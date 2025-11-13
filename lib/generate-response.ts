@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-js";
 import { CoreMessage, generateText, tool } from "ai";
 import { z } from "zod";
 import { exa } from "./utils";
@@ -7,8 +7,12 @@ export const generateResponse = async (
   messages: CoreMessage[],
   updateStatus?: (status: string) => void,
 ) => {
+  const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+  });
+
   const { text } = await generateText({
-    model: openai("gpt-4o"),
+    model: openrouter("openai/gpt-4o"),
     system: `You are a Feishu/Lark AI assistant. Keep your responses concise and to the point.
     - Do not tag users.
     - Current date is: ${new Date().toISOString().split("T")[0]}

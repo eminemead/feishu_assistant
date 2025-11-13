@@ -18,7 +18,7 @@ An AI-powered chatbot for Feishu/Lark powered by the [AI SDK by Vercel](https://
 
 - [Node.js](https://nodejs.org/) 18+ installed
 - Feishu/Lark workspace with admin privileges
-- [OpenAI API key](https://platform.openai.com/api-keys)
+- [OpenRouter API key](https://openrouter.ai)
 - [Exa API key](https://exa.ai) (for web search functionality)
 - A Linux server or hosting platform to deploy the bot
 
@@ -27,9 +27,7 @@ An AI-powered chatbot for Feishu/Lark powered by the [AI SDK by Vercel](https://
 ### 1. Install Dependencies
 
 ```bash
-npm install
-# or
-pnpm install
+bun install
 ```
 
 ### 2. Create a Feishu App
@@ -79,8 +77,8 @@ FEISHU_APP_SECRET=your-app-secret
 FEISHU_ENCRYPT_KEY=your-encrypt-key
 FEISHU_VERIFICATION_TOKEN=your-verification-token
 
-# OpenAI Credentials
-OPENAI_API_KEY=your-openai-api-key
+# OpenRouter Credentials
+OPENROUTER_API_KEY=your-openrouter-api-key
 
 # Exa API Key (for web search functionality)
 EXA_API_KEY=your-exa-api-key
@@ -94,9 +92,7 @@ Replace the placeholder values with your actual tokens.
 ### 5. Build the Project
 
 ```bash
-npm run build
-# or
-pnpm build
+bun run build
 ```
 
 ## Local Development
@@ -104,9 +100,7 @@ pnpm build
 Run the development server:
 
 ```bash
-npm run dev
-# or
-pnpm dev
+bun run dev
 ```
 
 The server will start on `http://localhost:3000` (or the port specified in `PORT` environment variable).
@@ -129,22 +123,22 @@ Update the Feishu app's webhook URL to the tunnel URL (e.g., `https://your-tunne
 
 1. **Build the project:**
    ```bash
-   npm run build
+   bun run build
    ```
 
 2. **Copy files to server:**
    - Copy the `dist/` directory
-   - Copy `package.json` and `package-lock.json` (or `pnpm-lock.yaml`)
+   - Copy `package.json` and `bun.lock`
    - Copy `.env` file (or set environment variables on the server)
 
 3. **Install production dependencies:**
    ```bash
-   npm install --production
+   bun install
    ```
 
 4. **Run the server:**
    ```bash
-   npm start
+   bun start
    ```
 
 ### Using PM2 (Recommended)
@@ -153,10 +147,10 @@ For production, use [PM2](https://pm2.keymetrics.io/) to manage the process:
 
 ```bash
 # Install PM2 globally
-npm install -g pm2
+bun install -g pm2
 
 # Start the application
-pm2 start dist/server.js --name feishu-agent
+pm2 start "bun dist/server.js" --name feishu-agent
 
 # Save PM2 configuration
 pm2 save
@@ -180,7 +174,7 @@ User=your-user
 WorkingDirectory=/path/to/your/app
 Environment="NODE_ENV=production"
 EnvironmentFile=/path/to/your/app/.env
-ExecStart=/usr/bin/node dist/server.js
+ExecStart=/usr/bin/bun dist/server.js
 Restart=always
 RestartSec=10
 

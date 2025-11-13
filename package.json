@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "description": "AI-powered Feishu/Lark agent using Vercel AI SDK",
   "main": "dist/server.js",
+  "packageManager": "bun@latest",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "tsx server.ts"
+    "build": "bun tsc",
+    "start": "bun dist/server.js",
+    "dev": "bun server.ts"
   },
   "keywords": ["feishu", "lark", "ai", "chatbot"],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ai-sdk/openai": "^1.1.14",
+    "@openrouter/ai-sdk-js": "^1.0.0",
     "@larksuiteoapi/node-sdk": "^1.44.0",
     "@hono/node-server": "^1.12.0",
     "ai": "^4.1.46",
@@ -22,7 +23,6 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.17",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }
 }
