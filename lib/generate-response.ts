@@ -9,10 +9,11 @@ export const generateResponse = async (
 ) => {
   const { text } = await generateText({
     model: openai("gpt-4o"),
-    system: `You are a Slack bot assistant Keep your responses concise and to the point.
+    system: `You are a Feishu/Lark AI assistant. Keep your responses concise and to the point.
     - Do not tag users.
     - Current date is: ${new Date().toISOString().split("T")[0]}
-    - Make sure to ALWAYS include sources in your final response if you use web search. Put sources inline if possible.`,
+    - Make sure to ALWAYS include sources in your final response if you use web search. Put sources inline if possible.
+    - Format your responses using Markdown syntax, which will be rendered in Feishu cards.`,
     messages,
     maxSteps: 10,
     tools: {
@@ -24,7 +25,7 @@ export const generateResponse = async (
           city: z.string(),
         }),
         execute: async ({ latitude, longitude, city }) => {
-          updateStatus?.(`is getting weather for ${city}...`);
+          updateStatus?.(`Getting weather for ${city}...`);
 
           const response = await fetch(
             `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weathercode,relativehumidity_2m&timezone=auto`,
@@ -51,7 +52,7 @@ export const generateResponse = async (
             ),
         }),
         execute: async ({ query, specificDomain }) => {
-          updateStatus?.(`is searching the web for ${query}...`);
+          updateStatus?.(`Searching the web for ${query}...`);
           const { results } = await exa.searchAndContents(query, {
             livecrawl: "always",
             numResults: 3,
@@ -70,6 +71,8 @@ export const generateResponse = async (
     },
   });
 
-  // Convert markdown to Slack mrkdwn format
-  return text.replace(/\[(.*?)\]\((.*?)\)/g, "<$2|$1>").replace(/\*\*/g, "*");
+  // Feishu cards support Markdown natively, so we can keep markdown format
+  // Just ensure links are properly formatted for Feishu markdown
+  // Feishu markdown uses [text](url) format which is standard
+  return text;
 };

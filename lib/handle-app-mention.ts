@@ -1,52 +1,66 @@
-import { AppMentionEvent } from "@slack/web-api";
-import { client, getThread } from "./slack-utils";
+import { getThread } from "./feishu-utils";
 import { generateResponse } from "./generate-response";
+import {
+  createAndSendStreamingCard,
+  updateCardElement,
+  finalizeCard,
+} from "./feishu-utils";
 
-const updateStatusUtil = async (
-  initialStatus: string,
-  event: AppMentionEvent,
-) => {
-  const initialMessage = await client.chat.postMessage({
-    channel: event.channel,
-    thread_ts: event.thread_ts ?? event.ts,
-    text: initialStatus,
+export interface FeishuMentionData {
+  chatId: string;
+  messageId: string;
+  rootId: string;
+  messageText: string;
+  botUserId: string;
+}
+
+export async function handleNewAppMention(data: FeishuMentionData) {
+  const { chatId, messageId, rootId, messageText, botUserId } = data;
+
+  console.log("Handling app mention");
+
+  // Remove bot mention from message text
+  let cleanText = messageText.replace(
+    /<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g,
+    ""
+  ).trim();
+
+  // Create streaming card
+  const card = await createAndSendStreamingCard(chatId, "chat_id", {
+    title: "AI Assistant",
+    initialContent: "Thinking...",
   });
 
-  if (!initialMessage || !initialMessage.ts)
-    throw new Error("Failed to post initial message");
-
-  const updateMessage = async (status: string) => {
-    await client.chat.update({
-      channel: event.channel,
-      ts: initialMessage.ts as string,
-      text: status,
-    });
+  // Create update function for streaming
+  let currentContent = "";
+  const updateCard = async (status: string) => {
+    currentContent = status;
+    await updateCardElement(card.cardId, card.elementId, status);
   };
-  return updateMessage;
-};
 
-export async function handleNewAppMention(
-  event: AppMentionEvent,
-  botUserId: string,
-) {
-  console.log("Handling app mention");
-  if (event.bot_id || event.bot_id === botUserId || event.bot_profile) {
-    console.log("Skipping app mention");
-    return;
-  }
+  try {
+    // Get thread messages if this is a thread reply
+    let messages;
+    if (rootId !== messageId) {
+      // This is a thread reply, get thread history
+      messages = await getThread(chatId, rootId, botUserId);
+    } else {
+      // New mention, start fresh conversation
+      messages = [{ role: "user" as const, content: cleanText }];
+    }
 
-  const { thread_ts, channel } = event;
-  const updateMessage = await updateStatusUtil("is thinking...", event);
+    // Generate response with streaming
+    const result = await generateResponse(messages, updateCard);
 
-  if (thread_ts) {
-    const messages = await getThread(channel, thread_ts, botUserId);
-    const result = await generateResponse(messages, updateMessage);
-    await updateMessage(result);
-  } else {
-    const result = await generateResponse(
-      [{ role: "user", content: event.text }],
-      updateMessage,
+    // Finalize card
+    await finalizeCard(card.cardId, result);
+  } catch (error) {
+    console.error("Error generating response:", error);
+    await updateCardElement(
+      card.cardId,
+      card.elementId,
+      "Sorry, I encountered an error processing your request."
     );
-    await updateMessage(result);
+    await finalizeCard(card.cardId);
   }
 }

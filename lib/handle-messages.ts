@@ -1,73 +1,66 @@
-import type {
-  AssistantThreadStartedEvent,
-  GenericMessageEvent,
-} from "@slack/web-api";
-import { client, getThread, updateStatusUtil } from "./slack-utils";
+import { getThread } from "./feishu-utils";
 import { generateResponse } from "./generate-response";
+import {
+  createAndSendStreamingCard,
+  updateCardElement,
+  finalizeCard,
+} from "./feishu-utils";
 
-export async function assistantThreadMessage(
-  event: AssistantThreadStartedEvent,
-) {
-  const { channel_id, thread_ts } = event.assistant_thread;
-  console.log(`Thread started: ${channel_id} ${thread_ts}`);
-  console.log(JSON.stringify(event));
-
-  await client.chat.postMessage({
-    channel: channel_id,
-    thread_ts: thread_ts,
-    text: "Hello, I'm an AI assistant built with the AI SDK by Vercel!",
-  });
-
-  await client.assistant.threads.setSuggestedPrompts({
-    channel_id: channel_id,
-    thread_ts: thread_ts,
-    prompts: [
-      {
-        title: "Get the weather",
-        message: "What is the current weather in London?",
-      },
-      {
-        title: "Get the news",
-        message: "What is the latest Premier League news from the BBC?",
-      },
-    ],
-  });
+export interface FeishuMessageData {
+  chatId: string;
+  messageId: string;
+  rootId: string;
+  messageText: string;
+  botUserId: string;
 }
 
-export async function handleNewAssistantMessage(
-  event: GenericMessageEvent,
-  botUserId: string,
-) {
-  if (
-    event.bot_id ||
-    event.bot_id === botUserId ||
-    event.bot_profile ||
-    !event.thread_ts
-  )
-    return;
+export async function handleNewMessage(data: FeishuMessageData) {
+  const { chatId, messageId, rootId, messageText, botUserId } = data;
 
-  const { thread_ts, channel } = event;
-  const updateStatus = updateStatusUtil(channel, thread_ts);
-  await updateStatus("is thinking...");
+  console.log(`Handling new message: ${chatId} ${rootId}`);
 
-  const messages = await getThread(channel, thread_ts, botUserId);
-  const result = await generateResponse(messages, updateStatus);
+  // Remove bot mention from message text if present
+  let cleanText = messageText.replace(
+    /<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g,
+    ""
+  ).trim();
 
-  await client.chat.postMessage({
-    channel: channel,
-    thread_ts: thread_ts,
-    text: result,
-    unfurl_links: false,
-    blocks: [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: result,
-        },
-      },
-    ],
+  // Create streaming card
+  const card = await createAndSendStreamingCard(chatId, "chat_id", {
+    title: "AI Assistant",
+    initialContent: "Thinking...",
   });
 
-  await updateStatus("");
+  // Create update function for streaming
+  let currentContent = "";
+  const updateCard = async (status: string) => {
+    currentContent = status;
+    await updateCardElement(card.cardId, card.elementId, status);
+  };
+
+  try {
+    // Get thread messages if this is a thread reply
+    let messages;
+    if (rootId !== messageId) {
+      // This is a thread reply, get thread history
+      messages = await getThread(chatId, rootId, botUserId);
+    } else {
+      // New conversation
+      messages = [{ role: "user" as const, content: cleanText }];
+    }
+
+    // Generate response with streaming
+    const result = await generateResponse(messages, updateCard);
+
+    // Finalize card
+    await finalizeCard(card.cardId, result);
+  } catch (error) {
+    console.error("Error generating response:", error);
+    await updateCardElement(
+      card.cardId,
+      card.elementId,
+      "Sorry, I encountered an error processing your request."
+    );
+    await finalizeCard(card.cardId);
+  }
 }
