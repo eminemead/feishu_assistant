@@ -13,6 +13,19 @@ An AI-powered chatbot for Feishu/Lark powered by the [AI SDK by Vercel](https://
   - Web search (powered by [Exa](https://exa.ai))
 - Streaming responses via Feishu interactive cards
 - Easily extensible architecture to add custom tools (e.g., knowledge search)
+- Multi-agent system with specialist agents for different domains (OKR, P&L, Alignment, DPA PM)
+
+## Documentation
+
+📚 **Full documentation** is available in the [`docs/`](./docs/) directory:
+
+- [Setup & Configuration](./docs/setup/) - DSPyground setup, observability tools
+- [Architecture](./docs/architecture/) - Agent architecture, routing logic, handoff system
+- [Implementation](./docs/implementation/) - OKR tools, visualization, Chinese support
+- [Testing](./docs/testing/) - Testing guides and quick start
+- [Verification](./docs/verification/) - API verification and handoff verification
+
+See [docs/README.md](./docs/README.md) for the complete documentation index.
 
 ## Prerequisites
 

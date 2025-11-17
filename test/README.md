@@ -2,6 +2,8 @@
 
 This directory contains tests for the agent features to ensure they work as specified.
 
+> 📚 **Documentation**: See [docs/testing/](../docs/testing/) for additional testing documentation.
+
 ## Test Structure
 
 ```

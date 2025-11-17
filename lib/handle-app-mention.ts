@@ -27,8 +27,8 @@ export async function handleNewAppMention(data: FeishuMentionData) {
 
   // Create streaming card
   const card = await createAndSendStreamingCard(chatId, "chat_id", {
-    title: "AI Assistant",
-    initialContent: "Thinking...",
+    title: "Evidence-总参",
+    initialContent: "我琢么琢么...",
   });
 
   // Create update function for streaming

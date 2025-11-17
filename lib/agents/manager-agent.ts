@@ -173,19 +173,59 @@ export async function managerAgent(
         }
       })();
 
-      // Process textStream for incremental updates
+      // Process textStream with batched updates for better performance
       const textStreamPromise = (async () => {
         let chunkCount = 0;
+        let lastUpdateTime = Date.now();
+        let lastUpdateLength = 0;
+        let pendingUpdate: NodeJS.Timeout | null = null;
+        
+        // Batching configuration
+        const BATCH_DELAY_MS = 100; // Wait 100ms between updates
+        const MIN_CHARS_PER_UPDATE = 10; // Update at least every 10 chars
+        const MAX_DELAY_MS = 500; // Force update every 500ms even if small
+        
+        const flushUpdate = async () => {
+          if (pendingUpdate) {
+            clearTimeout(pendingUpdate);
+            pendingUpdate = null;
+          }
+          if (updateStatus && accumulatedText.length > 0) {
+            await updateStatus(accumulatedText);
+            lastUpdateTime = Date.now();
+            lastUpdateLength = accumulatedText.length;
+          }
+        };
+        
         for await (const textDelta of result.textStream) {
           chunkCount++;
           accumulatedText += textDelta;
-          console.log(`[Manager] Received text chunk #${chunkCount}, length=${textDelta.length}, total=${accumulatedText.length}`);
-          // Update card with accumulated text as it streams
-          if (updateStatus) {
-            console.log(`[Manager] Calling updateStatus with accumulated text (length=${accumulatedText.length})`);
-            await updateStatus(accumulatedText);
+          const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+          const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+          
+          // Update immediately if:
+          // 1. This is the first chunk (show something immediately)
+          // 2. We've accumulated enough characters (MIN_CHARS_PER_UPDATE)
+          // 3. Too much time has passed (MAX_DELAY_MS)
+          const shouldUpdateImmediately = 
+            chunkCount === 1 || 
+            charsSinceLastUpdate >= MIN_CHARS_PER_UPDATE ||
+            timeSinceLastUpdate >= MAX_DELAY_MS;
+          
+          if (shouldUpdateImmediately) {
+            await flushUpdate();
+          } else {
+            // Schedule a batched update
+            if (pendingUpdate) {
+              clearTimeout(pendingUpdate);
+            }
+            pendingUpdate = setTimeout(flushUpdate, BATCH_DELAY_MS);
           }
         }
+        
+        // Flush any pending update
+        await flushUpdate();
+        
         console.log(`[Manager] Finished reading textStream. Total chunks: ${chunkCount}, Final text length: ${accumulatedText.length}`);
       })();
 

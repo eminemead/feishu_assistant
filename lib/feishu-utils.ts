@@ -158,7 +158,7 @@ export async function createStreamingCard(
     schema: "2.0",
     header: {
       title: {
-        content: config.title || "AI Assistant",
+        content: config.title || "Evidence-总参",
         tag: "plain_text",
       },
     },

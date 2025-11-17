@@ -5,3 +5,6 @@ dist
 .vercel
 .env*.local
 bun.lock
+
+# DSPyGround local data
+.dspyground/

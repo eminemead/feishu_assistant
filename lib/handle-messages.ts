@@ -27,7 +27,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
 
   // Create streaming card
   const card = await createAndSendStreamingCard(chatId, "chat_id", {
-    title: "AI Assistant",
+    title: "Evidence-总参",
     initialContent: "Thinking...",
   });
 

@@ -2,6 +2,8 @@
 
 This directory contains the multi-agent architecture implementation for the Feishu assistant using [`@ai-sdk-tools/agents`](https://ai-sdk-tools.dev/docs/agents).
 
+> 📚 **Documentation**: For detailed architecture documentation, see [docs/architecture/](../../docs/architecture/)
+
 ## Architecture Overview
 
 The system follows a **Manager Agent → Specialist Agent → Tool** pattern using the `@ai-sdk-tools/agents` library:
