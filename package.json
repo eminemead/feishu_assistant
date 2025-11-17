@@ -13,10 +13,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@openrouter/ai-sdk-js": "^1.0.0",
-    "@larksuiteoapi/node-sdk": "^1.44.0",
+    "@ai-sdk-tools/agents": "^1.0.8",
+    "@ai-sdk-tools/cache": "^1.0.8",
+    "@ai-sdk-tools/memory": "^1.0.8",
     "@hono/node-server": "^1.12.0",
-    "ai": "^4.1.46",
+    "@larksuiteoapi/node-sdk": "^1.44.0",
+    "@openrouter/ai-sdk-provider": "^1.2.3",
+    "ai": "^5.0.93",
+    "duckdb": "^1.0.0",
     "exa-js": "^1.4.10",
     "hono": "^4.5.0",
     "zod": "^3.24.2"

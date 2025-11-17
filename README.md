@@ -230,25 +230,39 @@ The bot maintains context within threads, so it can follow along with the conver
    - Example: "Search for the latest news about AI technology"
    - You can also specify a domain: "Search for the latest sports news on bbc.com"
 
+### Multi-Agent Architecture
+
+The chatbot uses a **Manager Agent → Specialist Agent → Tool** architecture:
+
+- **Manager Agent**: Orchestrates specialist agents and routes queries based on keywords or semantic meaning
+- **Specialist Agents**:
+  - **OKR Reviewer**: Analyzes OKR metrics and manager performance (includes `mgr_okr_review` tool)
+  - **Alignment Agent**: Alignment tracking (placeholder)
+  - **P&L Agent**: Profit & Loss analysis (placeholder)
+  - **DPA PM Agent**: Product management tasks (placeholder)
+
+See `lib/agents/README.md` for detailed documentation on the agent architecture.
+
 ### Extending with New Tools
 
-The chatbot is built with an extensible architecture using the [AI SDK's tool system](https://sdk.vercel.ai/docs/ai-sdk-core/tools-and-tool-calling). You can easily add new tools such as:
+The chatbot is built with an extensible architecture using the [AI SDK's tool system](https://sdk.vercel.ai/docs/ai-sdk-core/tools-and-tool-calling). Tools are defined within specialist agents and automatically made available through the manager agent.
 
-- Knowledge base search
-- Database queries
-- Custom API integrations
-- Company documentation search
+To add a new tool:
+1. Create or update a specialist agent in `lib/agents/`
+2. Define the tool using the `tool()` function with `zodSchema()` wrapper
+3. Register the tool in the agent's `getTools()` method
 
-To add a new tool, extend the tools object in the `lib/generate-response.ts` file following the existing pattern.
-
-You can also disable any of the existing tools by removing the tool in the `lib/generate-response.ts` file.
+See `lib/agents/README.md` for examples and detailed instructions.
 
 ## Architecture
 
 - **Hono** - Fast web framework for the backend
 - **Feishu Node SDK** - Official SDK for Feishu/Lark Open Platform
-- **Vercel AI SDK** - Unified interface for LLM providers
+- **Vercel AI SDK v5** - Unified interface for LLM providers
+- **@ai-sdk-tools/agents** - Multi-agent orchestration with automatic handoffs and routing
 - **Streaming Cards** - Real-time response updates via Feishu interactive cards
+- **Multi-Agent System** - Manager agent orchestrates specialist agents (OKR Reviewer, Alignment, P&L, DPA PM)
+- **DuckDB** - Database for OKR metrics storage and analysis
 
 ## Troubleshooting
 
