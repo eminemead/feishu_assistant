@@ -158,6 +158,7 @@ app.get("/", (c) => {
   });
 });
 
+
 // Feishu webhook endpoint (only used in Webhook Mode)
 // In Subscription Mode, events come through WebSocket connection managed by SDK
 app.post("/webhook/event", async (c) => {
@@ -246,6 +247,60 @@ app.post("/webhook/card", async (c) => {
 });
 
 const port = parseInt(process.env.PORT || "3000");
+
+// Devtools endpoints (development only) - moved before port usage
+if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "true") {
+  // Import devtools tracker (using dynamic import to avoid top-level await)
+  import("./lib/devtools-integration").then(({ devtoolsTracker }) => {
+    // API endpoint for devtools data
+    app.get("/devtools/api/events", (c) => {
+      const limit = c.req.query("limit");
+      const type = c.req.query("type");
+      const agent = c.req.query("agent");
+      
+      let events = devtoolsTracker.getEvents(limit ? parseInt(limit) : undefined);
+      
+      if (type) {
+        events = events.filter(e => e.type === type);
+      }
+      
+      if (agent) {
+        events = events.filter(e => e.agent === agent);
+      }
+      
+      return c.json({ events });
+    });
+    
+    // API endpoint for statistics
+    app.get("/devtools/api/stats", (c) => {
+      return c.json(devtoolsTracker.getStats());
+    });
+    
+    // API endpoint to clear events
+    app.post("/devtools/api/clear", (c) => {
+      devtoolsTracker.clear();
+      return c.json({ success: true });
+    });
+    
+    console.log("🔧 Devtools API: http://localhost:" + port + "/devtools/api/events");
+  });
+  
+  // Serve devtools UI
+  app.get("/devtools", async (c) => {
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    try {
+      const htmlPath = path.join(process.cwd(), "lib", "devtools-page.html");
+      const html = await fs.readFile(htmlPath, "utf-8");
+      return c.html(html);
+    } catch (error) {
+      console.error("Error loading devtools page:", error);
+      return c.text("Devtools page not found", 404);
+    }
+  });
+  
+  console.log("🔧 Devtools available at: http://localhost:" + port + "/devtools");
+}
 
 // Start the server
 serve({

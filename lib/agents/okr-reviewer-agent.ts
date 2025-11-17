@@ -3,6 +3,7 @@ import { tool, zodSchema } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import * as duckdb from "duckdb";
+import { trackToolCall } from "../devtools-integration";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
@@ -143,6 +144,21 @@ export async function analyzeHasMetricPercentage(period: string): Promise<any> {
   });
 }
 
+const mgrOkrReviewToolExecute = trackToolCall(
+  "mgr_okr_review",
+  async ({ period }: { period: string }) => {
+    try {
+      const analysis = await analyzeHasMetricPercentage(period);
+      return analysis;
+    } catch (error: any) {
+      return {
+        error: error.message || "Failed to analyze OKR metrics",
+        period,
+      };
+    }
+  }
+);
+
 const mgrOkrReviewTool = tool({
   description:
     "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries DuckDB to analyze if management criteria are met by managers of different levels across different city companies.",
@@ -155,17 +171,7 @@ const mgrOkrReviewTool = tool({
         ),
     })
   ),
-  execute: async ({ period }: { period: string }) => {
-    try {
-      const analysis = await analyzeHasMetricPercentage(period);
-      return analysis;
-    } catch (error: any) {
-      return {
-        error: error.message || "Failed to analyze OKR metrics",
-        period,
-      };
-    }
-  },
+  execute: mgrOkrReviewToolExecute,
 });
 
 export const okrReviewerAgent = new Agent({

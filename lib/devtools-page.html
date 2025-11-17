@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI SDK Devtools - Feishu Assistant</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: #0a0a0a;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #root {
+      width: 100%;
+      height: 100%;
+    }
+    .header {
+      padding: 1rem;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .status {
+      padding: 0.5rem 1rem;
+      background: #0a5;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    .info {
+      padding: 1rem;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      font-size: 0.875rem;
+      color: #aaa;
+    }
+    .info code {
+      background: #2a2a2a;
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="header">
+      <h1>🔧 AI SDK Devtools</h1>
+      <div class="status">Connected</div>
+    </div>
+    <div class="info">
+      Monitoring AI tool calls, agent handoffs, and performance metrics.
+      <br>
+      Server: <code id="server-url"></code>
+    </div>
+    <div id="devtools-container"></div>
+  </div>
+
+  <!-- React and ReactDOM from CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Note: @ai-sdk-tools/devtools needs to be bundled or loaded differently -->
+  <!-- For now, we'll create a simple monitoring interface -->
+  <script>
+    // Simple devtools interface that connects to the server
+    const serverUrl = window.location.origin;
+    document.getElementById('server-url').textContent = serverUrl;
+
+    // Create a simple monitoring interface
+    const DevtoolsContainer = document.getElementById('devtools-container');
+    DevtoolsContainer.innerHTML = `
+      <div style="padding: 2rem; text-align: center;">
+        <h2 style="margin-bottom: 1rem; color: #fff;">AI SDK Devtools</h2>
+        <p style="color: #aaa; margin-bottom: 2rem;">
+          The devtools will automatically track AI SDK calls from your agent system.
+          <br>
+          Monitor tool calls, agent handoffs, and performance in real-time.
+        </p>
+        <div style="background: #1a1a1a; border-radius: 8px; padding: 1.5rem; text-align: left; max-width: 800px; margin: 0 auto;">
+          <h3 style="margin-bottom: 1rem; color: #fff;">What's Being Monitored:</h3>
+          <ul style="list-style: none; padding: 0; color: #aaa;">
+            <li style="margin-bottom: 0.5rem;">✓ Manager agent routing decisions</li>
+            <li style="margin-bottom: 0.5rem;">✓ Specialist agent handoffs (OKR, Alignment, P&L, DPA PM)</li>
+            <li style="margin-bottom: 0.5rem;">✓ Tool calls (searchWeb, mgr_okr_review, etc.)</li>
+            <li style="margin-bottom: 0.5rem;">✓ Response times and token usage</li>
+            <li style="margin-bottom: 0.5rem;">✓ Error tracking and debugging</li>
+          </ul>
+        </div>
+        <p style="color: #666; margin-top: 2rem; font-size: 0.875rem;">
+          Check your server console for detailed logs. The devtools integration tracks all AI SDK activity.
+        </p>
+      </div>
+    `;
+
+    // In a full implementation, you would load @ai-sdk-tools/devtools here
+    // and render the AIDevtools component. For now, this provides a placeholder.
+  </script>
+</body>
+</html>
+

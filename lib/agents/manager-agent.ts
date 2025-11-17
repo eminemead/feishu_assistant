@@ -8,26 +8,16 @@ import { alignmentAgent } from "./alignment-agent";
 import { pnlAgent } from "./pnl-agent";
 import { dpaPmAgent } from "./dpa-pm-agent";
 import { exa } from "../utils";
+import { devtoolsTracker, trackToolCall } from "../devtools-integration";
 
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-// Create web search tool for fallback
-const searchWebTool = tool({
-  description: "Use this to search the web for information",
-  parameters: zodSchema(
-    z.object({
-      query: z.string(),
-      specificDomain: z
-        .string()
-        .nullable()
-        .describe(
-          "a domain to search if the user specifies e.g. bbc.com. Should be only the domain name without the protocol"
-        ),
-    })
-  ),
-  execute: async ({ query, specificDomain }: { query: string; specificDomain: string | null }) => {
+// Create web search tool for fallback (with devtools tracking)
+const searchWebToolExecute = trackToolCall(
+  "searchWeb",
+  async ({ query, specificDomain }: { query: string; specificDomain: string | null }) => {
     const { results } = await exa.searchAndContents(query, {
       livecrawl: "always",
       numResults: 3,
@@ -41,7 +31,23 @@ const searchWebTool = tool({
         snippet: result.text.slice(0, 1000),
       })),
     };
-  },
+  }
+);
+
+const searchWebTool = tool({
+  description: "Use this to search the web for information",
+  parameters: zodSchema(
+    z.object({
+      query: z.string(),
+      specificDomain: z
+        .string()
+        .nullable()
+        .describe(
+          "a domain to search if the user specifies e.g. bbc.com. Should be only the domain name without the protocol"
+        ),
+    })
+  ),
+  execute: searchWebToolExecute,
 });
 
 /**
@@ -122,7 +128,11 @@ export async function managerAgent(
   updateStatus?: (status: string) => void
 ): Promise<string> {
   const query = getQueryText(messages);
+  const startTime = Date.now();
   console.log(`[Manager] Received query: "${query}"`);
+  
+  // Track agent call
+  devtoolsTracker.trackAgentCall("Manager", query);
   
   try {
     // Track routing decisions
@@ -164,6 +174,9 @@ export async function managerAgent(
                 routedAgent = event.to || event.agent || event.agentName;
                 updateStatus?.(`Routing to ${routedAgent}...`);
                 console.log(`[Manager] Routing decision detected: "${query}" → ${routedAgent}`);
+                
+                // Track agent handoff
+                devtoolsTracker.trackAgentHandoff("Manager", routedAgent, `Query: ${query.substring(0, 50)}...`);
               }
             }
           }
@@ -238,14 +251,30 @@ export async function managerAgent(
     // Wait for the final result
     const finalResult = await result;
     const finalText = accumulatedText || finalResult.text || "";
+    const duration = Date.now() - startTime;
     
     if (!routedAgent) {
       console.log(`[Manager] Query handled directly (no handoff): "${query}"`);
     }
     
+    // Track response
+    devtoolsTracker.trackResponse("Manager", finalText, duration, {
+      routedAgent,
+      queryLength: query.length,
+    });
+    
     console.log(`[Manager] Returning final text (length=${finalText.length})`);
     return finalText;
   } catch (error) {
+    const duration = Date.now() - startTime;
+    
+    // Track error
+    devtoolsTracker.trackError(
+      "Manager",
+      error instanceof Error ? error : new Error(String(error)),
+      { query, duration }
+    );
+    
     console.error(`[Manager] Error processing query: "${query}"`, error);
     return "eh...错了错了, 完犊子！";
   }

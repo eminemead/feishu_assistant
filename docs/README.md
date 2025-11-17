@@ -6,6 +6,9 @@ This directory contains all project documentation organized by category.
 
 ### Setup & Configuration
 - [DSPyground Setup](./setup/dspyground-setup.md) - Guide for setting up and using DSPyground for prompt optimization
+- [AI SDK Devtools Setup](./setup/devtools-setup.md) - Real-time monitoring and debugging for agent system
+- [Devtools Walkthrough](./setup/devtools-walkthrough.md) - Step-by-step guide on using devtools
+- [Devtools Observability](./setup/devtools-observability.md) - Using devtools as production observability tool
 - [Observability Evaluation](./setup/observability-evaluation.md) - Comparison of observability tools (DSPyground vs Evalite)
 
 ### Architecture & Design
