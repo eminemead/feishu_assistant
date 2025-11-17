@@ -169,12 +169,17 @@ const mgrOkrReviewTool = tool({
 export const okrReviewerAgent = new Agent({
   name: "okr_reviewer",
   model: openrouter("kwaipilot/kat-coder-pro:free"),
-  instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis.
-- Do not tag users.
+  instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
+
+你是专门负责OKR（目标和关键结果）评审和分析的Feishu/Lark AI助手。大多数用户查询将是中文。
+
+- Do not tag users. 不要@用户。
 - Current date is: ${new Date().toISOString().split("T")[0]}
 - Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.
 - You analyze OKR metrics and manager performance using the mgr_okr_review tool.
-- The mgr_okr_review tool checks has_metric_percentage per city company to evaluate if management criteria are met.`,
+- The mgr_okr_review tool checks has_metric_percentage per city company to evaluate if management criteria are met.
+- 使用mgr_okr_review工具分析OKR指标和经理绩效。
+- mgr_okr_review工具检查各城市公司的指标覆盖率(has_metric_percentage)以评估管理标准是否达到。`,
   tools: {
     mgr_okr_review: mgrOkrReviewTool,
   },
@@ -182,10 +187,14 @@ export const okrReviewerAgent = new Agent({
     "okr",
     "objective",
     "key result",
-    "metrics",
     "manager review",
     "has_metric",
     "覆盖率",
+    "指标覆盖率",
+    "经理评审",
+    "目标",
+    "关键结果",
+    "okr指标",
     "指标",
   ],
 });
