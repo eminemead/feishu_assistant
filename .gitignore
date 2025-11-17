@@ -6,5 +6,8 @@ dist
 .env*.local
 bun.lock
 
+# TypeScript build cache
+.tsbuildinfo
+
 # DSPyGround local data
 .dspyground/

@@ -239,18 +239,19 @@ export function withDevtoolsTracking<T extends (...args: any[]) => Promise<any>>
 
 /**
  * Helper function to wrap tool calls with tracking
+ * Properly unwraps Promise types to avoid Promise<Promise<T>> issues
  */
 export function trackToolCall<T extends (...args: any[]) => Promise<any>>(
   toolName: string,
   fn: T
-): (...args: Parameters<T>) => Promise<ReturnType<T>> {
-  return async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+): T {
+  return (async (...args: Parameters<T>) => {
     const startTime = Date.now();
     devtoolsTracker.trackToolCall(toolName, args, startTime);
     
     try {
       const result = await fn(...args);
-      return result as ReturnType<T>;
+      return result;
     } catch (error) {
       devtoolsTracker.trackError(
         toolName,
@@ -259,6 +260,6 @@ export function trackToolCall<T extends (...args: any[]) => Promise<any>>(
       );
       throw error;
     }
-  };
+  }) as T;
 }
 

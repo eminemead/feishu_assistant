@@ -6,13 +6,23 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo",
     "outDir": "./dist",
+    "lib": ["ESNext"],
+    "isolatedModules": true,
+    "noEmitOnError": false
   },
   "exclude": [
     "node_modules",
+    "test",
+    ".dspyground",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ],
   "include": [
     "server.ts",
-    "lib"
+    "lib/**/*"
   ]
 }

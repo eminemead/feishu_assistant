@@ -52,8 +52,30 @@ export async function handleNewMessage(data: FeishuMessageData) {
     // Generate response with streaming
     const result = await generateResponse(messages, updateCard);
 
-    // Finalize card
-    await finalizeCard(card.cardId, result);
+    // Extract image_key from result if present
+    // Tool results may include visualization.image_key in JSON format
+    let imageKey: string | undefined;
+    try {
+      // Try to parse result as JSON to extract image_key
+      // Some agents may return JSON with tool results
+      const jsonMatch = result.match(/\{[^}]*"visualization"[^}]*"image_key"[^}]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        imageKey = parsed?.visualization?.image_key;
+      }
+      
+      // Also check for direct image_key references in text
+      const imageKeyMatch = result.match(/image_key["\s:]+([a-zA-Z0-9_-]+)/i);
+      if (!imageKey && imageKeyMatch) {
+        imageKey = imageKeyMatch[1];
+      }
+    } catch (e) {
+      // Parsing failed, continue without image
+      console.log("Could not extract image_key from result");
+    }
+
+    // Finalize card with optional image
+    await finalizeCard(card.cardId, result, imageKey);
   } catch (error) {
     console.error("Error generating response:", error);
     await updateCardElement(

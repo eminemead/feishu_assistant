@@ -262,11 +262,71 @@ export async function updateCardElement(
 }
 
 /**
+ * Add an image element to an existing card
+ * Creates a new image element and adds it to the card body
+ */
+export async function addImageElementToCard(
+  cardId: string,
+  imageKey: string,
+  altText: string = "OKR Metrics Visualization"
+): Promise<string> {
+  // Generate unique element ID for the image
+  const imageElementId = `img_${Date.now()}`;
+  
+  // Create image element
+  const imageElement = {
+    tag: "img",
+    img_key: imageKey,
+    alt: {
+      tag: "plain_text",
+      content: altText,
+    },
+    title: {
+      tag: "plain_text",
+      content: "OKR Metrics Heatmap",
+    },
+    mode: "fit_horizontal",
+    preview: true,
+    element_id: imageElementId,
+  };
+
+  // Update sequence
+  if (!cardSequences.has(cardId)) {
+    cardSequences.set(cardId, 0);
+  }
+  const sequence = cardSequences.get(cardId)! + 1;
+  cardSequences.set(cardId, sequence);
+
+  // Add image element to card using card element API
+  // Note: This creates a new element in the card body
+  const resp = await client.cardkit.v1.card.element.create({
+    path: {
+      card_id: cardId,
+    },
+    data: {
+      element: JSON.stringify(imageElement),
+      sequence: sequence,
+    },
+  });
+
+  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+  if (!isSuccess) {
+    console.error("Failed to add image element to card:", resp);
+    throw new Error("Failed to add image element to card");
+  }
+
+  console.log(`✅ [Card] Added image element: cardId=${cardId}, elementId=${imageElementId}, imageKey=${imageKey}`);
+  return imageElementId;
+}
+
+/**
  * Finalize card by disabling streaming mode
+ * Optionally adds image if imageKey is detected in the result
  */
 export async function finalizeCard(
   cardId: string,
-  finalContent?: string
+  finalContent?: string,
+  imageKey?: string
 ): Promise<void> {
   // Use card.settings (not .settings.update) to update card settings
   // Sequence must be incremental - get current sequence and increment
@@ -306,6 +366,17 @@ export async function finalizeCard(
   } catch (error) {
     // Settings update is optional - log but don't fail
     console.warn("Failed to finalize card settings (non-critical):", error);
+  }
+
+  // Add image element if imageKey is provided
+  if (imageKey) {
+    try {
+      await addImageElementToCard(cardId, imageKey);
+      console.log(`✅ [Card] Image added to card: cardId=${cardId}, imageKey=${imageKey}`);
+    } catch (error) {
+      console.error("Failed to add image to card (non-critical):", error);
+      // Don't throw - image addition is optional
+    }
   }
 }
 

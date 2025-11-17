@@ -20,6 +20,7 @@ This directory contains all project documentation organized by category.
 - [OKR Tool Implementation](./implementation/okr-tool.md) - OKR metrics analysis tool implementation
 - [Visualization Implementation](./implementation/visualization.md) - OKR visualization features
 - [Chinese Language Support](./implementation/chinese-support.md) - Chinese language handling
+- [Artifacts Integration Evaluation](./implementation/artifacts-evaluation.md) - Evaluation of leveraging @ai-sdk-tools/artifacts
 
 ### Testing
 - [Testing Guide](../TESTING.md) - Main testing documentation (kept at root for visibility)
