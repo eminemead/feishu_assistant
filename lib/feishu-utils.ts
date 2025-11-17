@@ -151,7 +151,9 @@ export interface StreamingCardConfig {
 export async function createStreamingCard(
   config: StreamingCardConfig = {}
 ): Promise<{ cardId: string; cardEntityId: string; elementId: string }> {
-  const elementId = config.elementId || `markdown_${Date.now()}`;
+  // ElementID must: start with alphabet, max 20 chars, only alphanumeric and underscores
+  const timestamp = Date.now().toString().slice(-8); // Use last 8 digits to keep it short
+  const elementId = config.elementId || `md_${timestamp}`;
   const cardData = {
     schema: "2.0",
     header: {
@@ -199,13 +201,23 @@ export async function createStreamingCard(
     },
   });
 
-  if (!resp.success() || !resp.data?.card_entity_id || !resp.data?.card_id) {
-    throw new Error("Failed to create streaming card");
+  // Handle different response structures
+  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+  const responseData = resp.data || resp;
+
+  if (!isSuccess || !responseData?.card_id) {
+    console.error("Failed to create streaming card. Response:", JSON.stringify(resp, null, 2));
+    throw new Error(`Failed to create streaming card: ${JSON.stringify(resp)}`);
   }
 
+  // card_entity_id might not be in the response, use card_id as fallback
+  const cardEntityId = responseData.card_entity_id || responseData.card_id;
+  
+  console.log(`✅ [Card] Created streaming card: cardId=${responseData.card_id}, elementId=${elementId}`);
+
   return {
-    cardId: resp.data.card_id,
-    cardEntityId: resp.data.card_entity_id,
+    cardId: responseData.card_id,
+    cardEntityId: cardEntityId,
     elementId,
   };
 }
@@ -213,22 +225,37 @@ export async function createStreamingCard(
 /**
  * Update card element content for streaming
  */
+// Track sequence numbers per card to ensure proper ordering
+const cardSequences = new Map<string, number>();
+
 export async function updateCardElement(
   cardId: string,
   elementId: string,
   content: string
 ): Promise<void> {
-  const resp = await client.cardkit.v1.card.element.update({
+  // Use cardElement.content for streaming updates (typing effect)
+  // Sequence must be incremental per card (start from 1, increment each time)
+  if (!cardSequences.has(cardId)) {
+    cardSequences.set(cardId, 0);
+  }
+  const sequence = cardSequences.get(cardId)! + 1;
+  cardSequences.set(cardId, sequence);
+  
+  console.log(`🔄 [Card] Updating card element: cardId=${cardId}, elementId=${elementId}, sequence=${sequence}, contentLength=${content.length}`);
+  
+  const resp = await client.cardkit.v1.cardElement.content({
     path: {
       card_id: cardId,
       element_id: elementId,
     },
     data: {
       content: content,
+      sequence: sequence,
     },
   });
 
-  if (!resp.success()) {
+  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+  if (!isSuccess) {
     console.error("Failed to update card element:", resp);
     throw new Error("Failed to update card element");
   }
@@ -241,45 +268,44 @@ export async function finalizeCard(
   cardId: string,
   finalContent?: string
 ): Promise<void> {
+  // Use card.settings (not .settings.update) to update card settings
+  // Sequence must be incremental - get current sequence and increment
+  if (!cardSequences.has(cardId)) {
+    cardSequences.set(cardId, 0);
+  }
+  const sequence = cardSequences.get(cardId)! + 1;
+  cardSequences.set(cardId, sequence);
+  
+  const settingsData: any = {
+    config: {
+      streaming_mode: false,
+    },
+  };
+  
   if (finalContent) {
-    // Update card config to disable streaming
-    const resp = await client.cardkit.v1.card.settings.update({
+    settingsData.summary = {
+      content: finalContent.slice(0, 100), // Summary preview
+    };
+  }
+
+  try {
+    const resp = await client.cardkit.v1.card.settings({
       path: {
         card_id: cardId,
       },
       data: {
-        settings: JSON.stringify({
-          config: {
-            streaming_mode: false,
-          },
-          summary: {
-            content: finalContent.slice(0, 100), // Summary preview
-          },
-        }),
+        settings: JSON.stringify(settingsData),
+        sequence: sequence,
       },
     });
 
-    if (!resp.success()) {
+    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    if (!isSuccess) {
       console.error("Failed to finalize card:", resp);
     }
-  } else {
-    // Just disable streaming
-    const resp = await client.cardkit.v1.card.settings.update({
-      path: {
-        card_id: cardId,
-      },
-      data: {
-        settings: JSON.stringify({
-          config: {
-            streaming_mode: false,
-          },
-        }),
-      },
-    });
-
-    if (!resp.success()) {
-      console.error("Failed to finalize card:", resp);
-    }
+  } catch (error) {
+    // Settings update is optional - log but don't fail
+    console.warn("Failed to finalize card settings (non-critical):", error);
   }
 }
 
@@ -308,11 +334,15 @@ export async function sendCardMessage(
     },
   });
 
-  if (!resp.success() || !resp.data?.message_id) {
-    throw new Error("Failed to send card message");
+  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+  const responseData = resp.data || resp;
+  
+  if (!isSuccess || !responseData?.message_id) {
+    console.error("Failed to send card message. Response:", JSON.stringify(resp, null, 2));
+    throw new Error(`Failed to send card message: ${JSON.stringify(resp)}`);
   }
 
-  return resp.data.message_id;
+  return responseData.message_id;
 }
 
 /**
@@ -323,8 +353,11 @@ export async function createAndSendStreamingCard(
   receiveIdType: "chat_id" | "open_id" | "user_id" | "email",
   config: StreamingCardConfig = {}
 ): Promise<{ cardId: string; cardEntityId: string; elementId: string; messageId: string }> {
+  console.log(`📤 [Card] Creating and sending streaming card to ${receiveIdType}:${receiveId}`);
   const card = await createStreamingCard(config);
+  console.log(`📨 [Card] Sending card message with cardId: ${card.cardId}`);
   const messageId = await sendCardMessage(receiveId, receiveIdType, card.cardEntityId);
+  console.log(`✅ [Card] Card sent successfully: messageId=${messageId}, cardId=${card.cardId}`);
 
   return {
     ...card,

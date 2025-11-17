@@ -7,6 +7,9 @@ import { getBotId, client } from "./lib/feishu-utils";
 
 const app = new Hono();
 
+// Track processed events to prevent duplicates
+const processedEvents = new Set<string>();
+
 // Determine if we're using Subscription Mode (WebSocket) or Webhook Mode
 // Subscription Mode doesn't require encryptKey/verificationToken
 const useSubscriptionMode = process.env.FEISHU_SUBSCRIPTION_MODE === "true" || 
@@ -22,29 +25,72 @@ const appSecret = process.env.FEISHU_APP_SECRET!;
 const eventDispatcher = new lark.EventDispatcher({
   encryptKey: encryptKey || "",
   verificationToken: verificationToken || "",
-}).register({
+})
+  // Add a catch-all handler to see what events we're receiving
+  .register({
+    "*": async (data, eventType) => {
+      console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
+      console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
+    },
+  })
+  .register({
   "im.message.receive_v1": async (data) => {
     try {
+      // Deduplicate events by event_id
+      const eventId = data.event_id || data.event?.event_id;
+      if (eventId && processedEvents.has(eventId)) {
+        console.log(`⚠️ [WebSocket] Duplicate event ignored: ${eventId}`);
+        return;
+      }
+      if (eventId) {
+        processedEvents.add(eventId);
+        // Clean up old event IDs (keep last 1000)
+        if (processedEvents.size > 1000) {
+          const firstId = processedEvents.values().next().value;
+          processedEvents.delete(firstId);
+        }
+      }
+
+      console.log("📨 [WebSocket] Event received: im.message.receive_v1");
+      console.log("📨 [WebSocket] Event data:", JSON.stringify(data, null, 2));
       const botUserId = await getBotId();
+      console.log(`🤖 [WebSocket] Bot User ID: ${botUserId}`);
       const message = data.message;
       const chatId = message.chat_id;
       const messageId = message.message_id;
       const rootId = message.root_id || messageId;
       const content = message.content;
+      // @ts-ignore - sender may exist in subscription mode data structure
+      const senderType = (message as any).sender?.sender_type || data.sender?.sender_type;
 
       // Parse message content
       let messageText = "";
       let isMention = false;
-      // @ts-ignore - sender may exist in subscription mode data structure
-      const senderType = (message as any).sender?.sender_type;
+
+      console.log(`📩 [WebSocket] Message details: chatId=${chatId}, messageId=${messageId}, chatType=${message.chat_type}`);
 
       try {
         const contentObj = JSON.parse(content);
         messageText = contentObj.text || "";
 
-        // Check if bot is mentioned
-        if (messageText.includes(`<at user_id="${botUserId}">`) || 
-            messageText.includes(`<at open_id="${botUserId}">`)) {
+        // Check if bot is mentioned using mentions array (Subscription Mode)
+        // @ts-ignore - mentions array exists in subscription mode
+        const mentions = (message as any).mentions || [];
+        console.log(`🔍 [WebSocket] Mentions array:`, JSON.stringify(mentions, null, 2));
+        
+        // Check mentions array for bot
+        // In Subscription Mode, if mentions array exists and has entries in a group chat,
+        // it means the bot was mentioned
+        if (mentions.length > 0 && message.chat_type === "group") {
+          console.log(`🔍 [WebSocket] Found ${mentions.length} mention(s) in group message`);
+          // In group chats, if there are mentions, the bot was mentioned
+          isMention = true;
+          console.log(`✅ [WebSocket] Bot mention detected via mentions array`);
+        }
+
+        // Fallback: Check text for @mentions (webhook mode format)
+        if (!isMention && (messageText.includes(`<at user_id="${botUserId}">`) || 
+            messageText.includes(`<at open_id="${botUserId}">`))) {
           isMention = true;
         }
       } catch (e) {
@@ -59,6 +105,7 @@ const eventDispatcher = new lark.EventDispatcher({
 
       // Handle direct message (chat_type === "p2p")
       if (message.chat_type === "p2p") {
+        console.log(`💬 [WebSocket] Processing direct message: "${messageText.substring(0, 50)}..."`);
         await handleNewMessage({
           chatId,
           messageId,
@@ -71,6 +118,7 @@ const eventDispatcher = new lark.EventDispatcher({
 
       // Handle group message with mention
       if (isMention) {
+        console.log(`👥 [WebSocket] Processing group mention: "${messageText.substring(0, 50)}..."`);
         await handleNewAppMention({
           chatId,
           messageId,
@@ -83,6 +131,7 @@ const eventDispatcher = new lark.EventDispatcher({
 
       // Handle thread reply (if root_id exists and is different from message_id)
       if (message.root_id && message.root_id !== messageId) {
+        console.log(`🧵 [WebSocket] Processing thread reply: "${messageText.substring(0, 50)}..."`);
         await handleNewMessage({
           chatId,
           messageId,
@@ -92,8 +141,10 @@ const eventDispatcher = new lark.EventDispatcher({
         });
         return;
       }
+      
+      console.log(`⚠️ [WebSocket] Message ignored (not p2p, not mention, not thread reply)`);
     } catch (error) {
-      console.error("Error handling message event:", error);
+      console.error("❌ [WebSocket] Error handling message event:", error);
     }
   },
 });

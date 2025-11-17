@@ -127,25 +127,84 @@ export async function managerAgent(
   try {
     // Track routing decisions
     let routedAgent: string | null = null;
+    let accumulatedText = "";
     
-    // Create a wrapper for status updates and logging
-    const result = await managerAgentInstance.generate({
+    // Use Agent.stream() with proper execution context
+    console.log(`[Manager] Starting stream for query: "${query}"`);
+    
+    // Create a minimal execution context object
+    // The Agent library internally accesses executionContext._memoryAddition
+    // So we need an object with this property (can be empty string)
+    const executionContext: any = {
+      _memoryAddition: "",
+    };
+    
+    // Use Agent.stream() with execution context
+    // Note: The type definition shows messages, but internally it needs executionContext
+    const result = (managerAgentInstance.stream as any)({
       messages,
-      onEvent: (event: any) => {
-        if (event.type === "agent-handoff") {
-          routedAgent = event.to;
-          updateStatus?.(`Routing to ${event.to}...`);
-          console.log(`[Manager] Routing decision: "${query}" → ${event.to}`);
-          console.log(`[Manager] Handoff event details:`, JSON.stringify(event, null, 2));
-        }
-      },
+      executionContext,
     });
 
+    console.log(`[Manager] Stream created, starting to read textStream...`);
+
+    // Process both textStream and fullStream in parallel
+    // fullStream contains events like agent-handoff
+    const processStreams = async () => {
+      // Process fullStream to catch handoff events
+      const fullStreamPromise = (async () => {
+        try {
+          for await (const part of result.fullStream) {
+            // Check for agent-handoff events in the stream
+            if (part && typeof part === 'object') {
+              const event = part as any;
+              // Look for handoff indicators in the stream parts
+              if (event.type === 'agent-handoff' || event.type === 'handoff' || 
+                  (event.agent && event.agent !== 'Manager')) {
+                routedAgent = event.to || event.agent || event.agentName;
+                updateStatus?.(`Routing to ${routedAgent}...`);
+                console.log(`[Manager] Routing decision detected: "${query}" → ${routedAgent}`);
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore errors in fullStream processing
+          console.log(`[Manager] FullStream processing completed or error:`, e);
+        }
+      })();
+
+      // Process textStream for incremental updates
+      const textStreamPromise = (async () => {
+        let chunkCount = 0;
+        for await (const textDelta of result.textStream) {
+          chunkCount++;
+          accumulatedText += textDelta;
+          console.log(`[Manager] Received text chunk #${chunkCount}, length=${textDelta.length}, total=${accumulatedText.length}`);
+          // Update card with accumulated text as it streams
+          if (updateStatus) {
+            console.log(`[Manager] Calling updateStatus with accumulated text (length=${accumulatedText.length})`);
+            await updateStatus(accumulatedText);
+          }
+        }
+        console.log(`[Manager] Finished reading textStream. Total chunks: ${chunkCount}, Final text length: ${accumulatedText.length}`);
+      })();
+
+      // Wait for both streams to complete
+      await Promise.all([fullStreamPromise, textStreamPromise]);
+    };
+
+    await processStreams();
+
+    // Wait for the final result
+    const finalResult = await result;
+    const finalText = accumulatedText || finalResult.text || "";
+    
     if (!routedAgent) {
       console.log(`[Manager] Query handled directly (no handoff): "${query}"`);
     }
-
-    return result.text;
+    
+    console.log(`[Manager] Returning final text (length=${finalText.length})`);
+    return finalText;
   } catch (error) {
     console.error(`[Manager] Error processing query: "${query}"`, error);
     return "eh...错了错了, 完犊子！";
