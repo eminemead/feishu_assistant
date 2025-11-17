@@ -36,8 +36,10 @@ async function getLatestMetricsTable(con: duckdb.Connection): Promise<string | n
 
 /**
  * Analyzes has_metric_percentage for managers by city company
+ * 
+ * Exported for use in visualization tool
  */
-async function analyzeHasMetricPercentage(period: string): Promise<any> {
+export async function analyzeHasMetricPercentage(period: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const db = new duckdb.Database(OKR_DB_PATH, { access_mode: "READ_ONLY" });
     const con = db.connect();
