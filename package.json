@@ -1,6 +1,6 @@
 {
   "name": "ai-sdk-feishu-agent",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "AI-powered Feishu/Lark agent using Vercel AI SDK",
   "main": "dist/server.js",
   "packageManager": "bun@latest",
