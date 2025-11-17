@@ -3,17 +3,25 @@ import { serve } from "@hono/node-server";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
-import { getBotId } from "./lib/feishu-utils";
+import { getBotId, client } from "./lib/feishu-utils";
 
 const app = new Hono();
 
+// Determine if we're using Subscription Mode (WebSocket) or Webhook Mode
+// Subscription Mode doesn't require encryptKey/verificationToken
+const useSubscriptionMode = process.env.FEISHU_SUBSCRIPTION_MODE === "true" || 
+                             (!process.env.FEISHU_ENCRYPT_KEY && !process.env.FEISHU_VERIFICATION_TOKEN);
+
 const encryptKey = process.env.FEISHU_ENCRYPT_KEY;
 const verificationToken = process.env.FEISHU_VERIFICATION_TOKEN;
+const appId = process.env.FEISHU_APP_ID!;
+const appSecret = process.env.FEISHU_APP_SECRET!;
 
 // Initialize Feishu EventDispatcher
+// For Subscription Mode, encryptKey and verificationToken are optional
 const eventDispatcher = new lark.EventDispatcher({
-  encryptKey: encryptKey,
-  verificationToken: verificationToken,
+  encryptKey: encryptKey || "",
+  verificationToken: verificationToken || "",
 }).register({
   "im.message.receive_v1": async (data) => {
     try {
@@ -27,7 +35,8 @@ const eventDispatcher = new lark.EventDispatcher({
       // Parse message content
       let messageText = "";
       let isMention = false;
-      let senderType = message.sender?.sender_type;
+      // @ts-ignore - sender may exist in subscription mode data structure
+      const senderType = (message as any).sender?.sender_type;
 
       try {
         const contentObj = JSON.parse(content);
@@ -91,11 +100,21 @@ const eventDispatcher = new lark.EventDispatcher({
 
 // Health check endpoint
 app.get("/", (c) => {
-  return c.json({ status: "ok", service: "feishu-agent" });
+  return c.json({ 
+    status: "ok", 
+    service: "feishu-agent",
+    mode: useSubscriptionMode ? "subscription" : "webhook"
+  });
 });
 
-// Feishu webhook endpoint
+// Feishu webhook endpoint (only used in Webhook Mode)
+// In Subscription Mode, events come through WebSocket connection managed by SDK
 app.post("/webhook/event", async (c) => {
+  if (useSubscriptionMode) {
+    return c.json({ 
+      error: "Webhook mode disabled. Using Subscription Mode (WebSocket)." 
+    }, 400);
+  }
   try {
     const rawBody = await c.req.text();
     const headers = c.req.header();
@@ -145,13 +164,29 @@ app.post("/webhook/event", async (c) => {
 });
 
 // Card action webhook endpoint (for interactive card callbacks)
+// NOTE: Card action callbacks typically still use webhooks even in Subscription Mode
+// If you're using interactive cards with buttons, you'll need to configure this URL
+// in the "Callback Configuration" tab in Feishu admin panel
 app.post("/webhook/card", async (c) => {
   try {
     const rawBody = await c.req.text();
     const headers = c.req.header();
 
-    // Handle card actions if needed
-    // For now, just return success
+    // Handle URL verification challenge for card callbacks
+    try {
+      const payload = JSON.parse(rawBody);
+      if (payload.type === "url_verification") {
+        return c.json({ challenge: payload.challenge });
+      }
+    } catch (e) {
+      // Not a challenge, continue with card action processing
+    }
+
+    // TODO: Implement card action handling if you use interactive cards with buttons
+    // For now, we're using streaming cards without interactive elements,
+    // so this endpoint just acknowledges receipt
+    console.log("Card action callback received (not yet implemented)");
+    
     return c.json({ success: true }, 200);
   } catch (error) {
     console.error("Error processing card webhook:", error);
@@ -161,10 +196,46 @@ app.post("/webhook/card", async (c) => {
 
 const port = parseInt(process.env.PORT || "3000");
 
-console.log(`Server is running on port ${port}`);
-
+// Start the server
 serve({
   fetch: app.fetch,
   port,
 });
+
+// Initialize WebSocket connection for Subscription Mode
+if (useSubscriptionMode) {
+  console.log("Using Subscription Mode (WebSocket) - no public URL needed");
+  console.log("Ensure Subscription Mode is enabled in Feishu admin panel");
+  
+  if (!appId || !appSecret) {
+    console.error("ERROR: FEISHU_APP_ID and FEISHU_APP_SECRET are required for Subscription Mode");
+    process.exit(1);
+  }
+
+  // Create WSClient for Subscription Mode
+  const wsClient = new lark.WSClient({
+    appId,
+    appSecret,
+    domain: lark.Domain.Feishu,
+    autoReconnect: true,
+  });
+
+  // Start the WebSocket connection with EventDispatcher
+  wsClient.start({ eventDispatcher })
+    .then(() => {
+      console.log("✅ WebSocket connection established successfully");
+      console.log("Subscription Mode is active - ready to receive events");
+    })
+    .catch((error) => {
+      console.error("❌ Failed to establish WebSocket connection:", error);
+      console.error("Please check:");
+      console.error("1. Subscription Mode is enabled in Feishu admin panel");
+      console.error("2. App ID and App Secret are correct");
+      console.error("3. Required permissions are granted");
+    });
+} else {
+  console.log("Using Webhook Mode - ensure webhook URL is configured in Feishu admin");
+}
+
+console.log(`Server is running on port ${port}`);
 
