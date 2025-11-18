@@ -13,7 +13,13 @@
     "dev": "bun server.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage"
+    "test:coverage": "bun test --coverage",
+    "setup:supabase": "bun scripts/setup-supabase.ts",
+    "migrate:supabase": "bun scripts/run-migrations.ts",
+    "test:supabase": "bun scripts/test-supabase.ts",
+    "permissions:set": "bun scripts/manage-user-permissions.ts set",
+    "permissions:get": "bun scripts/manage-user-permissions.ts get",
+    "permissions:list": "bun scripts/manage-user-permissions.ts list"
   },
   "keywords": ["feishu", "lark", "ai", "chatbot"],
   "author": "",
@@ -28,17 +34,22 @@
     "@larksuiteoapi/node-sdk": "^1.44.0",
     "@observablehq/plot": "^0.6.17",
     "@openrouter/ai-sdk-provider": "^1.2.3",
+    "@supabase/supabase-js": "^2.81.1",
     "ai": "^5.0.93",
     "canvas": "^3.2.0",
+    "drizzle-orm": "^0.44.7",
     "duckdb": "^1.0.0",
     "exa-js": "^1.4.10",
     "hono": "^4.5.0",
     "jsdom": "^27.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "postgres-js": "^0.1.0",
     "sharp": "^0.34.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@ai-sdk-tools/devtools": "^1.0.8",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.17",
     "typescript": "^5.3.3"
   }

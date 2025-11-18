@@ -10,12 +10,14 @@ import { managerAgent } from "./agents/manager-agent";
  * @param updateStatus - Optional callback for streaming status updates
  * @param chatId - Feishu chat ID for memory scoping
  * @param rootId - Feishu root message ID (thread identifier) for conversation context
+ * @param userId - Feishu user ID (open_id/user_id) for authentication and RLS
  */
 export const generateResponse = async (
   messages: CoreMessage[],
   updateStatus?: (status: string) => void,
   chatId?: string,
   rootId?: string,
+  userId?: string,
 ) => {
-  return await managerAgent(messages, updateStatus, chatId, rootId);
+  return await managerAgent(messages, updateStatus, chatId, rootId, userId);
 };

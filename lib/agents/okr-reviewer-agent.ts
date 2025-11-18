@@ -3,6 +3,7 @@ import * as duckdb from "duckdb";
 import { okrVisualizationTool } from "./okr-visualization-tool";
 import { openrouter } from "../shared/config";
 import { createOkrReviewTool } from "../tools";
+import { getUserDataScope } from "../auth/user-data-scope";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
@@ -34,9 +35,48 @@ async function getLatestMetricsTable(con: duckdb.Connection): Promise<string | n
  * Analyzes has_metric_percentage for managers by city company
  * 
  * Exported for use in visualization tool
+ * 
+ * @param period - Period to analyze (e.g., '10 月', '11 月')
+ * @param userId - Optional Feishu user ID for data filtering (RLS)
  */
-export function analyzeHasMetricPercentage(period: string): Promise<any> {
-  return new Promise((resolve, reject) => {
+export function analyzeHasMetricPercentage(period: string, userId?: string): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    // Get user's data scope if userId is provided
+    let userDataScope: { allowedAccounts: string[] } | null = null;
+    if (userId) {
+      try {
+        const scope = await getUserDataScope(userId);
+        userDataScope = { allowedAccounts: scope.allowedAccounts };
+        
+        // If user has no allowed accounts, return empty result (fail-secure)
+        if (scope.allowedAccounts.length === 0) {
+          console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts, returning empty result`);
+          resolve({
+            period,
+            table_used: null,
+            summary: [],
+            total_companies: 0,
+            overall_average: 0,
+            filtered_by_user: true
+          });
+          return;
+        }
+      } catch (error) {
+        console.error(`❌ [OKR] Error getting user data scope:`, error);
+        // Fail-secure: return empty result on error
+        resolve({
+          period,
+          table_used: null,
+          summary: [],
+          total_companies: 0,
+          overall_average: 0,
+          filtered_by_user: true,
+          error: 'Failed to get user permissions'
+        });
+        return;
+      }
+    }
+
     const db = new duckdb.Database(OKR_DB_PATH, { access_mode: "READ_ONLY" });
     const con = db.connect();
 
@@ -49,7 +89,20 @@ export function analyzeHasMetricPercentage(period: string): Promise<any> {
           return;
         }
 
+        // Build query with optional user filtering
+        let accountFilter = '';
+        const queryParams: any[] = [period];
+        
+        if (userDataScope && userDataScope.allowedAccounts.length > 0) {
+          // Filter by allowed accounts
+          // DuckDB uses ? for parameters, so we need to build the IN clause with placeholders
+          const accountPlaceholders = userDataScope.allowedAccounts.map(() => '?').join(', ');
+          accountFilter = `AND e.fellow_ad_account IN (${accountPlaceholders})`;
+          queryParams.push(...userDataScope.allowedAccounts);
+        }
+
         // Use parameterized query with proper escaping
+        // DuckDB uses ? for positional parameters
         const query = `
           WITH base AS (
             SELECT COALESCE(e.fellow_city_company_name, 'Unknown') AS company_name,
@@ -60,6 +113,7 @@ export function analyzeHasMetricPercentage(period: string): Promise<any> {
               ON m.owner = e.fellow_ad_account
             WHERE m.period = ?
               AND e.fellow_workday_cn_title IN ('乐道代理战队长', '乐道区域副总经理', '乐道区域总经理', '乐道区域行销负责人', '乐道战队长', '乐道战队长（兼个人销售）', '乐道片区总', '乐道行销大区负责人', '乐道销售部负责人')
+              ${accountFilter}
           )
           SELECT company_name, metric_type,
                  COUNT(*) AS total,
@@ -70,7 +124,7 @@ export function analyzeHasMetricPercentage(period: string): Promise<any> {
           GROUP BY company_name, metric_type
         `;
 
-        con.all(query, [period], (err: Error | null, result: any[]) => {
+        con.all(query, queryParams, (err: Error | null, result: any[]) => {
           con.close();
           db.close();
 
@@ -125,9 +179,11 @@ export function analyzeHasMetricPercentage(period: string): Promise<any> {
               ? Math.round(
                   (summary.reduce((sum, s) => sum + s.average_has_metric_percentage, 0) /
                     summary.length) *
-                    100
+                  100
                 ) / 100
               : 0,
+            filtered_by_user: userId ? true : false,
+            user_allowed_accounts_count: userDataScope?.allowedAccounts.length || 0
           });
         });
       })

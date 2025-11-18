@@ -12,10 +12,11 @@ export interface FeishuMessageData {
   rootId: string;
   messageText: string;
   botUserId: string;
+  userId: string; // Feishu user ID (open_id/user_id) for authentication and RLS
 }
 
 export async function handleNewMessage(data: FeishuMessageData) {
-  const { chatId, messageId, rootId, messageText, botUserId } = data;
+  const { chatId, messageId, rootId, messageText, botUserId, userId } = data;
 
   console.log(`Handling new message: ${chatId} ${rootId}`);
 
@@ -50,7 +51,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
     }
 
     // Generate response with streaming and memory context
-    const result = await generateResponse(messages, updateCard, chatId, rootId);
+    const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
 
     // Extract image_key from result if present
     // Tool results may include visualization.image_key in JSON format

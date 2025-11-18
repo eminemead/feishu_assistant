@@ -4,6 +4,7 @@ import * as lark from "@larksuiteoapi/node-sdk";
 import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
 import { getBotId, client } from "./lib/feishu-utils";
+import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
 
 const app = new Hono();
 
@@ -28,16 +29,16 @@ const eventDispatcher = new lark.EventDispatcher({
 })
   // Add a catch-all handler to see what events we're receiving
   .register({
-    "*": async (data, eventType) => {
+    "*": async (data: any, eventType: string) => {
       console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
       console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
     },
-  })
+  } as any)
   .register({
   "im.message.receive_v1": async (data) => {
     try {
       // Deduplicate events by event_id
-      const eventId = data.event_id || data.event?.event_id;
+      const eventId = (data as any).event_id || (data as any).event?.event_id;
       if (eventId && processedEvents.has(eventId)) {
         console.log(`⚠️ [WebSocket] Duplicate event ignored: ${eventId}`);
         return;
@@ -62,6 +63,14 @@ const eventDispatcher = new lark.EventDispatcher({
       const content = message.content;
       // @ts-ignore - sender may exist in subscription mode data structure
       const senderType = (message as any).sender?.sender_type || data.sender?.sender_type;
+      
+      // Extract user ID from Feishu event for authentication and RLS
+      const userId = extractFeishuUserId(message, data);
+      if (userId) {
+        console.log(`👤 [Auth] Extracted user ID: ${userId}`);
+      } else {
+        console.warn(`⚠️ [Auth] Could not extract user ID, using chatId as fallback: ${chatId}`);
+      }
 
       // Parse message content
       let messageText = "";
@@ -112,7 +121,8 @@ const eventDispatcher = new lark.EventDispatcher({
           rootId,
           messageText,
           botUserId,
-        });
+          userId: userId || chatId, // Fallback to chatId if userId not available
+        } as any);
         return;
       }
 
@@ -125,7 +135,8 @@ const eventDispatcher = new lark.EventDispatcher({
           rootId,
           messageText,
           botUserId,
-        });
+          userId: userId || chatId, // Fallback to chatId if userId not available
+        } as any);
         return;
       }
 
@@ -138,6 +149,7 @@ const eventDispatcher = new lark.EventDispatcher({
           rootId: message.root_id,
           messageText,
           botUserId,
+          userId: userId || chatId, // Fallback to chatId if userId not available
         });
         return;
       }

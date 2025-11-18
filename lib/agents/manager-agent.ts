@@ -104,12 +104,14 @@ function getQueryText(messages: CoreMessage[]): string {
  * @param updateStatus - Optional callback for streaming status updates
  * @param chatId - Feishu chat ID for memory scoping (optional)
  * @param rootId - Feishu root message ID for conversation context (optional)
+ * @param userId - Feishu user ID (open_id/user_id) for authentication and RLS (optional)
  */
 export async function managerAgent(
   messages: CoreMessage[],
   updateStatus?: (status: string) => void,
   chatId?: string,
   rootId?: string,
+  userId?: string,
 ): Promise<string> {
   const query = getQueryText(messages);
   const startTime = Date.now();
@@ -136,14 +138,20 @@ export async function managerAgent(
     if (chatId && rootId) {
       // TypeScript narrowing: chatId and rootId are guaranteed to be strings here
       const conversationId = getConversationId(chatId!, rootId!);
-      const userScopeId = getUserScopeId(chatId!);
+      // Use actual userId if provided, otherwise fallback to chatId-based scope
+      const userScopeId = userId ? getUserScopeId(userId) : getUserScopeId(chatId!);
       
       // Set conversation ID for history and chat management
       executionContext.chatId = conversationId;
-      // Set user scope for working memory
+      // Set user scope for working memory (use actual userId for RLS)
       executionContext.userId = userScopeId;
       
-      console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}`);
+      // Store actual Feishu userId for Supabase RLS
+      if (userId) {
+        executionContext.feishuUserId = userId;
+      }
+      
+      console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}, feishuUserId=${userId || 'N/A'}`);
     }
     
     // Use Agent.stream() with execution context

@@ -12,10 +12,11 @@ export interface FeishuMentionData {
   rootId: string;
   messageText: string;
   botUserId: string;
+  userId: string; // Feishu user ID (open_id/user_id) for authentication and RLS
 }
 
 export async function handleNewAppMention(data: FeishuMentionData) {
-  const { chatId, messageId, rootId, messageText, botUserId } = data;
+  const { chatId, messageId, rootId, messageText, botUserId, userId } = data;
 
   console.log("Handling app mention");
 
@@ -50,7 +51,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     }
 
     // Generate response with streaming and memory context
-    const result = await generateResponse(messages, updateCard, chatId, rootId);
+    const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
 
     // Finalize card
     await finalizeCard(card.cardId, result);
