@@ -16,25 +16,70 @@ const searchWebTool = createSearchWebTool(true, true);
 // Track which model tier is currently in use for this session
 let currentModelTier: "primary" | "fallback" = "primary";
 
+// Create agent instances for both tiers
+let managerAgentPrimary: Agent;
+let managerAgentFallback: Agent;
+
 /**
- * Routing logic for manager agent:
- * 
- * The @ai-sdk-tools/agents library handles routing automatically using:
- * 1. Keyword matching: Each specialist agent defines `matchOn` patterns
- * 2. Semantic understanding: LLM analyzes query meaning and routes to best agent
- * 3. Fallback: If no match, manager uses its own tools (searchWeb) or provides guidance
- * 
- * Routing priority (checked in order):
- * 1. OKR Reviewer: okr, objective, key result, manager review, has_metric, 覆盖率,
- * 2. Alignment Agent: alignment, 对齐, 目标对齐
- * 3. P&L Agent: pnl, profit, loss, 损益, 利润, 亏损, EBIT
- * 4. DPA PM Agent: dpa, data team, AE, DA
- * 5. Fallback: web search or guidance
+ * Initialize agents for both model tiers
  */
-export const managerAgentInstance = new Agent({
-  name: "Manager",
-  model: getPrimaryModel(),
-  instructions: `You are a Feishu/Lark AI assistant that routes queries to specialist agents. Most user queries will be in Chinese (中文).
+function initializeAgents() {
+  managerAgentPrimary = new Agent({
+    name: "Manager",
+    model: getPrimaryModel(),
+    instructions: getManagerInstructions(),
+    handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent],
+    tools: {
+      searchWeb: searchWebTool,
+    },
+    memory: {
+      provider: memoryProvider,
+      workingMemory: {
+        enabled: true,
+        scope: 'user',
+      },
+      history: {
+        enabled: true,
+        limit: 10,
+      },
+      chats: {
+        enabled: true,
+        generateTitle: true,
+      },
+    },
+  });
+  
+  managerAgentFallback = new Agent({
+    name: "Manager",
+    model: getFallbackModel(),
+    instructions: getManagerInstructions(),
+    handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent],
+    tools: {
+      searchWeb: searchWebTool,
+    },
+    memory: {
+      provider: memoryProvider,
+      workingMemory: {
+        enabled: true,
+        scope: 'user',
+      },
+      history: {
+        enabled: true,
+        limit: 10,
+      },
+      chats: {
+        enabled: true,
+        generateTitle: true,
+      },
+    },
+  });
+}
+
+/**
+ * Get manager instructions (extracted to avoid duplication)
+ */
+function getManagerInstructions(): string {
+  return `You are a Feishu/Lark AI assistant that routes queries to specialist agents. Most user queries will be in Chinese (中文).
 
 路由规则（按以下顺序应用）：
 1. OKR Reviewer: 路由关于OKR、目标、关键结果、经理评审、指标覆盖率(has_metric percentage)、覆盖率(覆盖率)的查询
@@ -62,27 +107,27 @@ AVAILABLE SPECIALISTS:
 - OKR Reviewer (okr_reviewer): For OKR metrics, manager reviews, has_metric percentage analysis / 用于OKR指标、经理评审、指标覆盖率分析
 - Alignment Agent (alignment_agent): For alignment tracking (under development) / 用于对齐跟踪（开发中）
 - P&L Agent (pnl_agent): For profit & loss analysis (under development) / 用于损益分析（开发中）
-- DPA PM Agent (dpa_pm): For product management tasks (under development) / 用于产品管理任务（开发中）`,
-  handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent],
-  tools: {
-    searchWeb: searchWebTool,
-  },
-  memory: {
-    provider: memoryProvider,
-    workingMemory: {
-      enabled: true,
-      scope: 'user', // User-scoped working memory (per chatId)
-    },
-    history: {
-      enabled: true,
-      limit: 10, // Load last 10 messages for context
-    },
-    chats: {
-      enabled: true,
-      generateTitle: true, // Auto-generate conversation titles
-    },
-  },
-});
+- DPA PM Agent (dpa_pm): For product management tasks (under development) / 用于产品管理任务（开发中）`;
+}
+
+// Initialize agents on module load
+initializeAgents();
+
+/**
+ * Routing logic for manager agent:
+ * 
+ * The @ai-sdk-tools/agents library handles routing automatically using:
+ * 1. Keyword matching: Each specialist agent defines `matchOn` patterns
+ * 2. Semantic understanding: LLM analyzes query meaning and routes to best agent
+ * 3. Fallback: If no match, manager uses its own tools (searchWeb) or provides guidance
+ * 
+ * Routing priority (checked in order):
+ * 1. OKR Reviewer: okr, objective, key result, manager review, has_metric, 覆盖率,
+ * 2. Alignment Agent: alignment, 对齐, 目标对齐
+ * 3. P&L Agent: pnl, profit, loss, 损益, 利润, 亏损, EBIT
+ * 4. DPA PM Agent: dpa, data team, AE, DA
+ * 5. Fallback: web search or guidance
+ */
 
 /**
  * Helper function to extract query text from messages for logging
@@ -126,61 +171,70 @@ export async function managerAgent(
   
   try {
     // Track routing decisions
-    let routedAgent: string | null = null;
+     let routedAgent: string = "";
     let accumulatedText = "";
     
     // Use Agent.stream() with proper execution context
-    console.log(`[Manager] Starting stream for query: "${query}"`);
-    
-    // Create execution context with memory support
-    // The Agent library uses executionContext for memory scoping
-    const executionContext: any = {
-      _memoryAddition: "",
-    };
-    
-    // Add memory context if chatId and rootId are provided
-    if (chatId && rootId) {
-      // TypeScript narrowing: chatId and rootId are guaranteed to be strings here
-      const conversationId = getConversationId(chatId!, rootId!);
-      // Use actual userId if provided, otherwise fallback to chatId-based scope
-      const userScopeId = userId ? getUserScopeId(userId) : getUserScopeId(chatId!);
-      
-      // Set conversation ID for history and chat management
-      executionContext.chatId = conversationId;
-      // Set user scope for working memory (use actual userId for RLS)
-      executionContext.userId = userScopeId;
-      
-      // Store actual Feishu userId for Supabase RLS
-      if (userId) {
-        executionContext.feishuUserId = userId;
-      }
-      
-      console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}, feishuUserId=${userId || 'N/A'}`);
-    }
-    
-    // Use Agent.stream() with execution context
-    // Note: The type definition shows messages, but internally it needs executionContext
-    let result;
-    try {
-      result = (managerAgentInstance.stream as any)({
-        messages,
-        executionContext,
-      });
-      console.log(`[Manager] Stream created, starting to read textStream...`);
-    } catch (streamError) {
-      console.error(`[Manager] Error creating stream:`, streamError);
-      
-      // Check if it's a rate limit error
-      if (isRateLimitError(streamError)) {
-        console.warn(`⚠️ [Manager] Rate limit detected (429). Consider switching to fallback model.`);
-        devtoolsTracker.trackError("Manager", streamError, {
-          query,
-          errorType: "RATE_LIMIT",
-          recommendation: "Switch to fallback model (google/gemini-2.5-flash-lite)",
-        });
-      }
-      throw streamError;
-    }
+     console.log(`[Manager] Starting stream for query: "${query}" with ${currentModelTier} model`);
+     
+     // Create execution context with memory support
+     // The Agent library uses executionContext for memory scoping
+     const executionContext: any = {
+       _memoryAddition: "",
+     };
+     
+     // Add memory context if chatId and rootId are provided
+     if (chatId && rootId) {
+       // TypeScript narrowing: chatId and rootId are guaranteed to be strings here
+       const conversationId = getConversationId(chatId!, rootId!);
+       // Use actual userId if provided, otherwise fallback to chatId-based scope
+       const userScopeId = userId ? getUserScopeId(userId) : getUserScopeId(chatId!);
+       
+       // Set conversation ID for history and chat management
+       executionContext.chatId = conversationId;
+       // Set user scope for working memory (use actual userId for RLS)
+       executionContext.userId = userScopeId;
+       
+       // Store actual Feishu userId for Supabase RLS
+       if (userId) {
+         executionContext.feishuUserId = userId;
+       }
+       
+       console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}, feishuUserId=${userId || 'N/A'}`);
+     }
+     
+     // Use Agent.stream() with execution context
+     // Note: The type definition shows messages, but internally it needs executionContext
+     // Select agent based on current model tier
+     const selectedAgent = currentModelTier === "fallback" ? managerAgentFallback : managerAgentPrimary;
+     let result;
+     try {
+       result = (selectedAgent.stream as any)({
+         messages,
+         executionContext,
+       });
+       console.log(`[Manager] Stream created, starting to read textStream...`);
+     } catch (streamError) {
+       console.error(`[Manager] Error creating stream:`, streamError);
+       
+       // Check if it's a rate limit error
+        if (isRateLimitError(streamError)) {
+         console.warn(`⚠️ [Manager] Rate limit detected (429). Switching to fallback model.`);
+         if (currentModelTier === "primary") {
+           currentModelTier = "fallback";
+           const error = streamError instanceof Error ? streamError : new Error(String(streamError));
+           devtoolsTracker.trackError("Manager", error, {
+             query,
+             errorType: "RATE_LIMIT",
+             action: "Switched to fallback model",
+           });
+           // Retry with fallback model
+           console.log(`[Manager] Retrying with fallback model...`);
+           return managerAgent(messages, updateStatus, chatId, rootId, userId);
+         }
+       }
+       throw streamError;
+     }
 
     // Process both textStream and fullStream in parallel
      // fullStream contains events like agent-handoff
@@ -272,11 +326,16 @@ export async function managerAgent(
           if (isRateLimitError(streamIterationError)) {
             console.warn(`⚠️ [Manager] Rate limit detected during streaming (429). Current model tier: ${currentModelTier}`);
             if (currentModelTier === "primary") {
-              console.warn(`💡 [Manager] Suggestion: Switch to fallback model for future requests to avoid rate limits`);
-              devtoolsTracker.trackError("Manager", new Error("Rate limit on primary model"), {
+              console.warn(`⚠️ [Manager] Switching to fallback model and retrying...`);
+              currentModelTier = "fallback";
+              const error = streamIterationError instanceof Error ? streamIterationError : new Error(String(streamIterationError));
+              devtoolsTracker.trackError("Manager", error, {
+                query,
                 errorType: "RATE_LIMIT",
-                suggestion: "Use fallback model"
+                action: "Switched to fallback model during streaming",
               });
+              // Retry with fallback model
+              return managerAgent(messages, updateStatus, chatId, rootId, userId);
             }
           } else {
             // Log unexpected errors with context
@@ -285,7 +344,7 @@ export async function managerAgent(
               { phase: "stream_iteration", query }
             );
           }
-          // Continue with accumulated text even if stream fails
+          // Continue with accumulated text even if stream fails (for non-rate-limit errors)
         }
         
         // Flush any pending update
