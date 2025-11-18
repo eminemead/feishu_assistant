@@ -287,28 +287,47 @@ process.on('unhandledRejection', (reason, promise) => {
 if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "true") {
   // Import devtools tracker (using dynamic import to avoid top-level await)
   import("./lib/devtools-integration").then(({ devtoolsTracker }) => {
-    // API endpoint for devtools data
+    // API endpoint for devtools data with advanced filtering
     app.get("/devtools/api/events", (c) => {
       const limit = c.req.query("limit");
       const type = c.req.query("type");
       const agent = c.req.query("agent");
+      const tool = c.req.query("tool");
+      const search = c.req.query("search");
       
       let events = devtoolsTracker.getEvents(limit ? parseInt(limit) : undefined);
       
-      if (type) {
-        events = events.filter(e => e.type === type);
-      }
+      // Apply filters
+      const filterOptions: any = {};
+      if (type) filterOptions.types = [type];
+      if (agent) filterOptions.agents = [agent];
+      if (tool) filterOptions.tools = [tool];
+      if (search) filterOptions.searchQuery = search;
       
-      if (agent) {
-        events = events.filter(e => e.agent === agent);
+      if (Object.keys(filterOptions).length > 0) {
+        events = devtoolsTracker.filterEvents(filterOptions);
       }
       
       return c.json({ events });
     });
     
+    // API endpoint for sessions
+    app.get("/devtools/api/sessions", (c) => {
+      const tool = c.req.query("tool");
+      const sessions = tool 
+        ? devtoolsTracker.getSessionsForTool(tool)
+        : devtoolsTracker.getSessions();
+      return c.json({ sessions });
+    });
+    
     // API endpoint for statistics
     app.get("/devtools/api/stats", (c) => {
-      return c.json(devtoolsTracker.getStats());
+      return c.json({
+        ...devtoolsTracker.getStats(),
+        uniqueAgents: devtoolsTracker.getUniqueAgents(),
+        uniqueTools: devtoolsTracker.getUniqueToolNames(),
+        eventStats: devtoolsTracker.getEventStats(),
+      });
     });
     
     // API endpoint to clear events
@@ -318,6 +337,8 @@ if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "t
     });
     
     console.log("🔧 Devtools API: http://localhost:" + port + "/devtools/api/events");
+    console.log("🔧 Devtools Sessions: http://localhost:" + port + "/devtools/api/sessions");
+    console.log("🔧 Devtools Stats: http://localhost:" + port + "/devtools/api/stats");
   });
   
   // Serve devtools UI

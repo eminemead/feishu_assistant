@@ -27,10 +27,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
   ).trim();
 
   // Create streaming card
-  const card = await createAndSendStreamingCard(chatId, "chat_id", {
-    title: "Evidence-总参",
-    initialContent: "Thinking...",
-  });
+  const card = await createAndSendStreamingCard(chatId, "chat_id", {});
 
   // Create update function for streaming
   let currentContent = "";

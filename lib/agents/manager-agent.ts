@@ -361,13 +361,25 @@ export async function managerAgent(
 
     // Wait for the final result
      let finalResult;
+     let tokenUsage: any = undefined;
      try {
        finalResult = await result;
        const resultText = typeof finalResult?.text === 'string' ? finalResult.text : '';
+       
+       // Capture token usage from result
+       if (finalResult && typeof finalResult === 'object' && 'usage' in finalResult) {
+         tokenUsage = finalResult.usage;
+       }
+       
        console.log(`[Manager] Final result received:`, {
          text: resultText?.substring(0, 100) || 'N/A',
          textLength: resultText?.length || 0,
          accumulatedLength: accumulatedText.length,
+         usage: tokenUsage ? {
+           input: tokenUsage.promptTokens,
+           output: tokenUsage.completionTokens,
+           total: tokenUsage.totalTokens,
+         } : 'N/A',
        });
      } catch (finalError) {
        console.error(`[Manager] Error awaiting final result:`, finalError);
@@ -382,11 +394,18 @@ export async function managerAgent(
         console.log(`[Manager] Query handled directly (no handoff): "${query}"`);
       }
       
-      // Track response and health metrics
-      devtoolsTracker.trackResponse("Manager", finalText, duration, {
-        routedAgent,
-        queryLength: query.length,
-      });
+      // Track response with token usage and health metrics
+      devtoolsTracker.trackResponse(
+        "Manager",
+        finalText,
+        duration,
+        {
+          routedAgent,
+          queryLength: query.length,
+          model: currentModelTier === 'fallback' ? 'gemini-2.5-flash' : 'kat-coder-pro',
+        },
+        tokenUsage
+      );
       
       // Track in health monitor
       healthMonitor.trackAgentCall("Manager", duration, true);

@@ -190,14 +190,14 @@ export async function createStreamingCard(
     schema: "2.0",
     header: {
       title: {
-        content: config.title || "Evidence-总参",
+        content: config.title || "",
         tag: "plain_text",
       },
     },
     config: {
       streaming_mode: true,
       summary: {
-        content: config.initialContent || "Thinking...",
+        content: config.initialContent || "",
       },
       streaming_config: {
         print_frequency_ms: {
@@ -219,7 +219,7 @@ export async function createStreamingCard(
       elements: [
         {
           tag: "markdown",
-          content: config.initialContent || "Thinking...",
+          content: config.initialContent || "",
           element_id: elementId,
         },
       ],

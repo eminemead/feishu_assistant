@@ -37,6 +37,54 @@ bun test --match "*manager-agent*"  # Run tests matching pattern
 - **Type safety**: Run `bun run typecheck` separately if you need type verification (slow but thorough)
 - **Watch mode**: `bun run build:watch` for incremental compilation during development
 
+### Server Startup
+
+**Environment Setup:**
+- Set `NODE_ENV=development` and `ENABLE_DEVTOOLS=true` in `.env` to enable developer tools
+- These are enabled by default in `.env.example` for easy testing
+- Enhanced Devtools UI available at `http://localhost:3000/devtools` with:
+  - Real-time event monitoring and filtering
+  - Token usage tracking and cost estimation
+  - Multi-step tool session grouping
+  - Agent routing metadata and decision visualization
+  - Advanced search and filtering (by agent, tool, type, custom queries)
+
+**Running the Server:**
+- **Startup time**: 5-8 seconds in Subscription Mode (WebSocket connects to Feishu)
+- **Not a hang**: Server appears unresponsive during startup but is actually initializing the persistent WebSocket connection
+- **Background mode recommended**: Always run with `nohup` or PM2 to avoid perceived hangs in foreground
+- **Startup flow**: HTTP server starts immediately on port 3000, then WebSocket initialization completes asynchronously
+- **Health check**: Use `curl http://localhost:3000/health` to verify server is running and connected
+- **PM2**: Pre-configured in `ecosystem.config.js` for production deployments with auto-restart and memory limits
+
+### Devtools API Endpoints
+
+**Real-time Monitoring:**
+- `GET /devtools/api/events` - Get events with filtering
+  - `?limit=100` - Limit number of events
+  - `?type=agent_call` - Filter by event type
+  - `?agent=Manager` - Filter by agent name
+  - `?tool=mgr_okr_review` - Filter by tool name
+  - `?search=query` - Search event data
+
+- `GET /devtools/api/sessions` - Get tool call sessions
+  - `?tool=mgr_okr_visualization` - Get sessions for specific tool
+
+- `GET /devtools/api/stats` - Get aggregated statistics
+  - Total events, events by type/tool/agent
+  - Unique agents and tools
+  - Time range of events
+
+- `POST /devtools/api/clear` - Clear all events (development only)
+
+**Features:**
+- Token usage tracking (input, output, total)
+- Cost estimation per event
+- Multi-step tool session grouping
+- Agent routing metadata (strategy, match score, alternatives)
+- Event search and advanced filtering
+- Real-time stats dashboard
+
 ## Architecture & Structure
 
 **Core Components:**

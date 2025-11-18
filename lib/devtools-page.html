@@ -24,6 +24,8 @@
     #root {
       width: 100%;
       height: 100%;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       padding: 1rem;
@@ -44,10 +46,10 @@
       font-size: 0.875rem;
     }
     .info {
-      padding: 1rem;
+      padding: 0.75rem 1rem;
       background: #1a1a1a;
       border-bottom: 1px solid #333;
-      font-size: 0.875rem;
+      font-size: 0.75rem;
       color: #aaa;
     }
     .info code {
@@ -56,22 +58,242 @@
       border-radius: 3px;
       font-family: 'Monaco', 'Courier New', monospace;
     }
+    .filters {
+      padding: 1rem;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .filter-group label {
+      font-size: 0.875rem;
+      color: #aaa;
+    }
+    select, input {
+      background: #2a2a2a;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 0.5rem;
+      font-size: 0.875rem;
+    }
+    select:hover, input:hover {
+      border-color: #0a5;
+    }
+    .stats {
+      padding: 0.75rem 1rem;
+      background: #0a0a0a;
+      border-bottom: 1px solid #333;
+      font-size: 0.75rem;
+      color: #666;
+      display: flex;
+      gap: 2rem;
+    }
+    .stat {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .stat-label {
+      color: #aaa;
+    }
+    .stat-value {
+      color: #0a5;
+      font-weight: 600;
+    }
+    .container {
+      flex: 1;
+      display: flex;
+      gap: 1rem;
+      padding: 1rem;
+      overflow: hidden;
+    }
+    #events-list {
+      flex: 1;
+      overflow-y: auto;
+      border-right: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+    }
+    .event-item {
+      padding: 0.75rem;
+      border-bottom: 1px solid #333;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.875rem;
+    }
+    .event-item:hover {
+      background: #1a1a1a;
+    }
+    .event-item.selected {
+      background: #333;
+      border-left: 3px solid #0a5;
+      padding-left: calc(0.75rem - 3px);
+    }
+    .event-type {
+      color: #0a5;
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+    }
+    .event-meta {
+      color: #666;
+      font-size: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .event-preview {
+      color: #aaa;
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .event-tokens {
+      color: #999;
+      font-size: 0.7rem;
+      margin-top: 0.25rem;
+    }
+    #event-detail {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .detail-section {
+      margin-bottom: 1.5rem;
+    }
+    .detail-title {
+      color: #0a5;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+    .detail-content {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    .detail-row {
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .detail-label {
+      color: #666;
+      min-width: 120px;
+    }
+    .detail-value {
+      color: #ccc;
+      font-family: 'Monaco', 'Courier New', monospace;
+      flex: 1;
+      text-align: right;
+    }
+    .detail-value.success {
+      color: #0a5;
+    }
+    .detail-value.error {
+      color: #f00;
+    }
+    .detail-value.warning {
+      color: #fa0;
+    }
+    pre {
+      background: #0a0a0a;
+      padding: 0.75rem;
+      border-radius: 4px;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      border-left: 3px solid #333;
+    }
+    .no-data {
+      padding: 1rem;
+      color: #666;
+      text-align: center;
+    }
+    button {
+      background: #0a5;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0f8;
+    }
   </style>
 </head>
 <body>
   <div id="root">
     <div class="header">
-      <h1>🔧 AI SDK Devtools</h1>
+      <h1>🔧 AI SDK Devtools Enhanced</h1>
       <div class="status">Connected</div>
     </div>
     <div class="info">
-      Monitoring AI tool calls, agent handoffs, and performance metrics.
-      <br>
+      Monitoring AI tool calls, agent handoffs, token usage, and performance metrics.
       Server: <code id="server-url"></code>
     </div>
-    <div id="devtools-container" style="display: flex; gap: 1rem; padding: 1rem; height: calc(100vh - 120px); overflow: hidden;">
-      <div id="events-list" style="flex: 1; overflow-y: auto; border-right: 1px solid #333;"></div>
-      <div id="event-detail" style="flex: 1; overflow-y: auto; padding: 1rem;"></div>
+    
+    <div class="filters">
+      <div class="filter-group">
+        <label>Type:</label>
+        <select id="filter-type" onchange="applyFilters()">
+          <option value="">All Types</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Agent:</label>
+        <select id="filter-agent" onchange="applyFilters()">
+          <option value="">All Agents</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Tool:</label>
+        <select id="filter-tool" onchange="applyFilters()">
+          <option value="">All Tools</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Search:</label>
+        <input type="text" id="filter-search" placeholder="Search events..." onkeyup="applyFilters()" />
+      </div>
+      <button onclick="clearFilters()">Clear Filters</button>
+      <button onclick="clearEvents()">Clear Events</button>
+    </div>
+    
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-label">Total Events:</span>
+        <span class="stat-value" id="stat-total">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Total Tokens:</span>
+        <span class="stat-value" id="stat-tokens">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Est. Cost:</span>
+        <span class="stat-value" id="stat-cost">$0.00</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Errors:</span>
+        <span class="stat-value" id="stat-errors">0</span>
+      </div>
+    </div>
+
+    <div class="container">
+      <div id="events-list"></div>
+      <div id="event-detail"></div>
     </div>
   </div>
 
@@ -87,41 +309,124 @@
     // Fetch events from the API
     async function fetchEvents() {
       try {
-        const response = await fetch(`${serverUrl}/devtools/api/events`);
+        const response = await fetch(`${serverUrl}/devtools/api/events?limit=500`);
         const data = await response.json();
         allEvents = data.events || [];
-        renderEventsList();
+        
+        // Fetch stats
+        const statsResponse = await fetch(`${serverUrl}/devtools/api/stats`);
+        const stats = await statsResponse.json();
+        updateStats(stats);
+        
+        // Update filter options
+        updateFilterOptions(stats);
+        
+        applyFilters();
       } catch (error) {
         console.error('Failed to fetch events:', error);
-        eventsList.innerHTML = `<div style="padding: 1rem; color: #f00;">Error loading events</div>`;
+        eventsList.innerHTML = `<div class="no-data">Error loading events</div>`;
       }
     }
 
-    function renderEventsList() {
-      if (allEvents.length === 0) {
-        eventsList.innerHTML = `<div style="padding: 1rem; color: #666;">Waiting for events...</div>`;
+    function updateStats(stats) {
+      const totalTokens = Object.values(stats.eventStats?.byType || {})
+        .reduce((sum, count) => sum + count, 0);
+      
+      // Calculate total tokens from events
+      let totalTokensUsed = 0;
+      let totalCost = 0;
+      allEvents.forEach(e => {
+        if (e.usage) {
+          totalTokensUsed += e.usage.totalTokens || 0;
+          if (e.metadata?.costEstimate) {
+            totalCost += e.metadata.costEstimate;
+          }
+        }
+      });
+      
+      document.getElementById('stat-total').textContent = allEvents.length;
+      document.getElementById('stat-tokens').textContent = totalTokensUsed.toLocaleString();
+      document.getElementById('stat-cost').textContent = '$' + totalCost.toFixed(4);
+      document.getElementById('stat-errors').textContent = (stats.eventStats?.byType?.error || 0);
+    }
+
+    function updateFilterOptions(stats) {
+      // Update Type filter
+      const typeSelect = document.getElementById('filter-type');
+      const currentType = typeSelect.value;
+      const types = Object.keys(stats.eventStats?.byType || {});
+      const typeOptions = types
+        .filter(t => t && !['custom', 'unknown'].includes(t))
+        .map(t => `<option value="${t}">${t}</option>`)
+        .join('');
+      typeSelect.innerHTML = '<option value="">All Types</option>' + typeOptions;
+      typeSelect.value = currentType;
+
+      // Update Agent filter
+      const agentSelect = document.getElementById('filter-agent');
+      const currentAgent = agentSelect.value;
+      const agents = stats.uniqueAgents || [];
+      const agentOptions = agents
+        .map(a => `<option value="${a}">${a}</option>`)
+        .join('');
+      agentSelect.innerHTML = '<option value="">All Agents</option>' + agentOptions;
+      agentSelect.value = currentAgent;
+
+      // Update Tool filter
+      const toolSelect = document.getElementById('filter-tool');
+      const currentTool = toolSelect.value;
+      const tools = stats.uniqueTools || [];
+      const toolOptions = tools
+        .map(t => `<option value="${t}">${t}</option>`)
+        .join('');
+      toolSelect.innerHTML = '<option value="">All Tools</option>' + toolOptions;
+      toolSelect.value = currentTool;
+    }
+
+    function applyFilters() {
+      const type = document.getElementById('filter-type').value;
+      const agent = document.getElementById('filter-agent').value;
+      const tool = document.getElementById('filter-tool').value;
+      const search = document.getElementById('filter-search').value;
+
+      let filtered = allEvents;
+
+      if (type) {
+        filtered = filtered.filter(e => e.type === type);
+      }
+      if (agent) {
+        filtered = filtered.filter(e => e.agent === agent);
+      }
+      if (tool) {
+        filtered = filtered.filter(e => e.tool === tool);
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        filtered = filtered.filter(e =>
+          JSON.stringify(e).toLowerCase().includes(q)
+        );
+      }
+
+      renderEventsList(filtered);
+    }
+
+    function renderEventsList(events) {
+      if (events.length === 0) {
+        eventsList.innerHTML = `<div class="no-data">Waiting for events...</div>`;
         return;
       }
 
-      eventsList.innerHTML = allEvents.map(event => `
-        <div 
-          data-event-id="${event.id}"
-          style="
-            padding: 0.75rem;
-            border-bottom: 1px solid #333;
-            cursor: pointer;
-            background: ${selectedEventId === event.id ? '#333' : 'transparent'};
-            transition: background 0.2s;
-          "
-          onclick="selectEvent('${event.id}')"
-        >
-          <div style="font-size: 0.875rem; color: #0a5; margin-bottom: 0.25rem;">
-            ${event.type} - ${event.agent}
+      eventsList.innerHTML = events.map(event => `
+        <div class="event-item ${selectedEventId === event.id ? 'selected' : ''}"
+             onclick="selectEvent('${event.id}')">
+          <div class="event-type">${event.type}</div>
+          <div class="event-meta">
+            <span>${event.agent || (event.tool ? `[${event.tool}]` : 'System')}</span>
+            <span>${new Date(event.timestamp).toLocaleTimeString()}</span>
           </div>
-          <div style="font-size: 0.75rem; color: #666;">
-            ${new Date(event.timestamp).toLocaleTimeString()}
-          </div>
-          ${event.data?.query ? `<div style="font-size: 0.75rem; color: #aaa; margin-top: 0.25rem;">${event.data.query.substring(0, 50)}</div>` : ''}
+          ${event.data?.query ? `<div class="event-preview">"${event.data.query.substring(0, 40)}"</div>` : ''}
+          ${event.usage ? `<div class="event-tokens">📊 ${event.usage.totalTokens} tokens (in: ${event.usage.promptTokens}, out: ${event.usage.completionTokens})</div>` : ''}
+          ${event.duration ? `<div class="event-meta"><span>⏱️ ${event.duration}ms</span></div>` : ''}
         </div>
       `).join('');
     }
@@ -129,35 +434,145 @@
     function selectEvent(eventId) {
       selectedEventId = eventId;
       const event = allEvents.find(e => e.id === eventId);
-      
+
       if (event) {
-        eventDetail.innerHTML = `
-          <div>
-            <h3 style="margin-bottom: 1rem; color: #0a5;">${event.type}</h3>
-            <div style="background: #1a1a1a; padding: 1rem; border-radius: 4px;">
-              <div style="margin-bottom: 0.75rem;">
-                <span style="color: #666;">Agent:</span> ${event.agent}
+        let html = `
+          <div class="detail-section">
+            <div class="detail-title">${event.type.toUpperCase()}</div>
+            <div class="detail-content">
+              <div class="detail-row">
+                <span class="detail-label">Type:</span>
+                <span class="detail-value">${event.type}</span>
               </div>
-              <div style="margin-bottom: 0.75rem;">
-                <span style="color: #666;">Type:</span> ${event.type}
+              ${event.agent ? `
+              <div class="detail-row">
+                <span class="detail-label">Agent:</span>
+                <span class="detail-value">${event.agent}</span>
               </div>
-              <div style="margin-bottom: 0.75rem;">
-                <span style="color: #666;">Duration:</span> ${event.duration}ms
+              ` : ''}
+              ${event.tool ? `
+              <div class="detail-row">
+                <span class="detail-label">Tool:</span>
+                <span class="detail-value">${event.tool}</span>
               </div>
-              <div style="margin-bottom: 0.75rem;">
-                <span style="color: #666;">Time:</span> ${new Date(event.timestamp).toLocaleString()}
+              ` : ''}
+              <div class="detail-row">
+                <span class="detail-label">Time:</span>
+                <span class="detail-value">${new Date(event.timestamp).toLocaleString()}</span>
               </div>
-              <div style="margin-top: 1.5rem;">
-                <span style="color: #666;">Data:</span>
-                <pre style="background: #0a0a0a; padding: 0.75rem; border-radius: 4px; margin-top: 0.5rem; font-size: 0.75rem; overflow-x: auto;">
-${JSON.stringify(event.data, null, 2)}
-                </pre>
+              ${event.duration ? `
+              <div class="detail-row">
+                <span class="detail-label">Duration:</span>
+                <span class="detail-value">${event.duration}ms</span>
               </div>
+              ` : ''}
             </div>
           </div>
         `;
+
+        // Token usage
+        if (event.usage) {
+          html += `
+            <div class="detail-section">
+              <div class="detail-title">Token Usage</div>
+              <div class="detail-content">
+                <div class="detail-row">
+                  <span class="detail-label">Input Tokens:</span>
+                  <span class="detail-value">${(event.usage.promptTokens || 0).toLocaleString()}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Output Tokens:</span>
+                  <span class="detail-value">${(event.usage.completionTokens || 0).toLocaleString()}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Total Tokens:</span>
+                  <span class="detail-value">${(event.usage.totalTokens || 0).toLocaleString()}</span>
+                </div>
+                ${event.metadata?.costEstimate ? `
+                <div class="detail-row">
+                  <span class="detail-label">Est. Cost:</span>
+                  <span class="detail-value">$${event.metadata.costEstimate.toFixed(4)}</span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }
+
+        // Metadata
+        if (event.metadata) {
+          html += `
+            <div class="detail-section">
+              <div class="detail-title">Metadata</div>
+              <div class="detail-content">
+                ${event.metadata.model ? `
+                <div class="detail-row">
+                  <span class="detail-label">Model:</span>
+                  <span class="detail-value">${event.metadata.model}</span>
+                </div>
+                ` : ''}
+                ${event.metadata.routingStrategy ? `
+                <div class="detail-row">
+                  <span class="detail-label">Routing:</span>
+                  <span class="detail-value">${event.metadata.routingStrategy}</span>
+                </div>
+                ` : ''}
+                ${event.metadata.matchScore !== undefined ? `
+                <div class="detail-row">
+                  <span class="detail-label">Match Score:</span>
+                  <span class="detail-value">${(event.metadata.matchScore * 100).toFixed(1)}%</span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }
+
+        // Error info
+        if (event.error) {
+          html += `
+            <div class="detail-section">
+              <div class="detail-title">Error</div>
+              <div class="detail-content">
+                <div class="detail-value error">${event.error}</div>
+              </div>
+            </div>
+          `;
+        }
+
+        // Full data
+        if (event.data && Object.keys(event.data).length > 0) {
+          html += `
+            <div class="detail-section">
+              <div class="detail-title">Data</div>
+              <pre>${JSON.stringify(event.data, null, 2)}</pre>
+            </div>
+          `;
+        }
+
+        eventDetail.innerHTML = html;
       }
-      renderEventsList();
+      applyFilters();
+    }
+
+    function clearFilters() {
+      document.getElementById('filter-type').value = '';
+      document.getElementById('filter-agent').value = '';
+      document.getElementById('filter-tool').value = '';
+      document.getElementById('filter-search').value = '';
+      applyFilters();
+    }
+
+    async function clearEvents() {
+      try {
+        await fetch(`${serverUrl}/devtools/api/clear`, { method: 'POST' });
+        allEvents = [];
+        selectedEventId = null;
+        eventDetail.innerHTML = '';
+        eventsList.innerHTML = `<div class="no-data">Events cleared</div>`;
+      } catch (error) {
+        console.error('Failed to clear events:', error);
+      }
     }
 
     // Fetch events every 1 second
@@ -166,4 +581,3 @@ ${JSON.stringify(event.data, null, 2)}
   </script>
 </body>
 </html>
-
