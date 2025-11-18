@@ -26,10 +26,13 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     ""
   ).trim();
 
-  // Create streaming card
+  // Create streaming card - reply in thread instead of direct chat message
   const card = await createAndSendStreamingCard(chatId, "chat_id", {
     title: "Evidence-总参",
     initialContent: "我琢么琢么...",
+  }, {
+    replyToMessageId: messageId,
+    replyInThread: true,
   });
 
   // Create update function for streaming

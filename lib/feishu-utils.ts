@@ -417,17 +417,67 @@ export async function sendCardMessage(
 }
 
 /**
+ * Reply to a message in a thread with a card
+ */
+export async function replyCardMessageInThread(
+  messageId: string,
+  cardEntityId: string,
+  replyInThread: boolean = true
+): Promise<string> {
+  const resp = await client.im.message.reply({
+    path: {
+      message_id: messageId,
+    },
+    data: {
+      msg_type: "interactive",
+      content: JSON.stringify({
+        type: "card",
+        data: {
+          card_id: cardEntityId,
+        },
+      }),
+      reply_in_thread: replyInThread,
+    },
+  });
+
+  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+  const responseData = resp.data || resp;
+
+  if (!isSuccess || !responseData?.message_id) {
+    console.error("Failed to reply card message in thread. Response:", JSON.stringify(resp, null, 2));
+    throw new Error(`Failed to reply card message in thread: ${JSON.stringify(resp)}`);
+  }
+
+  return responseData.message_id;
+}
+
+/**
  * Create and send a streaming card message
  */
 export async function createAndSendStreamingCard(
   receiveId: string,
   receiveIdType: "chat_id" | "open_id" | "user_id" | "email",
-  config: StreamingCardConfig = {}
+  config: StreamingCardConfig = {},
+  options?: { replyToMessageId?: string; replyInThread?: boolean }
 ): Promise<{ cardId: string; cardEntityId: string; elementId: string; messageId: string }> {
   console.log(`📤 [Card] Creating and sending streaming card to ${receiveIdType}:${receiveId}`);
   const card = await createStreamingCard(config);
   console.log(`📨 [Card] Sending card message with cardId: ${card.cardId}`);
-  const messageId = await sendCardMessage(receiveId, receiveIdType, card.cardEntityId);
+  
+  let messageId: string;
+  if (options?.replyToMessageId) {
+    // Reply to a specific message in thread
+    console.log(`📨 [Card] Sending as thread reply to message: ${options.replyToMessageId}`);
+    messageId = await replyCardMessageInThread(
+      options.replyToMessageId,
+      card.cardEntityId,
+      options.replyInThread !== false // Default to true
+    );
+  } else {
+    // Send as direct message
+    messageId = await sendCardMessage(receiveId, receiveIdType, card.cardEntityId);
+  }
+  
   console.log(`✅ [Card] Card sent successfully: messageId=${messageId}, cardId=${card.cardId}`);
 
   return {

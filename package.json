@@ -5,7 +5,10 @@
   "main": "dist/server.js",
   "packageManager": "bun@latest",
   "scripts": {
-    "build": "NODE_OPTIONS='--max-old-space-size=4096' bun tsc",
+    "typecheck": "tsc --noEmit",
+    "build:transpile": "npx esbuild server.ts --platform=node --target=es2020 --outdir=dist --bundle --format=cjs --external:@larksuiteoapi/node-sdk --external:duckdb --external:canvas --external:sharp --external:postgres --external:@ai-sdk-tools/artifacts --external:@ai-sdk-tools/agents --external:@ai-sdk-tools/cache --external:@ai-sdk-tools/memory --external:@ai-sdk-tools/store --external:@ai-sdk-tools/devtools --external:@observablehq/plot --external:jsdom",
+    "build": "bun run build:transpile",
+    "build:tsc": "NODE_OPTIONS='--max-old-space-size=8192' bun tsc",
     "build:fast": "bun build ./server.ts --outdir ./dist --target node --external @larksuiteoapi/node-sdk --external duckdb --external canvas --external sharp",
     "build:watch": "bun tsc --watch",
     "build:clean": "rm -rf dist .tsbuildinfo && bun run build",
@@ -51,6 +54,7 @@
     "@ai-sdk-tools/devtools": "^1.0.8",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.17",
+    "esbuild": "^0.20.2",
     "typescript": "^5.3.3"
   }
 }
