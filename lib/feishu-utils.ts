@@ -83,16 +83,48 @@ export async function getThread(
   // Note: Feishu API for listing messages in a thread might be different
   // For now, we'll fetch recent messages and filter by root_id
   // This is a simplified implementation - you may need to adjust based on actual API
-  const resp = await client.im.message.list({
-    params: {
-      container_id_type: "chat_id",
-      container_id: chatId,
-      page_size: 50,
-    },
-  });
+  
+  let resp;
+  let retries = 1; // Reduced from 3 to minimize latency on failures
+  const retryDelayMs = 200; // Reduced from 500ms
+  const timeoutMs = 5000; // 5 second timeout for thread fetch
+  
+  while (retries > 0) {
+    try {
+      // Wrap in Promise.race with timeout to prevent indefinite hangs
+      const fetchPromise = client.im.message.list({
+        params: {
+          container_id_type: "chat_id",
+          container_id: chatId,
+          page_size: 50,
+        },
+      });
+      
+      resp = await Promise.race([
+        fetchPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Thread fetch timeout after ${timeoutMs}ms`)), timeoutMs)
+        )
+      ]) as any;
+      
+      break;
+    } catch (error) {
+      retries--;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (retries === 0) {
+        console.error("❌ Failed to fetch thread after 1 attempt:", errorMsg);
+        // Return empty messages on failure to continue conversation gracefully
+        console.warn("⚠️ Proceeding with empty thread context (falling back to current message only)");
+        return [];
+      }
+      console.warn(`⚠️ Retry ${2 - retries}/1: Failed to fetch thread (${errorMsg}), retrying...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+    }
+  }
 
-  if (!resp.success() || !resp.data?.items) {
-    throw new Error("Failed to fetch messages");
+  if (!resp || !resp.success() || !resp.data?.items) {
+    console.warn("⚠️ No items in thread response, proceeding with empty context");
+    return [];
   }
 
   // Filter messages in the thread (root_id matches or message_id matches rootId)

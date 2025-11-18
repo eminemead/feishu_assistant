@@ -69,48 +69,100 @@
       <br>
       Server: <code id="server-url"></code>
     </div>
-    <div id="devtools-container"></div>
+    <div id="devtools-container" style="display: flex; gap: 1rem; padding: 1rem; height: calc(100vh - 120px); overflow: hidden;">
+      <div id="events-list" style="flex: 1; overflow-y: auto; border-right: 1px solid #333;"></div>
+      <div id="event-detail" style="flex: 1; overflow-y: auto; padding: 1rem;"></div>
+    </div>
   </div>
 
-  <!-- React and ReactDOM from CDN -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- Note: @ai-sdk-tools/devtools needs to be bundled or loaded differently -->
-  <!-- For now, we'll create a simple monitoring interface -->
   <script>
-    // Simple devtools interface that connects to the server
     const serverUrl = window.location.origin;
     document.getElementById('server-url').textContent = serverUrl;
 
-    // Create a simple monitoring interface
-    const DevtoolsContainer = document.getElementById('devtools-container');
-    DevtoolsContainer.innerHTML = `
-      <div style="padding: 2rem; text-align: center;">
-        <h2 style="margin-bottom: 1rem; color: #fff;">AI SDK Devtools</h2>
-        <p style="color: #aaa; margin-bottom: 2rem;">
-          The devtools will automatically track AI SDK calls from your agent system.
-          <br>
-          Monitor tool calls, agent handoffs, and performance in real-time.
-        </p>
-        <div style="background: #1a1a1a; border-radius: 8px; padding: 1.5rem; text-align: left; max-width: 800px; margin: 0 auto;">
-          <h3 style="margin-bottom: 1rem; color: #fff;">What's Being Monitored:</h3>
-          <ul style="list-style: none; padding: 0; color: #aaa;">
-            <li style="margin-bottom: 0.5rem;">✓ Manager agent routing decisions</li>
-            <li style="margin-bottom: 0.5rem;">✓ Specialist agent handoffs (OKR, Alignment, P&L, DPA PM)</li>
-            <li style="margin-bottom: 0.5rem;">✓ Tool calls (searchWeb, mgr_okr_review, etc.)</li>
-            <li style="margin-bottom: 0.5rem;">✓ Response times and token usage</li>
-            <li style="margin-bottom: 0.5rem;">✓ Error tracking and debugging</li>
-          </ul>
-        </div>
-        <p style="color: #666; margin-top: 2rem; font-size: 0.875rem;">
-          Check your server console for detailed logs. The devtools integration tracks all AI SDK activity.
-        </p>
-      </div>
-    `;
+    const eventsList = document.getElementById('events-list');
+    const eventDetail = document.getElementById('event-detail');
+    let allEvents = [];
+    let selectedEventId = null;
 
-    // In a full implementation, you would load @ai-sdk-tools/devtools here
-    // and render the AIDevtools component. For now, this provides a placeholder.
+    // Fetch events from the API
+    async function fetchEvents() {
+      try {
+        const response = await fetch(`${serverUrl}/devtools/api/events`);
+        const data = await response.json();
+        allEvents = data.events || [];
+        renderEventsList();
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+        eventsList.innerHTML = `<div style="padding: 1rem; color: #f00;">Error loading events</div>`;
+      }
+    }
+
+    function renderEventsList() {
+      if (allEvents.length === 0) {
+        eventsList.innerHTML = `<div style="padding: 1rem; color: #666;">Waiting for events...</div>`;
+        return;
+      }
+
+      eventsList.innerHTML = allEvents.map(event => `
+        <div 
+          data-event-id="${event.id}"
+          style="
+            padding: 0.75rem;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            background: ${selectedEventId === event.id ? '#333' : 'transparent'};
+            transition: background 0.2s;
+          "
+          onclick="selectEvent('${event.id}')"
+        >
+          <div style="font-size: 0.875rem; color: #0a5; margin-bottom: 0.25rem;">
+            ${event.type} - ${event.agent}
+          </div>
+          <div style="font-size: 0.75rem; color: #666;">
+            ${new Date(event.timestamp).toLocaleTimeString()}
+          </div>
+          ${event.data?.query ? `<div style="font-size: 0.75rem; color: #aaa; margin-top: 0.25rem;">${event.data.query.substring(0, 50)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function selectEvent(eventId) {
+      selectedEventId = eventId;
+      const event = allEvents.find(e => e.id === eventId);
+      
+      if (event) {
+        eventDetail.innerHTML = `
+          <div>
+            <h3 style="margin-bottom: 1rem; color: #0a5;">${event.type}</h3>
+            <div style="background: #1a1a1a; padding: 1rem; border-radius: 4px;">
+              <div style="margin-bottom: 0.75rem;">
+                <span style="color: #666;">Agent:</span> ${event.agent}
+              </div>
+              <div style="margin-bottom: 0.75rem;">
+                <span style="color: #666;">Type:</span> ${event.type}
+              </div>
+              <div style="margin-bottom: 0.75rem;">
+                <span style="color: #666;">Duration:</span> ${event.duration}ms
+              </div>
+              <div style="margin-bottom: 0.75rem;">
+                <span style="color: #666;">Time:</span> ${new Date(event.timestamp).toLocaleString()}
+              </div>
+              <div style="margin-top: 1.5rem;">
+                <span style="color: #666;">Data:</span>
+                <pre style="background: #0a0a0a; padding: 0.75rem; border-radius: 4px; margin-top: 0.5rem; font-size: 0.75rem; overflow-x: auto;">
+${JSON.stringify(event.data, null, 2)}
+                </pre>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      renderEventsList();
+    }
+
+    // Fetch events every 1 second
+    fetchEvents();
+    setInterval(fetchEvents, 1000);
   </script>
 </body>
 </html>

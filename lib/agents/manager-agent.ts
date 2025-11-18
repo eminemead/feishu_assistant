@@ -6,11 +6,15 @@ import { pnlAgent } from "./pnl-agent";
 import { dpaPmAgent } from "./dpa-pm-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
-import { openrouter } from "../shared/config";
+import { getPrimaryModel, getFallbackModel, isRateLimitError } from "../shared/model-fallback";
 import { createSearchWebTool } from "../tools";
+import { healthMonitor } from "../health-monitor";
 
 // Create web search tool for fallback (with caching and devtools tracking)
 const searchWebTool = createSearchWebTool(true, true);
+
+// Track which model tier is currently in use for this session
+let currentModelTier: "primary" | "fallback" = "primary";
 
 /**
  * Routing logic for manager agent:
@@ -29,7 +33,7 @@ const searchWebTool = createSearchWebTool(true, true);
  */
 export const managerAgentInstance = new Agent({
   name: "Manager",
-  model: openrouter("kwaipilot/kat-coder-pro:free"),
+  model: getPrimaryModel(),
   instructions: `You are a Feishu/Lark AI assistant that routes queries to specialist agents. Most user queries will be in Chinese (中文).
 
 路由规则（按以下顺序应用）：
@@ -156,40 +160,59 @@ export async function managerAgent(
     
     // Use Agent.stream() with execution context
     // Note: The type definition shows messages, but internally it needs executionContext
-    const result = (managerAgentInstance.stream as any)({
-      messages,
-      executionContext,
-    });
-
-    console.log(`[Manager] Stream created, starting to read textStream...`);
+    let result;
+    try {
+      result = (managerAgentInstance.stream as any)({
+        messages,
+        executionContext,
+      });
+      console.log(`[Manager] Stream created, starting to read textStream...`);
+    } catch (streamError) {
+      console.error(`[Manager] Error creating stream:`, streamError);
+      
+      // Check if it's a rate limit error
+      if (isRateLimitError(streamError)) {
+        console.warn(`⚠️ [Manager] Rate limit detected (429). Consider switching to fallback model.`);
+        devtoolsTracker.trackError("Manager", streamError, {
+          query,
+          errorType: "RATE_LIMIT",
+          recommendation: "Switch to fallback model (google/gemini-2.5-flash-lite)",
+        });
+      }
+      throw streamError;
+    }
 
     // Process both textStream and fullStream in parallel
-    // fullStream contains events like agent-handoff
-    const processStreams = async () => {
-      // Process fullStream to catch handoff events
-      const fullStreamPromise = (async () => {
-        try {
-          for await (const part of result.fullStream) {
-            // Check for agent-handoff events in the stream
-            if (part && typeof part === 'object') {
-              const event = part as any;
-              // Look for handoff indicators in the stream parts
-              if (event.type === 'agent-handoff' || event.type === 'handoff' || 
-                  (event.agent && event.agent !== 'Manager')) {
-                routedAgent = event.to || event.agent || event.agentName;
-                updateStatus?.(`Routing to ${routedAgent}...`);
-                console.log(`[Manager] Routing decision detected: "${query}" → ${routedAgent}`);
-                
-                // Track agent handoff
-                devtoolsTracker.trackAgentHandoff("Manager", routedAgent, `Query: ${query.substring(0, 50)}...`);
-              }
-            }
-          }
-        } catch (e) {
-          // Ignore errors in fullStream processing
-          console.log(`[Manager] FullStream processing completed or error:`, e);
-        }
-      })();
+     // fullStream contains events like agent-handoff
+     const processStreams = async () => {
+       // Process fullStream to catch handoff events
+       const fullStreamPromise = (async () => {
+         try {
+           for await (const part of result.fullStream) {
+             // Check for agent-handoff events in the stream
+             if (part && typeof part === 'object') {
+               const event = part as any;
+               // Look for handoff indicators in the stream parts
+               if (event.type === 'agent-handoff' || event.type === 'handoff' || 
+                   (event.agent && event.agent !== 'Manager')) {
+                 routedAgent = event.to || event.agent || event.agentName;
+                 updateStatus?.(`Routing to ${routedAgent}...`);
+                 console.log(`[Manager] Routing decision detected: "${query}" → ${routedAgent}`);
+                 
+                 // Track agent handoff
+                 devtoolsTracker.trackAgentHandoff("Manager", routedAgent, `Query: ${query.substring(0, 50)}...`);
+               }
+             }
+           }
+         } catch (e) {
+           // Log errors in fullStream processing but don't fail
+           if (e instanceof Error && !e.message.includes('break')) {
+             console.warn(`[Manager] FullStream processing warning:`, e.message);
+           } else {
+             console.log(`[Manager] FullStream processing completed`);
+           }
+         }
+       })();
 
       // Process textStream with batched updates for better performance
       const textStreamPromise = (async () => {
@@ -215,30 +238,54 @@ export async function managerAgent(
           }
         };
         
-        for await (const textDelta of result.textStream) {
-          chunkCount++;
-          accumulatedText += textDelta;
-          const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-          const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
-          
-          // Update immediately if:
-          // 1. This is the first chunk (show something immediately)
-          // 2. We've accumulated enough characters (MIN_CHARS_PER_UPDATE)
-          // 3. Too much time has passed (MAX_DELAY_MS)
-          const shouldUpdateImmediately = 
-            chunkCount === 1 || 
-            charsSinceLastUpdate >= MIN_CHARS_PER_UPDATE ||
-            timeSinceLastUpdate >= MAX_DELAY_MS;
-          
-          if (shouldUpdateImmediately) {
-            await flushUpdate();
-          } else {
-            // Schedule a batched update
-            if (pendingUpdate) {
-              clearTimeout(pendingUpdate);
+        try {
+          for await (const textDelta of result.textStream) {
+            chunkCount++;
+            accumulatedText += textDelta;
+            const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+            const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+            
+            // Update immediately if:
+            // 1. This is the first chunk (show something immediately)
+            // 2. We've accumulated enough characters (MIN_CHARS_PER_UPDATE)
+            // 3. Too much time has passed (MAX_DELAY_MS)
+            const shouldUpdateImmediately = 
+              chunkCount === 1 || 
+              charsSinceLastUpdate >= MIN_CHARS_PER_UPDATE ||
+              timeSinceLastUpdate >= MAX_DELAY_MS;
+            
+            if (shouldUpdateImmediately) {
+              await flushUpdate();
+            } else {
+              // Schedule a batched update
+              if (pendingUpdate) {
+                clearTimeout(pendingUpdate);
+              }
+              pendingUpdate = setTimeout(flushUpdate, BATCH_DELAY_MS);
             }
-            pendingUpdate = setTimeout(flushUpdate, BATCH_DELAY_MS);
           }
+        } catch (streamIterationError) {
+          const errorMsg = streamIterationError instanceof Error ? streamIterationError.message : String(streamIterationError);
+          console.error(`[Manager] Error during stream iteration:`, errorMsg);
+          
+          // Check if it's a rate limit error
+          if (isRateLimitError(streamIterationError)) {
+            console.warn(`⚠️ [Manager] Rate limit detected during streaming (429). Current model tier: ${currentModelTier}`);
+            if (currentModelTier === "primary") {
+              console.warn(`💡 [Manager] Suggestion: Switch to fallback model for future requests to avoid rate limits`);
+              devtoolsTracker.trackError("Manager", new Error("Rate limit on primary model"), {
+                errorType: "RATE_LIMIT",
+                suggestion: "Use fallback model"
+              });
+            }
+          } else {
+            // Log unexpected errors with context
+            devtoolsTracker.trackError("Manager", 
+              streamIterationError instanceof Error ? streamIterationError : new Error(String(streamIterationError)),
+              { phase: "stream_iteration", query }
+            );
+          }
+          // Continue with accumulated text even if stream fails
         }
         
         // Flush any pending update
@@ -254,33 +301,77 @@ export async function managerAgent(
     await processStreams();
 
     // Wait for the final result
-    const finalResult = await result;
-    const finalText = accumulatedText || finalResult.text || "";
-    const duration = Date.now() - startTime;
-    
-    if (!routedAgent) {
-      console.log(`[Manager] Query handled directly (no handoff): "${query}"`);
-    }
-    
-    // Track response
-    devtoolsTracker.trackResponse("Manager", finalText, duration, {
-      routedAgent,
-      queryLength: query.length,
-    });
-    
-    console.log(`[Manager] Returning final text (length=${finalText.length})`);
-    return finalText;
+     let finalResult;
+     try {
+       finalResult = await result;
+       const resultText = typeof finalResult?.text === 'string' ? finalResult.text : '';
+       console.log(`[Manager] Final result received:`, {
+         text: resultText?.substring(0, 100) || 'N/A',
+         textLength: resultText?.length || 0,
+         accumulatedLength: accumulatedText.length,
+       });
+     } catch (finalError) {
+       console.error(`[Manager] Error awaiting final result:`, finalError);
+       finalResult = { text: "" };
+     }
+     
+     const finalResultText = typeof finalResult?.text === 'string' ? finalResult.text : '';
+     const finalText = accumulatedText || finalResultText || "";
+      const duration = Date.now() - startTime;
+      
+      if (!routedAgent) {
+        console.log(`[Manager] Query handled directly (no handoff): "${query}"`);
+      }
+      
+      // Track response and health metrics
+      devtoolsTracker.trackResponse("Manager", finalText, duration, {
+        routedAgent,
+        queryLength: query.length,
+      });
+      
+      // Track in health monitor
+      healthMonitor.trackAgentCall("Manager", duration, true);
+      
+      console.log(`[Manager] Returning final text (length=${finalText.length})`);
+      return finalText;
   } catch (error) {
     const duration = Date.now() - startTime;
+    const errorMsg = error instanceof Error ? error.message : String(error);
     
-    // Track error
+    // Determine error type for better diagnostics
+    const isRateLimit = isRateLimitError(error);
+    const isTimeout = errorMsg.toLowerCase().includes('timeout') || errorMsg.toLowerCase().includes('econnrefused');
+    const isAuthError = errorMsg.toLowerCase().includes('unauthorized') || errorMsg.toLowerCase().includes('403');
+    
+    let errorType: 'RATE_LIMIT' | 'TIMEOUT' | 'AUTH_ERROR' | 'OTHER' = "OTHER";
+    if (isRateLimit) errorType = "RATE_LIMIT";
+    else if (isTimeout) errorType = "TIMEOUT";
+    else if (isAuthError) errorType = "AUTH_ERROR";
+    
+    // Track error in health monitor
+    healthMonitor.trackAgentCall("Manager", duration, false);
+    healthMonitor.trackError(errorType, errorMsg);
+    
+    // Track error with detailed context
     devtoolsTracker.trackError(
       "Manager",
-      error instanceof Error ? error : new Error(String(error)),
-      { query, duration }
+      error instanceof Error ? error : new Error(errorMsg),
+      { 
+        query, 
+        duration, 
+        errorType,
+        currentModelTier,
+        suggestion: isRateLimit ? "Consider switching to fallback model" : "Check server logs for details"
+      }
     );
     
-    console.error(`[Manager] Error processing query: "${query}"`, error);
+    console.error(`[Manager] Error processing query (${errorType}):`, {
+      query: query.substring(0, 100),
+      duration,
+      error: errorMsg,
+      model: currentModelTier
+    });
+    
     return "eh...错了错了, 完犊子！";
   }
 }

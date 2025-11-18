@@ -11,31 +11,34 @@
 
 export function extractFeishuUserId(message: any, data: any): string | null {
   // Try multiple possible locations for user ID
-  // Priority: sender_id > open_id > user_id
+  // Feishu subscription mode has sender_id as object with open_id field
+  // Webhook mode has direct open_id or user_id fields
   
   // Check message.sender first (most common location)
   if (message?.sender) {
-    if (message.sender.sender_id) {
-      return message.sender.sender_id;
+    // sender_id is an object with open_id, union_id, user_id fields
+    if (message.sender.sender_id?.open_id) {
+      return message.sender.sender_id.open_id;
     }
-    if (message.sender.open_id) {
+    if (message.sender.open_id && typeof message.sender.open_id === 'string') {
       return message.sender.open_id;
     }
-    if (message.sender.user_id) {
+    if (message.sender.user_id && typeof message.sender.user_id === 'string') {
       return message.sender.user_id;
     }
   }
   
   // Check data.sender as fallback
   if (data?.sender) {
-    if (data.sender.open_id) {
+    // Same structure as message.sender
+    if (data.sender.sender_id?.open_id) {
+      return data.sender.sender_id.open_id;
+    }
+    if (data.sender.open_id && typeof data.sender.open_id === 'string') {
       return data.sender.open_id;
     }
-    if (data.sender.user_id) {
+    if (data.sender.user_id && typeof data.sender.user_id === 'string') {
       return data.sender.user_id;
-    }
-    if (data.sender.sender_id) {
-      return data.sender.sender_id;
     }
   }
   

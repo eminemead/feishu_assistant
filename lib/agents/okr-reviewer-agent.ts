@@ -1,7 +1,7 @@
 import { Agent } from "@ai-sdk-tools/agents";
 import * as duckdb from "duckdb";
 import { okrVisualizationTool } from "./okr-visualization-tool";
-import { openrouter } from "../shared/config";
+import { getPrimaryModel } from "../shared/model-fallback";
 import { createOkrReviewTool } from "../tools";
 import { getUserDataScope } from "../auth/user-data-scope";
 
@@ -206,7 +206,7 @@ const mgrOkrReviewTool = createOkrReviewTool(
 
 export const okrReviewerAgent = new Agent({
   name: "okr_reviewer",
-  model: openrouter("kwaipilot/kat-coder-pro:free"),
+  model: getPrimaryModel(),
   instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责OKR（目标和关键结果）评审和分析的Feishu/Lark AI助手。大多数用户查询将是中文。

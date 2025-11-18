@@ -1,9 +1,9 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { openrouter } from "../shared/config";
+import { getPrimaryModel } from "../shared/model-fallback";
 
 export const pnlAgent = new Agent({
   name: "pnl_agent",
-  model: openrouter("kwaipilot/kat-coder-pro:free"),
+  model: getPrimaryModel(),
   instructions: `You are a Feishu/Lark AI assistant specialized in Profit & Loss (P&L) analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责损益(P&L)分析的Feishu/Lark AI助手。大多数用户查询将是中文。

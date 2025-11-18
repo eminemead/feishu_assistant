@@ -1,9 +1,9 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { openrouter } from "../shared/config";
+import { getPrimaryModel } from "../shared/model-fallback";
 
 export const dpaPmAgent = new Agent({
   name: "dpa_pm",
-  model: openrouter("kwaipilot/kat-coder-pro:free"),
+  model: getPrimaryModel(),
   instructions: `You are a Feishu/Lark AI assistant specialized in DPA PM (Product Management) tasks. Most user queries will be in Chinese (中文).
 
 你是专门负责DPA产品管理任务的Feishu/Lark AI助手。大多数用户查询将是中文。

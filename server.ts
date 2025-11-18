@@ -5,6 +5,7 @@ import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
 import { getBotId, client } from "./lib/feishu-utils";
 import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
+import { healthMonitor } from "./lib/health-monitor";
 
 const app = new Hono();
 
@@ -170,6 +171,13 @@ app.get("/", (c) => {
   });
 });
 
+// Detailed health metrics endpoint
+app.get("/health", (c) => {
+  const metrics = healthMonitor.getMetrics();
+  const statusCode = metrics.status === 'unhealthy' ? 503 : metrics.status === 'degraded' ? 200 : 200;
+  return c.json(metrics, statusCode);
+});
+
 
 // Feishu webhook endpoint (only used in Webhook Mode)
 // In Subscription Mode, events come through WebSocket connection managed by SDK
@@ -259,6 +267,21 @@ app.post("/webhook/card", async (c) => {
 });
 
 const port = parseInt(process.env.PORT || "3000");
+
+// Global error handlers for graceful degradation
+process.on('uncaughtException', (error) => {
+  console.error('❌ [FATAL] Uncaught exception:', error);
+  console.error('Stack:', error.stack);
+  healthMonitor.trackError('OTHER', `Uncaught exception: ${error.message}`);
+  // Log but don't crash - let process manager handle restart
+  // This allows ongoing requests to complete
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ [WARN] Unhandled rejection at:', promise, 'reason:', reason);
+  const message = reason instanceof Error ? reason.message : String(reason);
+  healthMonitor.trackError('OTHER', `Unhandled rejection: ${message}`);
+});
 
 // Devtools endpoints (development only) - moved before port usage
 if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "true") {
