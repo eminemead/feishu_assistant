@@ -49,8 +49,8 @@ export async function handleNewMessage(data: FeishuMessageData) {
       messages = [{ role: "user" as const, content: cleanText }];
     }
 
-    // Generate response with streaming
-    const result = await generateResponse(messages, updateCard);
+    // Generate response with streaming and memory context
+    const result = await generateResponse(messages, updateCard, chatId, rootId);
 
     // Extract image_key from result if present
     // Tool results may include visualization.image_key in JSON format

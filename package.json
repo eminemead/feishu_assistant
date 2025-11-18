@@ -5,9 +5,10 @@
   "main": "dist/server.js",
   "packageManager": "bun@latest",
   "scripts": {
-    "build": "bun tsc",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' bun tsc",
+    "build:fast": "bun build ./server.ts --outdir ./dist --target node --external @larksuiteoapi/node-sdk --external duckdb --external canvas --external sharp",
     "build:watch": "bun tsc --watch",
-    "build:clean": "rm -rf dist .tsbuildinfo && bun tsc",
+    "build:clean": "rm -rf dist .tsbuildinfo && bun run build",
     "start": "bun dist/server.js",
     "dev": "bun server.ts",
     "test": "bun test",

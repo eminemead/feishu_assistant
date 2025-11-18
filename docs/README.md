@@ -21,6 +21,8 @@ This directory contains all project documentation organized by category.
 - [Visualization Implementation](./implementation/visualization.md) - OKR visualization features
 - [Chinese Language Support](./implementation/chinese-support.md) - Chinese language handling
 - [Artifacts Integration Evaluation](./implementation/artifacts-evaluation.md) - Evaluation of leveraging @ai-sdk-tools/artifacts
+- [Cache Integration](./implementation/cache-integration.md) - Using @ai-sdk-tools/cache for performance optimization
+- [Build Optimization](./implementation/build-optimization.md) - TypeScript build time optimizations
 
 ### Testing
 - [Testing Guide](../TESTING.md) - Main testing documentation (kept at root for visibility)

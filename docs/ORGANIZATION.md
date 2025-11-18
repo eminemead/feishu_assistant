@@ -55,3 +55,5 @@ Some documentation remains at the root level for visibility:
 - **Verification docs** → `docs/verification/`
 - **Module READMEs** → Keep with code (e.g., `lib/agents/README.md`)
 
+
+

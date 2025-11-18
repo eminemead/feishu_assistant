@@ -1,63 +1,10 @@
-import { tool, zodSchema } from 'ai'
-import { z } from 'zod'
-import { exa } from './lib/utils'
-import { analyzeHasMetricPercentage } from './lib/agents/okr-reviewer-agent'
+// Import tool factories from your existing codebase
+// Note: These are factories for creating tool instances, not shared tools between agents
+import { createSearchWebTool, createOkrReviewTool } from './lib/tools'
 
-// Import tools from your existing codebase
-const searchWebTool = tool({
-  description: "Use this to search the web for information",
-  parameters: zodSchema(
-    z.object({
-      query: z.string(),
-      specificDomain: z
-        .string()
-        .nullable()
-        .describe(
-          "a domain to search if the user specifies e.g. bbc.com. Should be only the domain name without the protocol"
-        ),
-    })
-  ),
-  execute: async ({ query, specificDomain }: { query: string; specificDomain: string | null }) => {
-    const { results } = await exa.searchAndContents(query, {
-      livecrawl: "always",
-      numResults: 3,
-      includeDomains: specificDomain ? [specificDomain] : undefined,
-    });
-
-    return {
-      results: results.map((result) => ({
-        title: result.title,
-        url: result.url,
-        snippet: result.text.slice(0, 1000),
-      })),
-    };
-  },
-});
-
-const mgrOkrReviewTool = tool({
-  description:
-    "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries DuckDB to analyze if management criteria are met by managers of different levels across different city companies.",
-  parameters: zodSchema(
-    z.object({
-      period: z
-        .string()
-        .describe(
-          "The period to analyze (e.g., '10 月', '11 月', '9 月'). Defaults to current month if not specified."
-        ),
-    })
-  ),
-  execute: async ({ period }: { period: string }) => {
-    try {
-      const analysis = await analyzeHasMetricPercentage(period);
-      return analysis;
-    } catch (error: any) {
-      return {
-        error: error.message || "Failed to analyze OKR metrics",
-        period,
-      };
-    }
-  },
-});
+// Create tools without caching for dspyground (caching not needed during optimization)
+const searchWebTool = createSearchWebTool(false, false);
+const mgrOkrReviewTool = createOkrReviewTool(false);
 
 export default {
   // Tools available to the manager agent

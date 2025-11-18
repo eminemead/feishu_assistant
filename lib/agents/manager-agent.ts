@@ -1,54 +1,16 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { tool, zodSchema } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { CoreMessage } from "ai";
-import { z } from "zod";
 import { okrReviewerAgent } from "./okr-reviewer-agent";
 import { alignmentAgent } from "./alignment-agent";
 import { pnlAgent } from "./pnl-agent";
 import { dpaPmAgent } from "./dpa-pm-agent";
-import { exa } from "../utils";
-import { devtoolsTracker, trackToolCall } from "../devtools-integration";
+import { devtoolsTracker } from "../devtools-integration";
+import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
+import { openrouter } from "../shared/config";
+import { createSearchWebTool } from "../tools";
 
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-
-// Create web search tool for fallback (with devtools tracking)
-const searchWebToolExecute = trackToolCall(
-  "searchWeb",
-  async ({ query, specificDomain }: { query: string; specificDomain: string | null }) => {
-    const { results } = await exa.searchAndContents(query, {
-      livecrawl: "always",
-      numResults: 3,
-      includeDomains: specificDomain ? [specificDomain] : undefined,
-    });
-
-    return {
-      results: results.map((result) => ({
-        title: result.title,
-        url: result.url,
-        snippet: result.text.slice(0, 1000),
-      })),
-    };
-  }
-);
-
-const searchWebTool = tool({
-  description: "Use this to search the web for information",
-  parameters: zodSchema(
-    z.object({
-      query: z.string(),
-      specificDomain: z
-        .string()
-        .nullable()
-        .describe(
-          "a domain to search if the user specifies e.g. bbc.com. Should be only the domain name without the protocol"
-        ),
-    })
-  ),
-  execute: searchWebToolExecute,
-});
+// Create web search tool for fallback (with caching and devtools tracking)
+const searchWebTool = createSearchWebTool(true, true);
 
 /**
  * Routing logic for manager agent:
@@ -101,6 +63,21 @@ AVAILABLE SPECIALISTS:
   tools: {
     searchWeb: searchWebTool,
   },
+  memory: {
+    provider: memoryProvider,
+    workingMemory: {
+      enabled: true,
+      scope: 'user', // User-scoped working memory (per chatId)
+    },
+    history: {
+      enabled: true,
+      limit: 10, // Load last 10 messages for context
+    },
+    chats: {
+      enabled: true,
+      generateTitle: true, // Auto-generate conversation titles
+    },
+  },
 });
 
 /**
@@ -122,10 +99,17 @@ function getQueryText(messages: CoreMessage[]): string {
  * - Keyword matching (matchOn patterns in specialist agents)
  * - LLM semantic analysis
  * - Fallback to manager's tools (searchWeb)
+ * 
+ * @param messages - Conversation messages
+ * @param updateStatus - Optional callback for streaming status updates
+ * @param chatId - Feishu chat ID for memory scoping (optional)
+ * @param rootId - Feishu root message ID for conversation context (optional)
  */
 export async function managerAgent(
   messages: CoreMessage[],
-  updateStatus?: (status: string) => void
+  updateStatus?: (status: string) => void,
+  chatId?: string,
+  rootId?: string,
 ): Promise<string> {
   const query = getQueryText(messages);
   const startTime = Date.now();
@@ -142,12 +126,25 @@ export async function managerAgent(
     // Use Agent.stream() with proper execution context
     console.log(`[Manager] Starting stream for query: "${query}"`);
     
-    // Create a minimal execution context object
-    // The Agent library internally accesses executionContext._memoryAddition
-    // So we need an object with this property (can be empty string)
+    // Create execution context with memory support
+    // The Agent library uses executionContext for memory scoping
     const executionContext: any = {
       _memoryAddition: "",
     };
+    
+    // Add memory context if chatId and rootId are provided
+    if (chatId && rootId) {
+      // TypeScript narrowing: chatId and rootId are guaranteed to be strings here
+      const conversationId = getConversationId(chatId!, rootId!);
+      const userScopeId = getUserScopeId(chatId!);
+      
+      // Set conversation ID for history and chat management
+      executionContext.chatId = conversationId;
+      // Set user scope for working memory
+      executionContext.userId = userScopeId;
+      
+      console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}`);
+    }
     
     // Use Agent.stream() with execution context
     // Note: The type definition shows messages, but internally it needs executionContext

@@ -49,8 +49,8 @@ export async function handleNewAppMention(data: FeishuMentionData) {
       messages = [{ role: "user" as const, content: cleanText }];
     }
 
-    // Generate response with streaming
-    const result = await generateResponse(messages, updateCard);
+    // Generate response with streaming and memory context
+    const result = await generateResponse(messages, updateCard, chatId, rootId);
 
     // Finalize card
     await finalizeCard(card.cardId, result);

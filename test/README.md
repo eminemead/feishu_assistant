@@ -12,8 +12,9 @@ test/
 │   ├── manager-agent.test.ts
 │   ├── okr-reviewer-agent.test.ts
 │   └── agent-handoffs.test.ts
-├── integration/        # End-to-end tests
-│   └── end-to-end.test.ts
+├── integration/        # End-to-end and integration tests
+│   ├── end-to-end.test.ts
+│   └── memory-integration.test.ts
 └── helpers/            # Test utilities and mocks
     ├── mocks.ts
     └── test-utils.ts
@@ -66,6 +67,13 @@ bun test --watch
 - **General Query Workflow**: Non-specialist query handling
 - **Multi-turn Conversation**: Context maintenance across messages
 - **Error Handling**: End-to-end error scenarios
+
+### 5. Memory Integration Tests (`memory-integration.test.ts`)
+- **Memory Provider**: Tests memory provider creation and configuration
+- **Helper Functions**: Tests conversation ID and user scope ID generation
+- **Memory Configuration**: Validates memory configuration structure
+- **Execution Context**: Tests execution context setup with memory identifiers
+- **Integration Points**: Verifies all integration points are properly connected
 
 ## Test Environment Setup
 

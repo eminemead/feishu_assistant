@@ -1,16 +1,10 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { tool, zodSchema } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { z } from "zod";
 import * as duckdb from "duckdb";
-import { devtoolsTracker } from "../devtools-integration";
 import { okrVisualizationTool } from "./okr-visualization-tool";
+import { openrouter } from "../shared/config";
+import { createOkrReviewTool } from "../tools";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
 
 /**
  * Queries DuckDB to get the latest timestamped okr_metrics table
@@ -145,42 +139,14 @@ export function analyzeHasMetricPercentage(period: string): Promise<any> {
   });
 }
 
-// @ts-ignore - Type instantiation depth issue with zodSchema/tool combination
-// This is a known TypeScript limitation with deeply nested generic types
-// Runtime behavior is correct
-const mgrOkrReviewTool = tool({
-  description:
-    "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries DuckDB to analyze if management criteria are met by managers of different levels across different city companies.",
-  // @ts-ignore
-  parameters: zodSchema(
-    z.object({
-      period: z
-        .string()
-        .describe(
-          "The period to analyze (e.g., '10 月', '11 月', '9 月'). Defaults to current month if not specified."
-        ),
-    })
-  ),
-  execute: async ({ period }: { period: string }): Promise<any> => {
-    const startTime = Date.now();
-    devtoolsTracker.trackToolCall("mgr_okr_review", { period }, startTime);
-    
-    try {
-      const analysis = await analyzeHasMetricPercentage(period);
-      return analysis;
-    } catch (error: any) {
-      devtoolsTracker.trackError(
-        "mgr_okr_review",
-        error instanceof Error ? error : new Error(String(error)),
-        { toolName: "mgr_okr_review", params: { period } }
-      );
-      return {
-        error: error.message || "Failed to analyze OKR metrics",
-        period,
-      };
-    }
-  },
-}) as any; // Type assertion to work around deep type instantiation issue
+// Create OKR review tool with caching (1 hour TTL) and devtools tracking
+// DuckDB queries can be slow, so caching is important
+// Same period = instant response from cache
+const mgrOkrReviewTool = createOkrReviewTool(
+  true,  // enableCaching
+  true,  // enableDevtoolsTracking
+  60 * 60 * 1000  // cacheTTL: 1 hour (OKR data doesn't change frequently)
+);
 
 export const okrReviewerAgent = new Agent({
   name: "okr_reviewer",

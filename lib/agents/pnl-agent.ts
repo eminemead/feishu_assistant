@@ -1,9 +1,5 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter } from "../shared/config";
 
 export const pnlAgent = new Agent({
   name: "pnl_agent",

@@ -1,9 +1,5 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { openrouter } from "../shared/config";
 
 export const alignmentAgent = new Agent({
   name: "alignment_agent",

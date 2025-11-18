@@ -11,12 +11,13 @@ import { analyzeHasMetricPercentage } from "./okr-reviewer-agent";
 import { generateOKRHeatmap } from "../visualization/okr-heatmap";
 import { uploadImageToFeishu } from "../feishu-image-utils";
 import { okrAnalysisArtifact } from "../artifacts/okr-analysis-artifact";
+import { createCachedWithTTL } from "../cache";
 
 /**
- * Tool that generates OKR analysis with optional visualization
+ * Base tool that generates OKR analysis with optional visualization
  * Uses artifacts for type-safe data structures and progress tracking
  */
-export const okrVisualizationTool = tool({
+const okrVisualizationToolBase = tool({
   description:
     "Analyze manager OKR metrics and optionally generate a heatmap visualization. Returns analysis data and image_key for visualization if requested. Progress updates are streamed during generation.",
   parameters: zodSchema(
@@ -157,4 +158,15 @@ export const okrVisualizationTool = tool({
     }
   },
 });
+
+/**
+ * Cached version - This is the most expensive operation:
+ * - Database queries
+ * - Python heatmap generation
+ * - Image upload to Feishu
+ * 
+ * Cache for 2 hours since visualizations don't change frequently
+ * Same period + generateVisualization flag = instant response from cache
+ */
+export const okrVisualizationTool = createCachedWithTTL(2 * 60 * 60 * 1000)(okrVisualizationToolBase);
 

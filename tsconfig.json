@@ -11,7 +11,10 @@
     "outDir": "./dist",
     "lib": ["ESNext"],
     "isolatedModules": true,
-    "noEmitOnError": false
+    "noEmitOnError": false,
+    "maxNodeModuleJsDepth": 1,
+    "assumeChangesOnlyAffectDirectDependencies": true,
+    "preserveWatchOutput": true
   },
   "exclude": [
     "node_modules",
