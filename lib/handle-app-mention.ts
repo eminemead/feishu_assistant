@@ -81,15 +81,24 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     console.log(`[Thread] Processing with ${messages.length} message(s)`);
 
     // Generate response with streaming and memory context
+    console.log(`[FeishuMention] Generating response...`);
     const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
+    console.log(`[FeishuMention] Response generated (length=${result?.length || 0}): "${result?.substring(0, 50) || 'N/A'}..."`);
 
     // Finalize card with follow-up buttons
-    await finalizeCardWithFollowups(
-      card.cardId,
-      result,
-      undefined, // imageKey
-      cleanText  // context for button generation
-    );
+    console.log(`[FeishuMention] About to finalize card with followups. cardId=${card.cardId}, result length=${result?.length || 0}`);
+    try {
+      const finalizeResult = await finalizeCardWithFollowups(
+        card.cardId,
+        result,
+        undefined, // imageKey
+        cleanText  // context for button generation
+      );
+      console.log(`[FeishuMention] Finalization result:`, finalizeResult);
+    } catch (finalizeError) {
+      console.error(`[FeishuMention] Error in finalizeCardWithFollowups:`, finalizeError);
+      throw finalizeError;
+    }
     
     // Track successful response
     const duration = Date.now() - startTime;
@@ -98,7 +107,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
       messageId
     });
   } catch (error) {
-    console.error("Error generating response:", error);
+    console.error("Error in handleNewAppMention:", error);
     
     // Track error
     devtoolsTracker.trackError(

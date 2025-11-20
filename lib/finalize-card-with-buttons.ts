@@ -21,25 +21,31 @@ export async function finalizeCardWithFollowups(
   error?: string;
 }> {
   try {
-    console.log(`🎯 [CardButtons] Finalizing card with follow-ups: cardId=${cardId}`);
+    console.log(`🎯 [CardButtons] Finalizing card with follow-ups: cardId=${cardId}, contentLength=${finalContent?.length || 0}`);
 
     // First, finalize card settings (disable streaming mode)
+    console.log(`🎯 [CardButtons] Calling finalizeCardSettings...`);
     await finalizeCardSettings(cardId, finalContent);
+    console.log(`🎯 [CardButtons] finalizeCardSettings completed`);
 
     // Generate follow-up questions
+    console.log(`🎯 [CardButtons] About to generate followup questions. finalContent="${finalContent?.substring(0, 50) || 'empty'}...", context="${context?.substring(0, 30) || 'empty'}..."`);
     const followups = await generateFollowupQuestions(
       finalContent || "",
       context,
       maxFollowups || 3
     );
+    console.log(`🎯 [CardButtons] generateFollowupQuestions returned ${followups?.length || 0} followups`);
 
     if (!followups || followups.length === 0) {
-      console.log(`⚠️ [CardButtons] No follow-ups generated`);
+      console.log(`⚠️ [CardButtons] No follow-ups generated, returning empty`);
       return { followups: [] };
     }
 
     // Add buttons to card as elements
+    console.log(`🎯 [CardButtons] About to add ${followups.length} followup buttons...`);
     await addFollowupButtons(cardId, followups);
+    console.log(`🎯 [CardButtons] addFollowupButtons completed`);
 
     // Add image if provided
     if (imageKey) {
