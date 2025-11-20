@@ -52,7 +52,8 @@ export interface CardActionResponse {
  * When users click buttons or interact with cards, Feishu sends a callback to this endpoint
  */
 export async function handleCardAction(
-  payload: CardActionCallback
+  payload: CardActionCallback,
+  actionHandlers?: Record<string, (value: any) => Promise<CardActionResponse>>
 ): Promise<CardActionResponse> {
   try {
     // Validate required fields
@@ -71,19 +72,28 @@ export async function handleCardAction(
       throw new Error("Missing required field: action_id");
     }
 
-    console.log(`🎯 [CardAction] Handling card action: action_id=${actionId}, operator=${operatorId}`);
+    console.log(`🎯 [CardAction] Handling card action: action_id=${actionId}, operator=${operatorId}, value=${JSON.stringify(actionValue)}`);
 
-    // TODO: Implement actual action handlers based on action_id
-    // For now, return a simple success response
-    // In production, you might:
-    // 1. Update card UI based on button clicks
-    // 2. Log analytics
-    // 3. Trigger backend operations
-    // 4. Update card content dynamically
+    // Check if there's a custom handler for this action_id
+    if (actionHandlers && actionHandlers[actionId]) {
+      console.log(`🔧 [CardAction] Using custom handler for action: ${actionId}`);
+      return await actionHandlers[actionId](actionValue);
+    }
 
-    // Example: If button is a "Refresh" button, update card content
-    // Example: If form is submitted, process the data
-    
+    // Default handler for button clicks (e.g., follow-up questions)
+    // Extract button value which could be the follow-up question text
+    if (typeof actionValue === "string") {
+      console.log(`📝 [CardAction] Button clicked with value: "${actionValue}"`);
+      // This will be processed by the chat handler as a new message
+      return {
+        toast: {
+          type: "success",
+          content: "Processing your selection...",
+        },
+      };
+    }
+
+    // Default response
     return {
       toast: {
         type: "success",

@@ -1,0 +1,171 @@
+import { tool } from "ai";
+import { z } from "zod";
+import { generateObject } from "ai";
+import { getPrimaryModel } from "../shared/model-fallback";
+
+/**
+ * Generates 2-3 follow-up questions or recommendations based on agent response
+ * These will be rendered as interactive buttons on Feishu cards for user selection
+ */
+export const generateFollowupsTool = tool({
+  description:
+    "Generate follow-up questions or recommendations based on the agent response for user interaction via card buttons",
+  parameters: z.object({
+    response: z.string().describe("The agent's response text"),
+    context: z
+      .string()
+      .optional()
+      .describe("Additional context about the conversation topic"),
+    maxOptions: z
+      .number()
+      .int()
+      .min(2)
+      .max(5)
+      .default(3)
+      .describe("Maximum number of follow-up options to generate (default 3)"),
+  }),
+  execute: async ({ response, context, maxOptions }) => {
+    try {
+      console.log(
+        `🔄 [Followups] Generating ${maxOptions} follow-up questions for response: "${response.substring(0, 50)}..."`
+      );
+
+      const model = getPrimaryModel();
+
+      // Generate follow-up questions using the model
+      const result = await generateObject({
+        model,
+        schema: z.object({
+          followups: z.array(
+            z.object({
+              text: z
+                .string()
+                .max(60)
+                .describe("Short follow-up question or recommendation (max 60 chars for button text)"),
+              type: z
+                .enum(["question", "recommendation", "action"])
+                .describe("Type of follow-up"),
+              rationale: z
+                .string()
+                .optional()
+                .describe("Why this follow-up is relevant"),
+            })
+          ),
+        }),
+        prompt: `Based on this agent response, generate ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
+
+Agent Response: "${response}"
+${context ? `\nContext: ${context}` : ""}
+
+Each follow-up should be:
+1. Concise (max 60 characters - must fit on a button)
+2. Actionable and relevant to the response
+3. Encourage deeper exploration or next steps
+
+Return exactly ${maxOptions} follow-ups as JSON array.`,
+      });
+
+      // Limit to maxOptions
+      const followups = result.followups.slice(0, maxOptions);
+
+      console.log(`✅ [Followups] Generated ${followups.length} follow-up options`);
+      return {
+        followups,
+        count: followups.length,
+      };
+    } catch (error) {
+      console.error("❌ [Followups] Error generating follow-ups:", error);
+      // Return default follow-ups on error
+      return {
+        followups: [
+          {
+            text: "Tell me more",
+            type: "question",
+          },
+          {
+            text: "How do I apply this?",
+            type: "question",
+          },
+          {
+            text: "What's next?",
+            type: "action",
+          },
+        ],
+        count: 3,
+        error: true,
+      };
+    }
+  },
+});
+
+/**
+ * Type for follow-up option
+ */
+export interface FollowupOption {
+  text: string;
+  type: "question" | "recommendation" | "action";
+  rationale?: string;
+}
+
+/**
+ * Generate follow-ups without using the tool system
+ * Useful for direct use in response handling
+ */
+export async function generateFollowupQuestions(
+  response: string,
+  context?: string,
+  maxOptions: number = 3
+): Promise<FollowupOption[]> {
+  try {
+    console.log(
+      `🔄 [Followups] Generating ${maxOptions} follow-up questions for response: "${response.substring(0, 50)}..."`
+    );
+
+    const model = getPrimaryModel();
+
+    const result = await generateObject({
+      model,
+      schema: z.object({
+        followups: z.array(
+          z.object({
+            text: z.string().max(60),
+            type: z.enum(["question", "recommendation", "action"]),
+            rationale: z.string().optional(),
+          })
+        ),
+      }),
+      prompt: `Based on this agent response, generate ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
+
+Agent Response: "${response}"
+${context ? `\nContext: ${context}` : ""}
+
+Each follow-up should be:
+1. Concise (max 60 characters - must fit on a button)
+2. Actionable and relevant to the response
+3. Encourage deeper exploration or next steps
+
+Return exactly ${maxOptions} follow-ups as JSON array.`,
+    });
+
+    const followups = result.followups.slice(0, maxOptions);
+    console.log(`✅ [Followups] Generated ${followups.length} follow-up options`);
+    return followups;
+  } catch (error) {
+    console.error("❌ [Followups] Error generating follow-ups:", error);
+    // Return default follow-ups on error
+    return [
+      {
+        text: "Tell me more",
+        type: "question",
+      },
+      {
+        text: "How do I apply this?",
+        type: "question",
+      },
+      {
+        text: "What's next?",
+        type: "action",
+      },
+    ];
+  }
+}
