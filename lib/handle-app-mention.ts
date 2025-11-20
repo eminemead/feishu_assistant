@@ -5,6 +5,7 @@ import {
   updateCardElement,
   finalizeCard,
 } from "./feishu-utils";
+import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { devtoolsTracker } from "./devtools-integration";
 
 export interface FeishuMentionData {
@@ -82,8 +83,13 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     // Generate response with streaming and memory context
     const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
 
-    // Finalize card
-    await finalizeCard(card.cardId, result);
+    // Finalize card with follow-up buttons
+    await finalizeCardWithFollowups(
+      card.cardId,
+      result,
+      undefined, // imageKey
+      cleanText  // context for button generation
+    );
     
     // Track successful response
     const duration = Date.now() - startTime;
@@ -101,11 +107,21 @@ export async function handleNewAppMention(data: FeishuMentionData) {
       { messageId, rootId }
     );
     
+    const errorMessage = "Sorry, I encountered an error processing your request.";
     await updateCardElement(
       card.cardId,
       card.elementId,
-      "Sorry, I encountered an error processing your request."
+      errorMessage
     );
-    await finalizeCard(card.cardId);
+    // Finalize with error message but still try to add buttons
+    await finalizeCardWithFollowups(
+      card.cardId,
+      errorMessage,
+      undefined,
+      cleanText
+    ).catch(() => {
+      // If button finalization fails, fall back to basic finalization
+      return finalizeCard(card.cardId);
+    });
   }
 }

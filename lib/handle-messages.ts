@@ -5,6 +5,7 @@ import {
   updateCardElement,
   finalizeCard,
 } from "./feishu-utils";
+import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 
 export interface FeishuMessageData {
   chatId: string;
@@ -72,15 +73,30 @@ export async function handleNewMessage(data: FeishuMessageData) {
       console.log("Could not extract image_key from result");
     }
 
-    // Finalize card with optional image
-    await finalizeCard(card.cardId, result, imageKey);
+    // Finalize card with follow-up buttons and optional image
+    await finalizeCardWithFollowups(
+      card.cardId,
+      result,
+      imageKey,
+      cleanText  // context for button generation
+    );
   } catch (error) {
     console.error("Error generating response:", error);
+    const errorMessage = "Sorry, I encountered an error processing your request.";
     await updateCardElement(
       card.cardId,
       card.elementId,
-      "Sorry, I encountered an error processing your request."
+      errorMessage
     );
-    await finalizeCard(card.cardId);
+    // Finalize with error message but still try to add buttons
+    await finalizeCardWithFollowups(
+      card.cardId,
+      errorMessage,
+      undefined,
+      cleanText
+    ).catch(() => {
+      // If button finalization fails, fall back to basic finalization
+      return finalizeCard(card.cardId);
+    });
   }
 }
