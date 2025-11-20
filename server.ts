@@ -418,46 +418,83 @@ if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "t
   console.log("🔧 Devtools available at: http://localhost:" + port + "/devtools");
 }
 
-// Start the server
-serve({
-  fetch: app.fetch,
-  port,
-});
-
-// Initialize WebSocket connection for Subscription Mode
-if (useSubscriptionMode) {
-  console.log("Using Subscription Mode (WebSocket) - no public URL needed");
-  console.log("Ensure Subscription Mode is enabled in Feishu admin panel");
+/**
+ * Main startup sequence
+ * Handles both Subscription Mode (WebSocket) and Webhook Mode
+ * 
+ * IMPORTANT: In Subscription Mode, WebSocket connection is established first,
+ * then HTTP server starts. This prevents race conditions and ensures the
+ * server is fully ready before it reports as "running".
+ */
+async function startServer() {
+  console.log("📋 [Startup] Starting server initialization...");
   
-  if (!appId || !appSecret) {
-    console.error("ERROR: FEISHU_APP_ID and FEISHU_APP_SECRET are required for Subscription Mode");
-    process.exit(1);
-  }
+  // Step 1: Initialize WebSocket for Subscription Mode
+  if (useSubscriptionMode) {
+    console.log("📋 [Startup] Mode: Subscription (WebSocket)");
+    console.log("📋 [Startup] Step 1: Initializing WebSocket connection...");
+    
+    if (!appId || !appSecret) {
+      console.error("❌ [Startup] ERROR: FEISHU_APP_ID and FEISHU_APP_SECRET are required");
+      process.exit(1);
+    }
 
-  // Create WSClient for Subscription Mode
-  const wsClient = new lark.WSClient({
-    appId,
-    appSecret,
-    domain: lark.Domain.Feishu,
-    autoReconnect: true,
-  });
-
-  // Start the WebSocket connection with EventDispatcher
-  wsClient.start({ eventDispatcher })
-    .then(() => {
-      console.log("✅ WebSocket connection established successfully");
-      console.log("Subscription Mode is active - ready to receive events");
-    })
-    .catch((error) => {
-      console.error("❌ Failed to establish WebSocket connection:", error);
-      console.error("Please check:");
-      console.error("1. Subscription Mode is enabled in Feishu admin panel");
-      console.error("2. App ID and App Secret are correct");
-      console.error("3. Required permissions are granted");
+    // Create WSClient for Subscription Mode
+    const wsClient = new lark.WSClient({
+      appId,
+      appSecret,
+      domain: lark.Domain.Feishu,
+      autoReconnect: true,
     });
-} else {
-  console.log("Using Webhook Mode - ensure webhook URL is configured in Feishu admin");
+
+    // Start WebSocket with timeout
+    try {
+      const wsStartPromise = wsClient.start({ eventDispatcher });
+      
+      // Add 10-second timeout to WebSocket connection
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("WebSocket connection timeout after 10 seconds")),
+          10000
+        )
+      );
+      
+      await Promise.race([wsStartPromise, timeoutPromise]);
+      
+      console.log("✅ [Startup] Step 1: WebSocket connection established");
+      console.log("📋 [Startup] Ready to receive Feishu events");
+    } catch (error) {
+      console.error("❌ [Startup] Step 1 FAILED: WebSocket connection error");
+      console.error("   Error:", error instanceof Error ? error.message : String(error));
+      console.error("\n   Troubleshooting:");
+      console.error("   1. Verify Subscription Mode is enabled in Feishu admin panel");
+      console.error("   2. Check FEISHU_APP_ID and FEISHU_APP_SECRET are correct");
+      console.error("   3. Verify app has required permissions (im:message, contact:user)");
+      console.error("   4. Check network connectivity to Feishu servers");
+      console.error("\n   Note: Server will still start, but will not receive events");
+      // Don't exit - allow server to start in degraded mode
+    }
+  } else {
+    console.log("📋 [Startup] Mode: Webhook");
+    console.log("📋 [Startup] WebSocket disabled - using HTTP webhooks");
+  }
+  
+  // Step 2: Start HTTP server
+  console.log("📋 [Startup] Step 2: Starting HTTP server...");
+  
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+  
+  console.log(`✅ [Startup] Step 2: HTTP server started on port ${port}`);
+  console.log(`✨ [Startup] Server is ready to accept requests`);
+  console.log(`📊 [Startup] Health check: curl http://localhost:${port}/health`);
 }
 
-console.log(`Server is running on port ${port}`);
+// Start the server
+startServer().catch((error) => {
+  console.error("❌ [Startup] Fatal error during initialization:", error);
+  process.exit(1);
+});
 
