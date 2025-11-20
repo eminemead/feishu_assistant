@@ -204,7 +204,12 @@ const mgrOkrReviewTool = createOkrReviewTool(
   60 * 60 * 1000  // cacheTTL: 1 hour (OKR data doesn't change frequently)
 );
 
-export const okrReviewerAgent = new Agent({
+// Lazy initialization
+let _okrReviewerAgent: Agent | null = null;
+
+export function getOkrReviewerAgent(): Agent {
+  if (!_okrReviewerAgent) {
+    _okrReviewerAgent = new Agent({
   name: "okr_reviewer",
   model: getPrimaryModel(),
   instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
@@ -220,22 +225,28 @@ export const okrReviewerAgent = new Agent({
 - 使用mgr_okr_review工具分析OKR指标和经理绩效。
 - mgr_okr_review工具检查各城市公司的指标覆盖率(has_metric_percentage)以评估管理标准是否达到。
 - 使用okr_visualization工具生成热力图可视化，当用户请求图表或可视化时。`,
-  tools: {
-    mgr_okr_review: mgrOkrReviewTool,
-    okr_visualization: okrVisualizationTool as any, // Type assertion to avoid type issues
-  },
-  matchOn: [
-    "okr",
-    "objective",
-    "key result",
-    "manager review",
-    "has_metric",
-    "覆盖率",
-    "指标覆盖率",
-    "经理评审",
-    "目标",
-    "关键结果",
-    "okr指标",
-    "指标",
-  ],
-});
+      tools: {
+        mgr_okr_review: mgrOkrReviewTool,
+        okr_visualization: okrVisualizationTool as any, // Type assertion to avoid type issues
+      },
+      matchOn: [
+        "okr",
+        "objective",
+        "key result",
+        "manager review",
+        "has_metric",
+        "覆盖率",
+        "指标覆盖率",
+        "经理评审",
+        "目标",
+        "关键结果",
+        "okr指标",
+        "指标",
+      ],
+    });
+  }
+  return _okrReviewerAgent;
+}
+
+// Placeholder export for imports
+export const okrReviewerAgent = null as any;

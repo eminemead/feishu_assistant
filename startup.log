@@ -1,0 +1,18 @@
+$ bun server.ts
+[info]: [ "client ready" ]
+⚠️ [Auth] Supabase URL or ANON_KEY not configured. RLS features will be disabled.
+⚠️ [Auth] SUPABASE_JWT_SECRET not configured. JWT generation will fail.
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+⚠️ [Auth] Supabase credentials not configured. RLS features will be disabled.
+[info]: [ "event-dispatch is ready" ]
+Using Subscription Mode (WebSocket) - no public URL needed
+Ensure Subscription Mode is enabled in Feishu admin panel
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+Server is running on port 3000
+✅ WebSocket connection established successfully
+Subscription Mode is active - ready to receive events
+[info]: [ "[ws]", "ws client ready" ]
+error: script "dev" was terminated by signal SIGTERM (Polite quit request)

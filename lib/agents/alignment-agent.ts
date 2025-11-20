@@ -1,10 +1,15 @@
 import { Agent } from "@ai-sdk-tools/agents";
 import { getPrimaryModel } from "../shared/model-fallback";
 
-export const alignmentAgent = new Agent({
-  name: "alignment_agent",
-  model: getPrimaryModel(),
-  instructions: `You are a Feishu/Lark AI assistant specialized in alignment tracking. Most user queries will be in Chinese (中文).
+// Lazy initialization
+let _alignmentAgent: Agent | null = null;
+
+export function getAlignmentAgent(): Agent {
+  if (!_alignmentAgent) {
+    _alignmentAgent = new Agent({
+      name: "alignment_agent",
+      model: getPrimaryModel(),
+      instructions: `You are a Feishu/Lark AI assistant specialized in alignment tracking. Most user queries will be in Chinese (中文).
 
 你是专门负责对齐跟踪的Feishu/Lark AI助手。大多数用户查询将是中文。
 
@@ -14,5 +19,11 @@ export const alignmentAgent = new Agent({
 - You are the Alignment specialist agent.
 - This feature is currently under development. Please check back later for alignment tracking features.
 - 此功能目前正在开发中，请稍后再查看对齐跟踪功能。`,
-  matchOn: ["alignment", "对齐", "目标对齐", "对齐跟踪", "目标对齐跟踪"],
-});
+      matchOn: ["alignment", "对齐", "目标对齐", "对齐跟踪", "目标对齐跟踪"],
+    });
+  }
+  return _alignmentAgent;
+}
+
+// Placeholder export for imports - actual agent is created on demand
+export const alignmentAgent = null as any;

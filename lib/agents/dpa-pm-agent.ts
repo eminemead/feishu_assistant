@@ -1,10 +1,14 @@
 import { Agent } from "@ai-sdk-tools/agents";
 import { getPrimaryModel } from "../shared/model-fallback";
 
-export const dpaPmAgent = new Agent({
-  name: "dpa_pm",
-  model: getPrimaryModel(),
-  instructions: `You are a Feishu/Lark AI assistant specialized in DPA PM (Product Management) tasks. Most user queries will be in Chinese (中文).
+let _dpaPmAgent: Agent | null = null;
+
+export function getDpaPmAgent(): Agent {
+  if (!_dpaPmAgent) {
+    _dpaPmAgent = new Agent({
+      name: "dpa_pm",
+      model: getPrimaryModel(),
+      instructions: `You are a Feishu/Lark AI assistant specialized in DPA PM (Product Management) tasks. Most user queries will be in Chinese (中文).
 
 你是专门负责DPA产品管理任务的Feishu/Lark AI助手。大多数用户查询将是中文。
 
@@ -14,5 +18,10 @@ export const dpaPmAgent = new Agent({
 - You are the DPA PM specialist agent.
 - This feature is currently under development. Please check back later for product management features.
 - 此功能目前正在开发中，请稍后再查看产品管理功能。`,
-  matchOn: ["dpa", "data team", "ae", "da", "数据团队", "数据分析", "数据产品", "产品管理"],
-});
+      matchOn: ["dpa", "data team", "ae", "da", "数据团队", "数据分析", "数据产品", "产品管理"],
+    });
+  }
+  return _dpaPmAgent;
+}
+
+export const dpaPmAgent = null as any;

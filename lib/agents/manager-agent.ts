@@ -1,9 +1,9 @@
 import { Agent } from "@ai-sdk-tools/agents";
 import { CoreMessage } from "ai";
-import { okrReviewerAgent } from "./okr-reviewer-agent";
-import { alignmentAgent } from "./alignment-agent";
-import { pnlAgent } from "./pnl-agent";
-import { dpaPmAgent } from "./dpa-pm-agent";
+import { getOkrReviewerAgent } from "./okr-reviewer-agent";
+import { getAlignmentAgent } from "./alignment-agent";
+import { getPnlAgent } from "./pnl-agent";
+import { getDpaPmAgent } from "./dpa-pm-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getPrimaryModel, getFallbackModel, isRateLimitError } from "../shared/model-fallback";
@@ -35,7 +35,7 @@ function initializeAgents() {
     name: "Manager",
     model: getPrimaryModel(),
     instructions: getManagerInstructions(),
-    handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent],
+    handoffs: [getOkrReviewerAgent(), getAlignmentAgent(), getPnlAgent(), getDpaPmAgent()],
     tools: {
       searchWeb: searchWebTool,
     },
@@ -60,7 +60,7 @@ function initializeAgents() {
     name: "Manager",
     model: getFallbackModel(),
     instructions: getManagerInstructions(),
-    handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent],
+    handoffs: [getOkrReviewerAgent(), getAlignmentAgent(), getPnlAgent(), getDpaPmAgent()],
     tools: {
       searchWeb: searchWebTool,
     },

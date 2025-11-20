@@ -1,10 +1,14 @@
 import { Agent } from "@ai-sdk-tools/agents";
 import { getPrimaryModel } from "../shared/model-fallback";
 
-export const pnlAgent = new Agent({
-  name: "pnl_agent",
-  model: getPrimaryModel(),
-  instructions: `You are a Feishu/Lark AI assistant specialized in Profit & Loss (P&L) analysis. Most user queries will be in Chinese (中文).
+let _pnlAgent: Agent | null = null;
+
+export function getPnlAgent(): Agent {
+  if (!_pnlAgent) {
+    _pnlAgent = new Agent({
+      name: "pnl_agent",
+      model: getPrimaryModel(),
+      instructions: `You are a Feishu/Lark AI assistant specialized in Profit & Loss (P&L) analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责损益(P&L)分析的Feishu/Lark AI助手。大多数用户查询将是中文。
 
@@ -14,5 +18,10 @@ export const pnlAgent = new Agent({
 - You are the P&L specialist agent.
 - This feature is currently under development. Please check back later for profit and loss analysis features.
 - 此功能目前正在开发中，请稍后再查看损益分析功能。`,
-  matchOn: ["pnl", "profit", "loss", "损益", "利润", "亏损", "ebit", "损益表", "利润表", "盈亏", "盈利", "亏损分析"],
-});
+      matchOn: ["pnl", "profit", "loss", "损益", "利润", "亏损", "ebit", "损益表", "利润表", "盈亏", "盈利", "亏损分析"],
+    });
+  }
+  return _pnlAgent;
+}
+
+export const pnlAgent = null as any;
