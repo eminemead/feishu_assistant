@@ -2,12 +2,9 @@
  * Enhanced card finalization with interactive button support
  */
 
-import { client } from "./feishu-utils";
+import { client, getNextCardSequence } from "./feishu-utils";
 import { generateFollowupQuestions, FollowupOption } from "./tools/generate-followups-tool";
 import { CardButton } from "./card-button-utils";
-
-// Track card sequences for button elements (separate from content sequences)
-const cardButtonSequences = new Map<string, number>();
 
 /**
  * Finalize card and add follow-up button options
@@ -70,11 +67,8 @@ async function finalizeCardSettings(
   cardId: string,
   finalContent?: string
 ): Promise<void> {
-  if (!cardButtonSequences.has(cardId)) {
-    cardButtonSequences.set(cardId, 0);
-  }
-  const sequence = cardButtonSequences.get(cardId)! + 1;
-  cardButtonSequences.set(cardId, sequence);
+  // Use shared sequence counter so this call comes after all streaming updates
+  const sequence = getNextCardSequence(cardId);
 
   const settingsData: any = {
     config: {
@@ -120,11 +114,8 @@ async function addFollowupButtons(
   followups: FollowupOption[]
 ): Promise<void> {
   try {
-    if (!cardButtonSequences.has(cardId)) {
-      cardButtonSequences.set(cardId, 0);
-    }
-    const sequence = cardButtonSequences.get(cardId)! + 1;
-    cardButtonSequences.set(cardId, sequence);
+    // Use shared sequence counter so this call comes after finalize settings
+    const sequence = getNextCardSequence(cardId);
 
     // Create action element with buttons
     const actionElement = {
@@ -176,11 +167,8 @@ async function addFollowupButtons(
  * Add image element to card
  */
 async function addImageElement(cardId: string, imageKey: string): Promise<void> {
-  if (!cardButtonSequences.has(cardId)) {
-    cardButtonSequences.set(cardId, 0);
-  }
-  const sequence = cardButtonSequences.get(cardId)! + 1;
-  cardButtonSequences.set(cardId, sequence);
+  // Use shared sequence counter
+  const sequence = getNextCardSequence(cardId);
 
   const imageElement = {
     tag: "img",

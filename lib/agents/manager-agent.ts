@@ -288,16 +288,19 @@ export async function managerAgent(
         let pendingUpdate: NodeJS.Timeout | null = null;
         
         // Batching configuration
-        const BATCH_DELAY_MS = 100; // Wait 100ms between updates
-        const MIN_CHARS_PER_UPDATE = 10; // Update at least every 10 chars
-        const MAX_DELAY_MS = 500; // Force update every 500ms even if small
+        // These settings reduce the number of Feishu API calls while maintaining responsive streaming
+        const BATCH_DELAY_MS = 150; // Wait 150ms between updates to batch small chunks
+        const MIN_CHARS_PER_UPDATE = 50; // Only update after accumulating 50+ new chars (reduces API calls from 200+ to ~20)
+        const MAX_DELAY_MS = 1000; // Force update every 1s even if small (prevents stalling for slow responses)
         
         const flushUpdate = async () => {
           if (pendingUpdate) {
             clearTimeout(pendingUpdate);
             pendingUpdate = null;
           }
-          if (updateStatus && accumulatedText.length > 0) {
+          // IMPORTANT: Only send new text since last update (delta), not accumulated text
+          // This prevents repeating text when the card is updated multiple times
+          if (updateStatus && accumulatedText.length > lastUpdateLength) {
             await updateStatus(accumulatedText);
             lastUpdateTime = Date.now();
             lastUpdateLength = accumulatedText.length;

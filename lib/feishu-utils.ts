@@ -258,7 +258,23 @@ export async function createStreamingCard(
  * Update card element content for streaming
  */
 // Track sequence numbers per card to ensure proper ordering
+// IMPORTANT: This is the single source of truth for all card operations
+// Both element updates and button/settings operations must use this same counter
 const cardSequences = new Map<string, number>();
+
+/**
+ * Get the next sequence number for a card operation
+ * Used by all card updates (streaming content, buttons, settings, images)
+ * to ensure proper ordering in Feishu
+ */
+export function getNextCardSequence(cardId: string): number {
+  if (!cardSequences.has(cardId)) {
+    cardSequences.set(cardId, 0);
+  }
+  const sequence = cardSequences.get(cardId)! + 1;
+  cardSequences.set(cardId, sequence);
+  return sequence;
+}
 
 export async function updateCardElement(
   cardId: string,
@@ -266,12 +282,8 @@ export async function updateCardElement(
   content: string
 ): Promise<void> {
   // Use cardElement.content for streaming updates (typing effect)
-  // Sequence must be incremental per card (start from 1, increment each time)
-  if (!cardSequences.has(cardId)) {
-    cardSequences.set(cardId, 0);
-  }
-  const sequence = cardSequences.get(cardId)! + 1;
-  cardSequences.set(cardId, sequence);
+  // Sequence must be incremental per card across ALL operations
+  const sequence = getNextCardSequence(cardId);
   
   console.log(`🔄 [Card] Updating card element: cardId=${cardId}, elementId=${elementId}, sequence=${sequence}, contentLength=${content.length}`);
   
