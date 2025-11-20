@@ -16,14 +16,21 @@ const searchWebTool = createSearchWebTool(true, true);
 // Track which model tier is currently in use for this session
 let currentModelTier: "primary" | "fallback" = "primary";
 
-// Create agent instances for both tiers
-let managerAgentPrimary: Agent;
-let managerAgentFallback: Agent;
+// Create agent instances for both tiers (lazy initialized)
+let managerAgentPrimary: Agent | null = null;
+let managerAgentFallback: Agent | null = null;
+let isInitializing = false;
 
 /**
- * Initialize agents for both model tiers
+ * Initialize agents for both model tiers (lazy - called on first request)
  */
 function initializeAgents() {
+  // Prevent race conditions
+  if (isInitializing) return;
+  if (managerAgentPrimary && managerAgentFallback) return;
+  
+  isInitializing = true;
+  
   managerAgentPrimary = new Agent({
     name: "Manager",
     model: getPrimaryModel(),
@@ -110,9 +117,6 @@ AVAILABLE SPECIALISTS:
 - DPA PM Agent (dpa_pm): For product management tasks (under development) / 用于产品管理任务（开发中）`;
 }
 
-// Initialize agents on module load
-initializeAgents();
-
 /**
  * Routing logic for manager agent:
  * 
@@ -162,6 +166,9 @@ export async function managerAgent(
   rootId?: string,
   userId?: string,
 ): Promise<string> {
+  // Lazy initialize agents on first request (not at module load)
+  initializeAgents();
+  
   const query = getQueryText(messages);
   const startTime = Date.now();
   console.log(`[Manager] Received query: "${query}"`);
@@ -207,6 +214,11 @@ export async function managerAgent(
      // Note: The type definition shows messages, but internally it needs executionContext
      // Select agent based on current model tier
      const selectedAgent = currentModelTier === "fallback" ? managerAgentFallback : managerAgentPrimary;
+     
+     if (!selectedAgent) {
+       throw new Error("Agent initialization failed");
+     }
+     
      let result;
      try {
        result = (selectedAgent.stream as any)({
