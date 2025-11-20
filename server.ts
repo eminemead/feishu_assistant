@@ -7,6 +7,10 @@ import { getBotId, client } from "./lib/feishu-utils";
 import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
 import { healthMonitor } from "./lib/health-monitor";
 import { handleCardAction, parseCardActionCallback } from "./lib/handle-card-action";
+import {
+  handleButtonFollowup,
+  extractButtonFollowupContext,
+} from "./lib/handle-button-followup";
 
 const app = new Hono();
 
@@ -267,7 +271,50 @@ app.post("/webhook/card", async (c) => {
       return c.json({ error: "Invalid payload" }, 400);
     }
 
-    // Handle the card action
+    // Get bot ID for button followup routing
+    const botUserId = await getBotId();
+
+    // Check if this is a button action (string value) - treat as button followup
+    const actionValue = cardActionPayload.event?.action?.value;
+    if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
+      console.log(`🔘 [CardAction] Detected button followup action: "${actionValue}"`);
+
+      // Extract button followup context
+      const chatId = cardActionPayload.event?.action?.action_id?.split("_")[0] || 
+                     cardActionPayload.header?.app_id || "";
+      
+      const buttonContext = extractButtonFollowupContext(
+        cardActionPayload,
+        chatId || "unknown",
+        botUserId,
+        false // Determine from message context if needed
+      );
+
+      if (buttonContext) {
+        console.log(`✅ [CardAction] Extracted button followup context, processing as new query...`);
+        // Process button click as a new user message (in background)
+        handleButtonFollowup(buttonContext)
+          .then(() => {
+            console.log(`✅ [CardAction] Button followup processed successfully`);
+          })
+          .catch((err) => {
+            console.error(`❌ [CardAction] Error processing button followup:`, err);
+          });
+
+        // Return success response immediately
+        return c.json(
+          {
+            toast: {
+              type: "success" as const,
+              content: "Processing your selection...",
+            },
+          },
+          200
+        );
+      }
+    }
+
+    // Default: handle as generic card action
     const response = await handleCardAction(cardActionPayload);
 
     // Send response within 3 seconds as required by Feishu

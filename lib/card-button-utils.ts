@@ -74,7 +74,6 @@ export function addFollowupButtonsToCard(
     updatedCard.body.elements.push({
       tag: "text",
       content: containerLabel,
-      tag: "plain_text",
       text_size: "small",
     });
   }
