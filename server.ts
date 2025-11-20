@@ -6,6 +6,7 @@ import { handleNewMessage } from "./lib/handle-messages";
 import { getBotId, client } from "./lib/feishu-utils";
 import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
 import { healthMonitor } from "./lib/health-monitor";
+import { handleCardAction, parseCardActionCallback } from "./lib/handle-card-action";
 
 const app = new Hono();
 
@@ -254,14 +255,26 @@ app.post("/webhook/card", async (c) => {
       // Not a challenge, continue with card action processing
     }
 
-    // TODO: Implement card action handling if you use interactive cards with buttons
-    // For now, we're using streaming cards without interactive elements,
-    // so this endpoint just acknowledges receipt
-    console.log("Card action callback received (not yet implemented)");
-    
-    return c.json({ success: true }, 200);
+    // Parse and validate card action callback
+    const cardActionPayload = await parseCardActionCallback(
+      headers,
+      rawBody,
+      eventDispatcher
+    );
+
+    if (!cardActionPayload) {
+      console.warn("⚠️ [CardAction] Invalid or unparseable card action payload");
+      return c.json({ error: "Invalid payload" }, 400);
+    }
+
+    // Handle the card action
+    const response = await handleCardAction(cardActionPayload);
+
+    // Send response within 3 seconds as required by Feishu
+    console.log(`✅ [CardAction] Sending response:`, JSON.stringify(response, null, 2));
+    return c.json(response, 200);
   } catch (error) {
-    console.error("Error processing card webhook:", error);
+    console.error("❌ [CardAction] Error processing card webhook:", error);
     return c.json({ error: "Internal server error" }, 500);
   }
 });
