@@ -1,0 +1,4 @@
+{"id":"feishu_assistant-411","title":"Create /history/ directory for AI-generated planning documents","status":"open","priority":2,"issue_type":"task","created_at":"2025-11-20T17:28:14.568586+08:00","updated_at":"2025-11-20T17:28:14.568586+08:00"}
+{"id":"feishu_assistant-520","title":"Organize documentation into /docs/ folder structure","status":"open","priority":2,"issue_type":"task","created_at":"2025-11-20T17:28:09.797215+08:00","updated_at":"2025-11-20T17:28:09.797215+08:00"}
+{"id":"feishu_assistant-f15","title":"Establish code style conventions for implementation docs","status":"open","priority":2,"issue_type":"task","created_at":"2025-11-20T17:28:28.811304+08:00","updated_at":"2025-11-20T17:28:28.811304+08:00"}
+{"id":"feishu_assistant-v8r","title":"Update .gitignore to exclude /history/ directory","status":"open","priority":2,"issue_type":"task","created_at":"2025-11-20T17:28:19.527161+08:00","updated_at":"2025-11-20T17:28:19.527161+08:00"}
