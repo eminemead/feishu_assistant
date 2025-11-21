@@ -228,21 +228,8 @@ export async function createStreamingCard(
           content: config.initialContent || "",
           element_id: elementId,
         },
-        ...(config.buttons && config.buttons.length > 0 ? [
-          {
-            tag: "action",
-            actions: config.buttons.map((btn, idx) => ({
-              tag: "button",
-              text: {
-                content: btn.text,
-                tag: "plain_text",
-              },
-              type: btn.type || "default",
-              size: "medium",
-              value: btn.value || btn.text,
-            })),
-          },
-        ] : []),
+        // NOTE: Cannot add action elements to streaming cards in Feishu v2
+        // Button support deferred - see docs/implementation/button-ui-implementation.md
       ],
     },
   };

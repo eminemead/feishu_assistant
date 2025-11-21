@@ -1,11 +1,10 @@
 /**
  * Enhanced card finalization with button follow-up suggestions
  * 
- * Buttons are now created at card initialization time (in handle-app-mention.ts)
- * based on the user's question. This function disables streaming mode and
- * optionally generates additional text-based suggestions as a fallback.
+ * Attempts to add real interactive buttons using cardElement.create API.
+ * Falls back to text-based suggestions if button addition fails.
  * 
- * See lib/generate-buttons-parallel.ts for button generation logic.
+ * See lib/add-buttons-to-card.ts for button element creation.
  */
 
 import { getNextCardSequence, client as feishuClient, updateCardElement } from "./feishu-utils";
@@ -47,7 +46,7 @@ export async function finalizeCardWithFollowups(
 
     let contentWithSuggestions = finalContent || '';
     
-    // Step 2: If suggestions were generated, format and append them
+    // Step 2: If suggestions were generated, format and append them as text
     if (followups && followups.length > 0) {
       console.log(`🎯 [CardSuggestions] Formatting ${followups.length} suggestions as markdown...`);
       const suggestionsMarkdown = formatSuggestionsAsMarkdown(followups, {

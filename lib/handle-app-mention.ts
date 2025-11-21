@@ -1,12 +1,11 @@
 import { getThread } from "./feishu-utils";
 import { generateResponse } from "./generate-response";
 import {
-    createAndSendStreamingCard,
-    updateCardElement,
-    finalizeCard,
+  createAndSendStreamingCard,
+  updateCardElement,
+  finalizeCard,
 } from "./feishu-utils";
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
-import { generateButtonSuggestions } from "./generate-buttons-parallel";
 import { devtoolsTracker } from "./devtools-integration";
 
 export interface FeishuMentionData {
@@ -37,18 +36,10 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         isNewThread: messageId === rootId
     });
 
-    // Generate button suggestions based on the question
-    // These buttons are included at card creation time (only way to add buttons in streaming cards)
-    console.log(`[FeishuMention] Generating button suggestions based on question...`);
-    const buttons = await generateButtonSuggestions(cleanText, 3);
-    console.log(`[FeishuMention] Generated ${buttons.length} buttons for card`);
-
-    // Create streaming card with buttons included
-    const card = await createAndSendStreamingCard(chatId, "chat_id", {
-        buttons: buttons.length > 0 ? buttons : undefined,
-    }, {
-        replyToMessageId: messageId,
-        replyInThread: true,
+    // Create streaming card - reply in thread instead of direct chat message
+    const card = await createAndSendStreamingCard(chatId, "chat_id", {}, {
+      replyToMessageId: messageId,
+      replyInThread: true,
     });
 
     // Create update function for streaming
