@@ -1,6 +1,5 @@
-import { tool } from "ai";
+import { tool, generateText } from "ai";
 import { z } from "zod";
-import { generateObject } from "ai";
 import { getPrimaryModel } from "../shared/model-fallback";
 
 /**
@@ -129,39 +128,39 @@ export async function generateFollowupQuestions(
       console.error(`❌ [Followups] No model available`);
       throw new Error("Model not available");
     }
-    
-    if (typeof generateObject !== 'function') {
-      console.error(`❌ [Followups] generateObject is not a function: ${typeof generateObject}`);
-      throw new Error("generateObject is not available");
-    }
 
-    const result = await generateObject({
+    // Use generateText with JSON parsing instead of generateObject
+    const text = await generateText({
       model,
-      schema: z.object({
-        followups: z.array(
-          z.object({
-            text: z.string().max(60),
-            type: z.enum(["question", "recommendation", "action"]),
-            rationale: z.string().optional(),
-          })
-        ),
-      }),
-      prompt: `Based on this agent response, generate ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
+      prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
 
 Agent Response: "${response}"
 ${context ? `\nContext: ${context}` : ""}
 
 Each follow-up should be:
-1. Concise (max 60 characters - must fit on a button)
+1. Concise (max 60 characters)
 2. Actionable and relevant to the response
 3. Encourage deeper exploration or next steps
 
-Return exactly ${maxOptions} follow-ups as JSON array.`,
+Return ONLY a JSON array with this exact structure. No markdown, no code blocks, just raw JSON:
+[
+  {"text": "question text", "type": "question"},
+  {"text": "recommendation text", "type": "recommendation"},
+  {"text": "action text", "type": "action"}
+]
+
+Types must be: "question", "recommendation", or "action"`,
     });
 
-    const followups = result.followups.slice(0, maxOptions);
+    // Parse the JSON response
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      throw new Error("Could not extract JSON from response");
+    }
+
+    const followups = JSON.parse(jsonMatch[0]).slice(0, maxOptions);
     
-    // Add emoji and category based on type
+    // Validate and add metadata
     const emojiMap: Record<string, string> = {
       question: '❓',
       recommendation: '💡',
@@ -174,18 +173,22 @@ Return exactly ${maxOptions} follow-ups as JSON array.`,
       action: 'next-step',
     };
     
-    const followupsWithMetadata = followups.map((f) => ({
-      ...f,
-      emoji: emojiMap[f.type] || '📝',
-      category: categoryMap[f.type] || 'other',
-      id: `followup_${Math.random().toString(36).substr(2, 9)}`,
-    }));
+    const followupsWithMetadata = followups.map((f: any) => {
+      const type = f.type || 'question';
+      return {
+        text: String(f.text).slice(0, 60), // Ensure max 60 chars
+        type: type as "question" | "recommendation" | "action",
+        emoji: emojiMap[type] || '📝',
+        category: categoryMap[type] || 'other',
+        id: `followup_${Math.random().toString(36).substr(2, 9)}`,
+      };
+    });
     
     console.log(`✅ [Followups] Generated ${followupsWithMetadata.length} follow-up options with metadata`);
     return followupsWithMetadata;
   } catch (error) {
     console.error("❌ [Followups] Error generating follow-ups:", error);
-    // Return default follow-ups on error
+    // Return default follow-ups on error - with all required metadata
     return [
       {
         text: "Tell me more",
