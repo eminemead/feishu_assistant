@@ -72,11 +72,10 @@ export async function sendFollowupButtonsMessage(
           tag: "plain_text",
         },
         type: isFirst ? "primary" : "default",
-        // Set both action_id (for context) and callback value (what gets sent)
-        id: actionId,
         behaviors: [
           {
             type: "callback",
+            action_id: actionId,  // Context encoded in action_id
             value: followup.text, // What gets sent when user clicks
           },
         ],
