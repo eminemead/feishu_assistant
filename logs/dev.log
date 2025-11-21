@@ -18,17 +18,17 @@ $ bun server.ts
 📨 [WebSocket] Event received: im.message.receive_v1
 📨 [WebSocket] Event data: {
   "schema": "2.0",
-  "event_id": "0a79f36bc67378053ed1e98bd7b6b3a8",
+  "event_id": "de86faa39bf5e0f91068401674953671",
   "token": "",
-  "create_time": "1763696917194",
+  "create_time": "1763697828395",
   "event_type": "im.message.receive_v1",
   "tenant_key": "2de1f662118f575d",
   "app_id": "cli_a6af6b76c6f0d013",
   "message": {
     "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
     "chat_type": "group",
-    "content": "{\"text\":\"@_user_1 again ana again\"}",
-    "create_time": "1763696916895",
+    "content": "{\"text\":\"@_user_1 还有别的么\"}",
+    "create_time": "1763697828118",
     "mentions": [
       {
         "id": {
@@ -41,12 +41,13 @@ $ bun server.ts
         "tenant_key": "2de1f662118f575d"
       }
     ],
-    "message_id": "om_x100b5eca5f81f8b0c2a9b1f40dd69e1",
+    "message_id": "om_x100b5eca048dcca8c3eb2adf48c9fe1",
     "message_type": "text",
     "parent_id": "om_x100b5edb3c20e4a0c291114d498450e",
     "root_id": "om_x100b5edb3c20e4a0c291114d498450e",
     "thread_id": "omt_1a7b7fe7f08f1b85",
-    "update_time": "1763696916895"
+    "update_time": "1763697828169",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_3_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.268 Safari/537.36 Lark/7.56.5 LarkLocale/zh_CN ttnet SDK-Version/7.56.19"
   },
   "sender": {
     "sender_id": {
@@ -60,7 +61,7 @@ $ bun server.ts
 }
 🤖 [WebSocket] Bot User ID: cli_a6af6b76c6f0d013
 👤 [Auth] Extracted user ID: ou_db4d1d08c4fcd3f1f4c253eab32ff580
-📩 [WebSocket] Message details: chatId=oc_cd4b98905e12ec0cb68adc529440e623, messageId=om_x100b5eca5f81f8b0c2a9b1f40dd69e1, chatType=group
+📩 [WebSocket] Message details: chatId=oc_cd4b98905e12ec0cb68adc529440e623, messageId=om_x100b5eca048dcca8c3eb2adf48c9fe1, chatType=group
 🔍 [WebSocket] Mentions array: [
   {
     "id": {
@@ -75,14 +76,14 @@ $ bun server.ts
 ]
 🔍 [WebSocket] Found 1 mention(s) in group message
 ✅ [WebSocket] Bot mention detected via mentions array
-👥 [WebSocket] Processing group mention: "@_user_1 again ana again..."
+👥 [WebSocket] Processing group mention: "@_user_1 还有别的么..."
 Handling app mention
 📤 [Card] Creating and sending streaming card to chat_id:oc_cd4b98905e12ec0cb68adc529440e623
-✅ [Card] Created streaming card: cardId=7575020576802229451, elementId=md_96917322
-📨 [Card] Sending card message with cardId: 7575020576802229451
-📨 [Card] Sending as thread reply to message: om_x100b5eca5f81f8b0c2a9b1f40dd69e1
-✅ [Card] Card sent successfully: messageId=om_x100b5eca5f93c4a4c4daa7690ab3525, cardId=7575020576802229451
-[Thread] Fetching thread history: rootId=om_x100b5edb3c20e4a0c291114d498450e, messageId=om_x100b5eca5f81f8b0c2a9b1f40dd69e1
+✅ [Card] Created streaming card: cardId=7575024492742118628, elementId=md_97828496
+📨 [Card] Sending card message with cardId: 7575024492742118628
+📨 [Card] Sending as thread reply to message: om_x100b5eca048dcca8c3eb2adf48c9fe1
+✅ [Card] Card sent successfully: messageId=om_x100b5eca049c10a0c3b4acd7440c648, cardId=7575024492742118628
+[Thread] Fetching thread history: rootId=om_x100b5edb3c20e4a0c291114d498450e, messageId=om_x100b5eca048dcca8c3eb2adf48c9fe1
 ❌ Failed to fetch thread after 1 attempt: Thread fetch timeout after 5000ms
 ⚠️ Proceeding with empty thread context (falling back to current message only)
 ⚠️ [Thread] Thread history empty or fetch failed, using current message only
@@ -95,36 +96,54 @@ Handling app mention
 🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
 🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
 🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
-[Manager] Received query: "@_user_1 again ana again"
-[Manager] Starting stream for query: "@_user_1 again ana again" with primary model
+[Manager] Received query: "@_user_1 还有别的么"
+[Manager] Starting stream for query: "@_user_1 还有别的么" with primary model
 [Manager] Memory context: conversationId=feishu:oc_cd4b98905e12ec0cb68adc529440e623:om_x100b5edb3c20e4a0c291114d498450e, userId=user:ou_db4d1d08c4fcd3f1f4c253eab32ff580, feishuUserId=ou_db4d1d08c4fcd3f1f4c253eab32ff580
 [Manager] Stream created, starting to read textStream...
-🔄 [Card] Updating card element: cardId=7575020576802229451, elementId=md_96917322, sequence=1, contentLength=5
-🔄 [Card] Updating card element: cardId=7575020576802229451, elementId=md_96917322, sequence=2, contentLength=60
-🔄 [Card] Updating card element: cardId=7575020576802229451, elementId=md_96917322, sequence=3, contentLength=110
-🔄 [Card] Updating card element: cardId=7575020576802229451, elementId=md_96917322, sequence=4, contentLength=156
-[Manager] Finished reading textStream. Total chunks: 62, Final text length: 156
+[Cache] MISS
+[Cache] MISS
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=1, contentLength=2
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=2, contentLength=52
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=3, contentLength=103
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=4, contentLength=153
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=5, contentLength=194
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=6, contentLength=203
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=7, contentLength=253
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=8, contentLength=306
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=9, contentLength=338
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=10, contentLength=390
+🔄 [Card] Updating card element: cardId=7575024492742118628, elementId=md_97828496, sequence=11, contentLength=410
+[Manager] Finished reading textStream. Total chunks: 210, Final text length: 410
 [Manager] Final result received: {
   text: "N/A",
   textLength: 0,
-  accumulatedLength: 156,
+  accumulatedLength: 410,
   usage: {
     input: undefined,
     output: undefined,
     total: undefined,
   },
 }
-[Manager] Query handled directly (no handoff): "@_user_1 again ana again"
-[Manager] Returning final text (length=156)
-[FeishuMention] Response generated (length=156): "Hello @_user_1! I can see you've updated your work..."
-[FeishuMention] About to finalize card with followups. cardId=7575020576802229451, result length=156
-🎯 [CardButtons] Finalizing card with follow-ups: cardId=7575020576802229451, contentLength=156
+[Manager] Query handled directly (no handoff): "@_user_1 还有别的么"
+[Manager] Returning final text (length=410)
+[FeishuMention] Response generated (length=410): "目前我们有以下几位专业代理可以为您提供帮助：
+
+## 🎯 OKR Reviewer
+- **专长*..."
+[FeishuMention] About to finalize card with followups. cardId=7575024492742118628, result length=410
+🎯 [CardButtons] Finalizing card with follow-ups: cardId=7575024492742118628, contentLength=410
 🎯 [CardButtons] Calling finalizeCardSettings...
 🎯 [CardButtons] finalizeCardSettings completed
-🎯 [CardButtons] About to generate followup questions. finalContent="Hello @_user_1! I can see you've updated your work...", context="@_user_1 again ana again..."
-🔄 [Followups] Generating 3 follow-up questions for response: "Hello @_user_1! I can see you've updated your work..."
+🎯 [CardButtons] About to generate followup questions. finalContent="目前我们有以下几位专业代理可以为您提供帮助：
+
+## 🎯 OKR Reviewer
+- **专长*...", context="@_user_1 还有别的么..."
+🔄 [Followups] Generating 3 follow-up questions for response: "目前我们有以下几位专业代理可以为您提供帮助：
+
+## 🎯 OKR Reviewer
+- **专长*..."
 🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
-⚠️ [WebSocket] Duplicate event ignored: 0a79f36bc67378053ed1e98bd7b6b3a8
+⚠️ [WebSocket] Duplicate event ignored: de86faa39bf5e0f91068401674953671
 ❌ [Followups] Error generating follow-ups: 154 | 3. Encourage deeper exploration or next steps
 155 | 
 156 | Return exactly ${maxOptions} follow-ups as JSON array.`,
@@ -160,12 +179,9 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
 🎯 [CardButtons] About to add 3 followup buttons...
 📌 [CardButtons] addFollowupButtons called with Feishu client
 📌 [CardButtons] Feishu client ready: object, has cardkit: true
-📌 [CardButtons] Client verification passed, proceeding with card element creation
-📌 [CardButtons] client.cardkit keys: v1
-📌 [CardButtons] client.cardkit.v1 exists: true
-📌 [CardButtons] client.cardkit.v1?.cardElement exists: true
-📌 [CardButtons] Adding 3 button elements to card: cardId=7575020576802229451
-📌 [CardButtons] actionElement: {"tag":"action","actions":[{"tag":"button","text":{"content":"Tell me more","tag":"plain_text"},"type":"default","size":"medium","value":"Tell me more"},{"tag":"button","text":{"content":"How do I apply this?","tag":"plain_text"},"type":"default","size":"medium","value":"How do I apply this?"},{"tag":"button","text":{"content":"What's next?","tag":"plain_text"},"type":"default","size":"medium","value":"What's next?"}]}
+📌 [CardButtons] Client verification passed, proceeding with adding buttons
+📌 [CardButtons] Adding 3 button elements to card: cardId=7575024492742118628
+📌 [CardButtons] Attempting to add buttons using card.update with patches...
 [error]: [
   [
     {
@@ -177,15 +193,15 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       code: 99992402,
       msg: "field validation failed",
       error: [Object ...],
-      troubleshooter: "排查建议查看(Troubleshooting suggestions): https://open.feishu.cn/search?from=openapi&log_id=202511211148562DAFC611B5F96F46875E&code=99992402&method_id=7355916510231330818",
+      log_id: "202511211204134AA3565A8A7E5345CDA5",
+      troubleshooter: "排查建议查看(Troubleshooting suggestions): https://open.feishu.cn/search?from=openapi&log_id=202511211204134AA3565A8A7E5345CDA5&code=99992402&method_id=7355916510231298050",
       field_violations: [
-        [Object ...], [Object ...]
+        [Object ...]
       ],
-      log_id: "202511211148562DAFC611B5F96F46875E",
     }
   ]
 ]
-❌ [CardButtons] Error adding follow-up buttons: AxiosError {
+⚠️ [CardButtons] Error adding follow-up buttons (non-critical): AxiosError {
   message: "Request failed with status code 400",
   name: "AxiosError",
   code: "ERR_BAD_REQUEST",
@@ -216,11 +232,11 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       "Content-Type": "application/json",
       "User-Agent": "oapi-node-sdk/1.0.0",
       Authorization: "Bearer t-g104blaXNAKMFPZX2ZDVKEPAZ5T3473XY7LBXV5T",
-      "Content-Length": 447,
+      "Content-Length": 522,
     },
-    url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-    method: "post",
-    data: "{\"element\":{\"tag\":\"action\",\"actions\":[{\"tag\":\"button\",\"text\":{\"content\":\"Tell me more\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"Tell me more\"},{\"tag\":\"button\",\"text\":{\"content\":\"How do I apply this?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"How do I apply this?\"},{\"tag\":\"button\",\"text\":{\"content\":\"What's next?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"What's next?\"}]},\"sequence\":6}",
+    url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575024492742118628",
+    method: "put",
+    data: "{\"patches\":[{\"op\":\"add\",\"path\":\"/body/elements/-\",\"value\":{\"tag\":\"div\",\"fields\":[{\"tag\":\"action\",\"actions\":[{\"tag\":\"button\",\"text\":{\"content\":\"Tell me more\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"Tell me more\"},{\"tag\":\"button\",\"text\":{\"content\":\"How do I apply this?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"How do I apply this?\"},{\"tag\":\"button\",\"text\":{\"content\":\"What's next?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"What's next?\"}]}]}}],\"sequence\":13}",
     params: {},
     paramsSerializer: [Function: paramsSerializer],
   },
@@ -285,12 +301,12 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
     [Symbol(useDefaultPort)]: true,
     [Symbol(host)]: "open.feishu.cn",
     [Symbol(socketPath)]: undefined,
-    [Symbol(method)]: "POST",
+    [Symbol(method)]: "PUT",
     maxHeaderSize: undefined,
     [Symbol(maxHeaderSize)]: undefined,
     insecureHTTPParser: undefined,
     joinDuplicateHeaders: undefined,
-    [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+    [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575024492742118628",
     _events: [Object: null prototype] {
       abort: [
         [Function]
@@ -323,14 +339,14 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       "content-type": "application/json",
       "user-agent": "oapi-node-sdk/1.0.0",
       "authorization": "Bearer t-g104blaXNAKMFPZX2ZDVKEPAZ5T3473XY7LBXV5T",
-      "content-length": "447",
+      "content-length": "522",
     },
     [Symbol(options)]: {
       maxRedirects: 21,
       maxBodyLength: 10485760,
       protocol: "https:",
-      path: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      method: "POST",
+      path: "/open-apis/cardkit/v1/cards/7575024492742118628",
+      method: "PUT",
       headers: [Object ...],
       agent: undefined,
       agents: [Object ...],
@@ -338,7 +354,7 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       hostname: "open.feishu.cn",
       port: null,
       nativeProtocols: [Object ...],
-      pathname: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+      pathname: "/open-apis/cardkit/v1/cards/7575024492742118628",
       _defaultAgent: [Object ...],
       host: "open.feishu.cn",
     },
@@ -357,12 +373,12 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       _ending: true,
       _redirectCount: 0,
       _redirects: [],
-      _requestBodyLength: 447,
+      _requestBodyLength: 522,
       _requestBodyBuffers: [],
       _eventsCount: NaN,
       _onNativeResponse: [Function],
       _currentRequest: [Circular],
-      _currentUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+      _currentUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575024492742118628",
       abort: [Function],
       destroy: [Function],
       write: [Function],
@@ -420,7 +436,7 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       listenerCount: [Function: listenerCount],
     },
     [Symbol(bodyChunks)]: [
-      <Buffer 7b 22 65 6c 65 6d 65 6e 74 22 3a 7b 22 74 61 67 22 3a 22 61 63 74 69 6f 6e 22 2c 22 61 63 74 69 6f 6e 73 22 3a 5b 7b 22 74 61 67 22 3a 22 62 75 74 74 ... 397 more bytes>
+      <Buffer 7b 22 70 61 74 63 68 65 73 22 3a 5b 7b 22 6f 70 22 3a 22 61 64 64 22 2c 22 70 61 74 68 22 3a 22 2f 62 6f 64 79 2f 65 6c 65 6d 65 6e 74 73 2f 2d 22 2c ... 472 more bytes>
     ],
     [Symbol(fetchRequest)]: null,
     [Symbol(fakeSocket)]: Socket {
@@ -537,7 +553,7 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       _eventsCount: NaN,
       [Symbol(FetchAPI)]: Response (0 KB) {
         ok: false,
-        url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+        url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575024492742118628",
         status: 400,
         statusText: "Bad Request",
         headers: Headers [Object ...],
@@ -548,23 +564,23 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       [Symbol(bodyStream)]: undefined,
       [Symbol(statusMessage)]: "Bad Request",
       [Symbol(statusCode)]: 400,
-      url: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+      url: "/open-apis/cardkit/v1/cards/7575024492742118628",
       headers: [Object ...],
       rawHeaders: [
-        "content-type", "application/json; charset=utf-8", "content-length", "431", "connection",
-        "keep-alive", "date", "Fri, 21 Nov 2025 03:48:56 GMT", "server-timing", "inner; dur=31, cdn-cache;desc=MISS,edge;dur=0,origin;dur=60",
-        "via", "vcache25.cn7175[60,0]", "timing-allow-origin", "*", "Server", "Tengine", "X-Tt-Logid",
-        "202511211148562DAFC611B5F96F46875E", "X-Lgw-Dst-Svc", "sDizjgq8uEPPnBMJ-M5jrlZX36uN02F1mwNI01X_Kk_0KglcYp11ZryCM9etrn-bAeOJvzPzQNNjKx_P-d-L9bofjpMp_EX0yCfglLofMw0-SaAEPsDkTEwmbX7fpn9PgleG0uDUWSZU4-xGcLZ4kaUpYLyvR7A5_vHQqQlQpyj-YKTYq6QwJUAVbyL84uSyUDZeb1UfFPRrH2fhcrAwVW_mfevZCpaaTEJxs6wdwZG79Vb6VWxYrlV9txvc_HI=",
-        "Tt_stable", "1", "X-Request-Id", "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab", "Request-Id",
-        "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab", "x-tt-trace-host", "01f5563db8f7e8f46fe210cc28722285d5d6b556691092e4ce0318bd3c75595a7221e8fc321e155469da970f0b98eef5e988954e230cdaa464767d47767df95e3ba5e675fce7cc5224d558cd879ff6d5f19acae0153609f47cb30c0ba858a908e1",
-        "x-tt-trace-tag", "id=03;cdn-cache=miss;type=dyn", "x-tt-trace-id", "00-2511211148562DAFC611B5F96F46875E-4075951D592696ED-00",
-        "X-Timestamp", "1763696936.829", "x-alicdn-da-ups-status", "endOs,0,400", "EagleId",
-        "b4a393ad17636969367811414e"
+        "content-type", "application/json; charset=utf-8", "content-length", "373", "connection",
+        "keep-alive", "date", "Fri, 21 Nov 2025 04:04:13 GMT", "server-timing", "inner; dur=11, cdn-cache;desc=MISS,edge;dur=0,origin;dur=40",
+        "via", "cache2.cn7173[40,0]", "timing-allow-origin", "*", "Server", "Tengine", "X-Tt-Logid",
+        "202511211204134AA3565A8A7E5345CDA5", "X-Lgw-Dst-Svc", "UiAprQch1G8grm_3wBzo9o6mxlbeG1r6WEC-FIU0-JM6R-ZkXnCxl0Zih02fTeP2f-TA3WOzGx6c5xEatalZz1U4BUYaeB1s04BxV36HCVi3THfZFpTJ5ScIHL8IITfmZXqnBXjTiNGMyczF55niw3OPVfL_kCtYVgtZzYjc9SimyQaObA_DUtMZO76A08yoRywrvPMETAO0ddqIiot73BltMAJzUs2msKtucqqgbHojyfllSCA=",
+        "Tt_stable", "1", "X-Request-Id", "da90979c-ab17-4cca-9a6e-292a2228b386", "Request-Id",
+        "da90979c-ab17-4cca-9a6e-292a2228b386", "x-tt-trace-host", "01f5563db8f7e8f46fe210cc28722285d5eeb7364d712c728ef6811599a5c2f5e62275160f1b07a642a0cd966464ea8bb5575b05d59ce1ecc0ba5f1012e968d5c600899b97fbedf202c0e587b4a6d9af138d2a0ed7fb1265f116dfe1b52755c709",
+        "x-tt-trace-tag", "id=03;cdn-cache=miss;type=dyn", "x-tt-trace-id", "00-2511211204134AA3565A8A7E5345CDA5-09A8390B22ACB532-00",
+        "X-Timestamp", "1763697853.357", "x-alicdn-da-ups-status", "endOs,0,400", "EagleId",
+        "b4a3919617636978533277533e"
       ],
       [Symbol(fakeSocket)]: [Object ...],
       req: [Circular],
       setTimeout: [Function],
-      responseUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+      responseUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575024492742118628",
       redirects: [],
       [Symbol(kAutoDestroyed)]: true,
       httpVersion: "1.1",
@@ -713,24 +729,24 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
     statusText: "Bad Request",
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "content-length": "431",
+      "content-length": "373",
       connection: "keep-alive",
-      date: "Fri, 21 Nov 2025 03:48:56 GMT",
-      "server-timing": "inner; dur=31, cdn-cache;desc=MISS,edge;dur=0,origin;dur=60",
-      via: "vcache25.cn7175[60,0]",
+      date: "Fri, 21 Nov 2025 04:04:13 GMT",
+      "server-timing": "inner; dur=11, cdn-cache;desc=MISS,edge;dur=0,origin;dur=40",
+      via: "cache2.cn7173[40,0]",
       "timing-allow-origin": "*",
       server: "Tengine",
-      "x-tt-logid": "202511211148562DAFC611B5F96F46875E",
-      "x-lgw-dst-svc": "sDizjgq8uEPPnBMJ-M5jrlZX36uN02F1mwNI01X_Kk_0KglcYp11ZryCM9etrn-bAeOJvzPzQNNjKx_P-d-L9bofjpMp_EX0yCfglLofMw0-SaAEPsDkTEwmbX7fpn9PgleG0uDUWSZU4-xGcLZ4kaUpYLyvR7A5_vHQqQlQpyj-YKTYq6QwJUAVbyL84uSyUDZeb1UfFPRrH2fhcrAwVW_mfevZCpaaTEJxs6wdwZG79Vb6VWxYrlV9txvc_HI=",
+      "x-tt-logid": "202511211204134AA3565A8A7E5345CDA5",
+      "x-lgw-dst-svc": "UiAprQch1G8grm_3wBzo9o6mxlbeG1r6WEC-FIU0-JM6R-ZkXnCxl0Zih02fTeP2f-TA3WOzGx6c5xEatalZz1U4BUYaeB1s04BxV36HCVi3THfZFpTJ5ScIHL8IITfmZXqnBXjTiNGMyczF55niw3OPVfL_kCtYVgtZzYjc9SimyQaObA_DUtMZO76A08yoRywrvPMETAO0ddqIiot73BltMAJzUs2msKtucqqgbHojyfllSCA=",
       tt_stable: "1",
-      "x-request-id": "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab",
-      "request-id": "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab",
-      "x-tt-trace-host": "01f5563db8f7e8f46fe210cc28722285d5d6b556691092e4ce0318bd3c75595a7221e8fc321e155469da970f0b98eef5e988954e230cdaa464767d47767df95e3ba5e675fce7cc5224d558cd879ff6d5f19acae0153609f47cb30c0ba858a908e1",
+      "x-request-id": "da90979c-ab17-4cca-9a6e-292a2228b386",
+      "request-id": "da90979c-ab17-4cca-9a6e-292a2228b386",
+      "x-tt-trace-host": "01f5563db8f7e8f46fe210cc28722285d5eeb7364d712c728ef6811599a5c2f5e62275160f1b07a642a0cd966464ea8bb5575b05d59ce1ecc0ba5f1012e968d5c600899b97fbedf202c0e587b4a6d9af138d2a0ed7fb1265f116dfe1b52755c709",
       "x-tt-trace-tag": "id=03;cdn-cache=miss;type=dyn",
-      "x-tt-trace-id": "00-2511211148562DAFC611B5F96F46875E-4075951D592696ED-00",
-      "x-timestamp": "1763696936.829",
+      "x-tt-trace-id": "00-2511211204134AA3565A8A7E5345CDA5-09A8390B22ACB532-00",
+      "x-timestamp": "1763697853.357",
       "x-alicdn-da-ups-status": "endOs,0,400",
-      eagleid: "b4a393ad17636969367811414e",
+      eagleid: "b4a3919617636978533277533e",
     },
     config: {
       transitional: [Object ...],
@@ -749,9 +765,9 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       env: [Object ...],
       validateStatus: [Function: validateStatus],
       headers: [Object ...],
-      url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      method: "post",
-      data: "{\"element\":{\"tag\":\"action\",\"actions\":[{\"tag\":\"button\",\"text\":{\"content\":\"Tell me more\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"Tell me more\"},{\"tag\":\"button\",\"text\":{\"content\":\"How do I apply this?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"How do I apply this?\"},{\"tag\":\"button\",\"text\":{\"content\":\"What's next?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"What's next?\"}]},\"sequence\":6}",
+      url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575024492742118628",
+      method: "put",
+      data: "{\"patches\":[{\"op\":\"add\",\"path\":\"/body/elements/-\",\"value\":{\"tag\":\"div\",\"fields\":[{\"tag\":\"action\",\"actions\":[{\"tag\":\"button\",\"text\":{\"content\":\"Tell me more\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"Tell me more\"},{\"tag\":\"button\",\"text\":{\"content\":\"How do I apply this?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"How do I apply this?\"},{\"tag\":\"button\",\"text\":{\"content\":\"What's next?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"What's next?\"}]}]}}],\"sequence\":13}",
       params: [Object ...],
       paramsSerializer: [Function: paramsSerializer],
     },
@@ -771,12 +787,12 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       [Symbol(useDefaultPort)]: true,
       [Symbol(host)]: "open.feishu.cn",
       [Symbol(socketPath)]: undefined,
-      [Symbol(method)]: "POST",
+      [Symbol(method)]: "PUT",
       maxHeaderSize: undefined,
       [Symbol(maxHeaderSize)]: undefined,
       insecureHTTPParser: undefined,
       joinDuplicateHeaders: undefined,
-      [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
+      [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575024492742118628",
       _events: [Object ...],
       _eventsCount: 6,
       finished: true,
@@ -794,7 +810,7 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
       [Symbol(kClearTimeout)]: [Function],
       _redirectable: [Object ...],
       [Symbol(bodyChunks)]: [
-        <Buffer 7b 22 65 6c 65 6d 65 6e 74 22 3a 7b 22 74 61 67 22 3a 22 61 63 74 69 6f 6e 22 2c 22 61 63 74 69 6f 6e 73 22 3a 5b 7b 22 74 61 67 22 3a 22 62 75 74 74 ... 397 more bytes>
+        <Buffer 7b 22 70 61 74 63 68 65 73 22 3a 5b 7b 22 6f 70 22 3a 22 61 64 64 22 2c 22 70 61 74 68 22 3a 22 2f 62 6f 64 79 2f 65 6c 65 6d 65 6e 74 73 2f 2d 22 2c ... 472 more bytes>
       ],
       [Symbol(fetchRequest)]: null,
       [Symbol(fakeSocket)]: [Object ...],
@@ -878,709 +894,19 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
   isAxiosError: true,
   toString: [Function: toString],
 }
-❌ [CardButtons] Error finalizing card with buttons: AxiosError {
-  message: "Request failed with status code 400",
-  name: "AxiosError",
-  code: "ERR_BAD_REQUEST",
-  config: {
-    transitional: {
-      silentJSONParsing: true,
-      forcedJSONParsing: true,
-      clarifyTimeoutError: false,
-    },
-    adapter: [Function: httpAdapter],
-    transformRequest: [
-      [Function: transformRequest]
-    ],
-    transformResponse: [
-      [Function: transformResponse]
-    ],
-    timeout: 0,
-    xsrfCookieName: "XSRF-TOKEN",
-    xsrfHeaderName: "X-XSRF-TOKEN",
-    maxContentLength: -1,
-    maxBodyLength: -1,
-    env: {
-      FormData: [Function: FormData],
-    },
-    validateStatus: [Function: validateStatus],
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      "Content-Type": "application/json",
-      "User-Agent": "oapi-node-sdk/1.0.0",
-      Authorization: "Bearer t-g104blaXNAKMFPZX2ZDVKEPAZ5T3473XY7LBXV5T",
-      "Content-Length": 447,
-    },
-    url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-    method: "post",
-    data: "{\"element\":{\"tag\":\"action\",\"actions\":[{\"tag\":\"button\",\"text\":{\"content\":\"Tell me more\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"Tell me more\"},{\"tag\":\"button\",\"text\":{\"content\":\"How do I apply this?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"How do I apply this?\"},{\"tag\":\"button\",\"text\":{\"content\":\"What's next?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"What's next?\"}]},\"sequence\":6}",
-    params: {},
-    paramsSerializer: [Function: paramsSerializer],
-  },
-  request: ClientRequest {
-    write: [Function],
-    end: [Function],
-    flushHeaders: [Function],
-    destroy: [Function],
-    _ensureTls: [Function],
-    abort: [Function],
-    [Symbol(tls)]: null,
-    [Symbol(kAbortController)]: AbortController {
-      signal: [AbortSignal ...],
-      abort: [Function: abort],
-    },
-    [Symbol(agent)]: Agent {
-      _events: [Object ...],
-      _eventsCount: 0,
-      _maxListeners: undefined,
-      [Symbol(kCapture)]: false,
-      defaultPort: 443,
-      protocol: "https:",
-      options: [Object ...],
-      requests: [Object ...],
-      sockets: [Object ...],
-      freeSockets: [Object ...],
-      keepAliveMsecs: 1000,
-      keepAlive: true,
-      maxSockets: Infinity,
-      maxFreeSockets: 256,
-      scheduling: "lifo",
-      maxTotalSockets: undefined,
-      totalSocketCount: 0,
-      maxCachedSessions: 100,
-      createConnection: undefined,
-      getName: [Function],
-      addRequest: [Function],
-      createSocket: [Function],
-      removeSocket: [Function],
-      keepSocketAlive: [Function],
-      reuseSocket: [Function],
-      destroy: [Function],
-      setMaxListeners: [Function: setMaxListeners],
-      getMaxListeners: [Function: getMaxListeners],
-      emit: [Function: emit],
-      addListener: [Function: addListener],
-      on: [Function: addListener],
-      prependListener: [Function: prependListener],
-      once: [Function: once],
-      prependOnceListener: [Function: prependOnceListener],
-      removeListener: [Function: removeListener],
-      off: [Function: removeListener],
-      removeAllListeners: [Function: removeAllListeners],
-      listeners: [Function: listeners],
-      rawListeners: [Function: rawListeners],
-      listenerCount: [Function: listenerCount],
-      eventNames: [Function: eventNames],
-    },
-    destroyed: false,
-    [Symbol(protocol)]: "https:",
-    [Symbol(port)]: 443,
-    [Symbol(useDefaultPort)]: true,
-    [Symbol(host)]: "open.feishu.cn",
-    [Symbol(socketPath)]: undefined,
-    [Symbol(method)]: "POST",
-    maxHeaderSize: undefined,
-    [Symbol(maxHeaderSize)]: undefined,
-    insecureHTTPParser: undefined,
-    joinDuplicateHeaders: undefined,
-    [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-    _events: [Object: null prototype] {
-      abort: [
-        [Function]
-      ],
-      aborted: [
-        [Function]
-      ],
-      connect: [
-        [Function]
-      ],
-      error: [
-        [Function]
-      ],
-      socket: [
-        [Function]
-      ],
-      timeout: [
-        [Function]
-      ],
-    },
-    _eventsCount: 6,
-    finished: true,
-    [Symbol(res)]: null,
-    [Symbol(upgradeOrConnect)]: false,
-    [Symbol(parser)]: null,
-    [Symbol(maxHeadersCount)]: null,
-    [Symbol(reusedSocket)]: false,
-    [Symbol(headers)]: Headers {
-      "accept": "application/json, text/plain, */*",
-      "content-type": "application/json",
-      "user-agent": "oapi-node-sdk/1.0.0",
-      "authorization": "Bearer t-g104blaXNAKMFPZX2ZDVKEPAZ5T3473XY7LBXV5T",
-      "content-length": "447",
-    },
-    [Symbol(options)]: {
-      maxRedirects: 21,
-      maxBodyLength: 10485760,
-      protocol: "https:",
-      path: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      method: "POST",
-      headers: [Object ...],
-      agent: undefined,
-      agents: [Object ...],
-      auth: undefined,
-      hostname: "open.feishu.cn",
-      port: null,
-      nativeProtocols: [Object ...],
-      pathname: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      _defaultAgent: [Object ...],
-      host: "open.feishu.cn",
-    },
-    _httpMessage: [Circular],
-    [Symbol(emitState)]: 14,
-    setSocketKeepAlive: [Function],
-    setNoDelay: [Function],
-    [Symbol(kClearTimeout)]: [Function],
-    _redirectable: Writable {
-      _events: [Object ...],
-      _writableState: [Object ...],
-      _maxListeners: undefined,
-      [Symbol(kCapture)]: false,
-      _options: [Object ...],
-      _ended: true,
-      _ending: true,
-      _redirectCount: 0,
-      _redirects: [],
-      _requestBodyLength: 447,
-      _requestBodyBuffers: [],
-      _eventsCount: NaN,
-      _onNativeResponse: [Function],
-      _currentRequest: [Circular],
-      _currentUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      abort: [Function],
-      destroy: [Function],
-      write: [Function],
-      end: [Function],
-      setHeader: [Function],
-      removeHeader: [Function],
-      setTimeout: [Function],
-      flushHeaders: [Function],
-      getHeader: [Function],
-      setNoDelay: [Function],
-      setSocketKeepAlive: [Function],
-      aborted: [Getter],
-      connection: [Getter],
-      socket: [Getter],
-      _sanitizeOptions: [Function],
-      _performRequest: [Function],
-      _processResponse: [Function],
-      pipe: [Function],
-      cork: [Function],
-      uncork: [Function],
-      setDefaultEncoding: [Function: setDefaultEncoding],
-      _write: [Function],
-      _writev: null,
-      closed: [Getter],
-      destroyed: [Getter/Setter],
-      writable: [Getter/Setter],
-      writableFinished: [Getter],
-      writableObjectMode: [Getter],
-      writableBuffer: [Getter],
-      writableEnded: [Getter],
-      writableNeedDrain: [Getter],
-      writableHighWaterMark: [Getter],
-      writableCorked: [Getter],
-      writableLength: [Getter],
-      errored: [Getter],
-      writableAborted: [Getter],
-      _undestroy: [Function: undestroy],
-      _destroy: [Function],
-      [Symbol(nodejs.rejection)]: [Function],
-      [Symbol(Symbol.asyncDispose)]: [Function],
-      eventNames: [Function: eventNames],
-      setMaxListeners: [Function: setMaxListeners],
-      getMaxListeners: [Function: getMaxListeners],
-      emit: [Function: emit],
-      addListener: [Function: addListener],
-      on: [Function: addListener],
-      prependListener: [Function: prependListener],
-      once: [Function: once],
-      prependOnceListener: [Function: prependOnceListener],
-      removeListener: [Function: removeListener],
-      off: [Function: removeListener],
-      removeAllListeners: [Function: removeAllListeners],
-      listeners: [Function: listeners],
-      rawListeners: [Function: rawListeners],
-      listenerCount: [Function: listenerCount],
-    },
-    [Symbol(bodyChunks)]: [
-      <Buffer 7b 22 65 6c 65 6d 65 6e 74 22 3a 7b 22 74 61 67 22 3a 22 61 63 74 69 6f 6e 22 2c 22 61 63 74 69 6f 6e 73 22 3a 5b 7b 22 74 61 67 22 3a 22 62 75 74 74 ... 397 more bytes>
-    ],
-    [Symbol(fetchRequest)]: null,
-    [Symbol(fakeSocket)]: Socket {
-      _events: [Object ...],
-      _readableState: [Object ...],
-      _writableState: [Object ...],
-      allowHalfOpen: true,
-      _maxListeners: undefined,
-      [Symbol(kCapture)]: false,
-      [Symbol(::bunternal::)]: undefined,
-      bytesRead: 0,
-      bytesWritten: 0,
-      connecting: false,
-      timeout: 0,
-      isServer: false,
-      _httpMessage: [Circular],
-      _onTimeout: [Function],
-      address: [Function: address],
-      bufferSize: [Getter],
-      connect: [Function: connect],
-      _destroy: [Function: _destroy],
-      _final: [Function: _final],
-      localAddress: [Getter],
-      localFamily: [Getter],
-      localPort: [Getter],
-      pending: [Getter],
-      _read: [Function: _read],
-      readyState: [Getter],
-      ref: [Function: ref],
-      remoteAddress: [Getter/Setter],
-      remotePort: [Getter/Setter],
-      remoteFamily: [Getter/Setter],
-      resetAndDestroy: [Function: resetAndDestroy],
-      setKeepAlive: [Function: setKeepAlive],
-      setNoDelay: [Function: setNoDelay],
-      setTimeout: [Function: setTimeout],
-      unref: [Function: unref],
-      _write: [Function: _write],
-      destroy: [Function: destroy],
-      write: [Function],
-      cork: [Function],
-      uncork: [Function],
-      setDefaultEncoding: [Function: setDefaultEncoding],
-      _writev: null,
-      end: [Function],
-      writable: [Getter/Setter],
-      writableHighWaterMark: [Getter],
-      writableObjectMode: [Getter],
-      writableBuffer: [Getter],
-      writableLength: [Getter],
-      writableFinished: [Getter],
-      writableCorked: [Getter],
-      writableEnded: [Getter],
-      writableNeedDrain: [Getter],
-      destroyed: [Getter/Setter],
-      _undestroy: [Function: undestroy],
-      push: [Function],
-      unshift: [Function],
-      isPaused: [Function],
-      setEncoding: [Function],
-      read: [Function],
-      pipe: [Function],
-      unpipe: [Function],
-      on: [Function],
-      addListener: [Function],
-      removeListener: [Function],
-      off: [Function],
-      removeAllListeners: [Function],
-      resume: [Function],
-      pause: [Function],
-      wrap: [Function],
-      iterator: [Function],
-      readable: [Getter/Setter],
-      readableDidRead: [Getter],
-      readableAborted: [Getter],
-      readableHighWaterMark: [Getter],
-      readableBuffer: [Getter],
-      readableFlowing: [Getter/Setter],
-      readableLength: [Getter],
-      readableObjectMode: [Getter],
-      readableEncoding: [Getter],
-      errored: [Getter],
-      closed: [Getter],
-      readableEnded: [Getter],
-      drop: [Function],
-      filter: [Function],
-      flatMap: [Function],
-      map: [Function],
-      take: [Function],
-      compose: [Function],
-      every: [Function],
-      forEach: [Function],
-      reduce: [Function],
-      toArray: [Function],
-      some: [Function],
-      find: [Function],
-      [Symbol(nodejs.rejection)]: [Function],
-      [Symbol(Symbol.asyncDispose)]: [Function],
-      [Symbol(Symbol.asyncIterator)]: [Function],
-      eventNames: [Function: eventNames],
-    },
-    res: IncomingMessage {
-      [Symbol(aborted)]: false,
-      [Symbol(eofInProgress)]: true,
-      _consuming: true,
-      _dumped: false,
-      complete: true,
-      _closed: false,
-      [Symbol(noBody)]: false,
-      _events: [Object ...],
-      _readableState: [Object ...],
-      _maxListeners: undefined,
-      [Symbol(kCapture)]: false,
-      _eventsCount: NaN,
-      [Symbol(FetchAPI)]: Response (0 KB) {
-        ok: false,
-        url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-        status: 400,
-        statusText: "Bad Request",
-        headers: Headers [Object ...],
-        redirected: false,
-        bodyUsed: true
-      },
-      [Symbol(type)]: 1,
-      [Symbol(bodyStream)]: undefined,
-      [Symbol(statusMessage)]: "Bad Request",
-      [Symbol(statusCode)]: 400,
-      url: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      headers: [Object ...],
-      rawHeaders: [
-        "content-type", "application/json; charset=utf-8", "content-length", "431", "connection",
-        "keep-alive", "date", "Fri, 21 Nov 2025 03:48:56 GMT", "server-timing", "inner; dur=31, cdn-cache;desc=MISS,edge;dur=0,origin;dur=60",
-        "via", "vcache25.cn7175[60,0]", "timing-allow-origin", "*", "Server", "Tengine", "X-Tt-Logid",
-        "202511211148562DAFC611B5F96F46875E", "X-Lgw-Dst-Svc", "sDizjgq8uEPPnBMJ-M5jrlZX36uN02F1mwNI01X_Kk_0KglcYp11ZryCM9etrn-bAeOJvzPzQNNjKx_P-d-L9bofjpMp_EX0yCfglLofMw0-SaAEPsDkTEwmbX7fpn9PgleG0uDUWSZU4-xGcLZ4kaUpYLyvR7A5_vHQqQlQpyj-YKTYq6QwJUAVbyL84uSyUDZeb1UfFPRrH2fhcrAwVW_mfevZCpaaTEJxs6wdwZG79Vb6VWxYrlV9txvc_HI=",
-        "Tt_stable", "1", "X-Request-Id", "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab", "Request-Id",
-        "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab", "x-tt-trace-host", "01f5563db8f7e8f46fe210cc28722285d5d6b556691092e4ce0318bd3c75595a7221e8fc321e155469da970f0b98eef5e988954e230cdaa464767d47767df95e3ba5e675fce7cc5224d558cd879ff6d5f19acae0153609f47cb30c0ba858a908e1",
-        "x-tt-trace-tag", "id=03;cdn-cache=miss;type=dyn", "x-tt-trace-id", "00-2511211148562DAFC611B5F96F46875E-4075951D592696ED-00",
-        "X-Timestamp", "1763696936.829", "x-alicdn-da-ups-status", "endOs,0,400", "EagleId",
-        "b4a393ad17636969367811414e"
-      ],
-      [Symbol(fakeSocket)]: [Object ...],
-      req: [Circular],
-      setTimeout: [Function],
-      responseUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      redirects: [],
-      [Symbol(kAutoDestroyed)]: true,
-      httpVersion: "1.1",
-      _construct: [Function: _construct],
-      _dump: [Function: _dump],
-      _read: [Function: _read],
-      _finish: [Function: _finish],
-      _destroy: [Function: IncomingMessage_destroy],
-      aborted: [Getter/Setter],
-      connection: [Getter],
-      statusCode: [Getter/Setter],
-      statusMessage: [Getter/Setter],
-      httpVersionMajor: [Getter/Setter],
-      httpVersionMinor: [Getter/Setter],
-      rawTrailers: [Getter/Setter],
-      trailers: [Getter/Setter],
-      socket: [Getter/Setter],
-      destroy: [Function: destroy],
-      _undestroy: [Function: undestroy],
-      push: [Function],
-      unshift: [Function],
-      isPaused: [Function],
-      setEncoding: [Function],
-      read: [Function],
-      pipe: [Function],
-      unpipe: [Function],
-      on: [Function],
-      addListener: [Function],
-      removeListener: [Function],
-      off: [Function],
-      removeAllListeners: [Function],
-      resume: [Function],
-      pause: [Function],
-      wrap: [Function],
-      iterator: [Function],
-      readable: [Getter/Setter],
-      readableDidRead: [Getter],
-      readableAborted: [Getter],
-      readableHighWaterMark: [Getter],
-      readableBuffer: [Getter],
-      readableFlowing: [Getter/Setter],
-      readableLength: [Getter],
-      readableObjectMode: [Getter],
-      readableEncoding: [Getter],
-      errored: [Getter],
-      closed: [Getter],
-      destroyed: [Getter/Setter],
-      readableEnded: [Getter],
-      drop: [Function],
-      filter: [Function],
-      flatMap: [Function],
-      map: [Function],
-      take: [Function],
-      compose: [Function],
-      every: [Function],
-      forEach: [Function],
-      reduce: [Function],
-      toArray: [Function],
-      some: [Function],
-      find: [Function],
-      [Symbol(nodejs.rejection)]: [Function],
-      [Symbol(Symbol.asyncDispose)]: [Function],
-      [Symbol(Symbol.asyncIterator)]: [Function],
-      eventNames: [Function: eventNames],
-      setMaxListeners: [Function: setMaxListeners],
-      getMaxListeners: [Function: getMaxListeners],
-      emit: [Function: emit],
-      prependListener: [Function: prependListener],
-      once: [Function: once],
-      prependOnceListener: [Function: prependOnceListener],
-      listeners: [Function: listeners],
-      rawListeners: [Function: rawListeners],
-      listenerCount: [Function: listenerCount],
-    },
-    _closed: true,
-    complete: true,
-    setTimeout: [Function: setTimeout],
-    clearTimeout: [Function: clearTimeout],
-    path: [Getter],
-    port: [Getter],
-    method: [Getter],
-    host: [Getter],
-    protocol: [Getter],
-    agent: [Getter/Setter],
-    aborted: [Getter/Setter],
-    writable: [Getter],
-    _keepAliveTimeout: 0,
-    _defaultKeepAlive: true,
-    shouldKeepAlive: true,
-    _onPendingData: [Function: nop2],
-    outputSize: 0,
-    outputData: [],
-    strictContentLength: false,
-    _removedTE: false,
-    _removedContLen: false,
-    _removedConnection: false,
-    usesChunkedEncodingByDefault: true,
-    _headerNames: [Getter/Setter],
-    appendHeader: [Function: appendHeader],
-    _implicitHeader: [Function: _implicitHeader],
-    getHeader: [Function: getHeader],
-    pipe: [Function: pipe],
-    getHeaderNames: [Function: getHeaderNames],
-    getRawHeaderNames: [Function: getRawHeaderNames],
-    getHeaders: [Function: getHeaders],
-    removeHeader: [Function: removeHeader],
-    setHeader: [Function: setHeader],
-    setHeaders: [Function: setHeaders],
-    hasHeader: [Function: hasHeader],
-    headers: [Getter/Setter],
-    addTrailers: [Function: addTrailers],
-    connection: [Getter/Setter],
-    socket: [Getter/Setter],
-    chunkedEncoding: [Getter/Setter],
-    writableObjectMode: [Getter],
-    writableLength: [Getter],
-    writableHighWaterMark: [Getter],
-    writableNeedDrain: [Getter],
-    writableEnded: [Getter],
-    writableFinished: [Getter],
-    _send: [Function: _send],
-    _writeRaw: [Function: _writeRaw],
-    writableCorked: [Getter/Setter],
-    cork: [Function: cork],
-    uncork: [Function: uncork],
-    _headers: [Getter/Setter],
-    eventNames: [Function: eventNames],
-    setMaxListeners: [Function: setMaxListeners],
-    getMaxListeners: [Function: getMaxListeners],
-    emit: [Function: emit],
-    addListener: [Function: addListener],
-    on: [Function: addListener],
-    prependListener: [Function: prependListener],
-    once: [Function: once],
-    prependOnceListener: [Function: prependOnceListener],
-    removeListener: [Function: removeListener],
-    off: [Function: removeListener],
-    removeAllListeners: [Function: removeAllListeners],
-    listeners: [Function: listeners],
-    rawListeners: [Function: rawListeners],
-    listenerCount: [Function: listenerCount],
-    [Symbol(kCapture)]: false,
-  },
-  response: {
-    status: 400,
-    statusText: "Bad Request",
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "content-length": "431",
-      connection: "keep-alive",
-      date: "Fri, 21 Nov 2025 03:48:56 GMT",
-      "server-timing": "inner; dur=31, cdn-cache;desc=MISS,edge;dur=0,origin;dur=60",
-      via: "vcache25.cn7175[60,0]",
-      "timing-allow-origin": "*",
-      server: "Tengine",
-      "x-tt-logid": "202511211148562DAFC611B5F96F46875E",
-      "x-lgw-dst-svc": "sDizjgq8uEPPnBMJ-M5jrlZX36uN02F1mwNI01X_Kk_0KglcYp11ZryCM9etrn-bAeOJvzPzQNNjKx_P-d-L9bofjpMp_EX0yCfglLofMw0-SaAEPsDkTEwmbX7fpn9PgleG0uDUWSZU4-xGcLZ4kaUpYLyvR7A5_vHQqQlQpyj-YKTYq6QwJUAVbyL84uSyUDZeb1UfFPRrH2fhcrAwVW_mfevZCpaaTEJxs6wdwZG79Vb6VWxYrlV9txvc_HI=",
-      tt_stable: "1",
-      "x-request-id": "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab",
-      "request-id": "c8e33c4f-7d0d-44a6-a1ca-7bb7fcf760ab",
-      "x-tt-trace-host": "01f5563db8f7e8f46fe210cc28722285d5d6b556691092e4ce0318bd3c75595a7221e8fc321e155469da970f0b98eef5e988954e230cdaa464767d47767df95e3ba5e675fce7cc5224d558cd879ff6d5f19acae0153609f47cb30c0ba858a908e1",
-      "x-tt-trace-tag": "id=03;cdn-cache=miss;type=dyn",
-      "x-tt-trace-id": "00-2511211148562DAFC611B5F96F46875E-4075951D592696ED-00",
-      "x-timestamp": "1763696936.829",
-      "x-alicdn-da-ups-status": "endOs,0,400",
-      eagleid: "b4a393ad17636969367811414e",
-    },
-    config: {
-      transitional: [Object ...],
-      adapter: [Function: httpAdapter],
-      transformRequest: [
-        [Function: transformRequest]
-      ],
-      transformResponse: [
-        [Function: transformResponse]
-      ],
-      timeout: 0,
-      xsrfCookieName: "XSRF-TOKEN",
-      xsrfHeaderName: "X-XSRF-TOKEN",
-      maxContentLength: -1,
-      maxBodyLength: -1,
-      env: [Object ...],
-      validateStatus: [Function: validateStatus],
-      headers: [Object ...],
-      url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      method: "post",
-      data: "{\"element\":{\"tag\":\"action\",\"actions\":[{\"tag\":\"button\",\"text\":{\"content\":\"Tell me more\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"Tell me more\"},{\"tag\":\"button\",\"text\":{\"content\":\"How do I apply this?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"How do I apply this?\"},{\"tag\":\"button\",\"text\":{\"content\":\"What's next?\",\"tag\":\"plain_text\"},\"type\":\"default\",\"size\":\"medium\",\"value\":\"What's next?\"}]},\"sequence\":6}",
-      params: [Object ...],
-      paramsSerializer: [Function: paramsSerializer],
-    },
-    request: ClientRequest {
-      write: [Function],
-      end: [Function],
-      flushHeaders: [Function],
-      destroy: [Function],
-      _ensureTls: [Function],
-      abort: [Function],
-      [Symbol(tls)]: null,
-      [Symbol(kAbortController)]: [AbortController ...],
-      [Symbol(agent)]: [Object ...],
-      destroyed: false,
-      [Symbol(protocol)]: "https:",
-      [Symbol(port)]: 443,
-      [Symbol(useDefaultPort)]: true,
-      [Symbol(host)]: "open.feishu.cn",
-      [Symbol(socketPath)]: undefined,
-      [Symbol(method)]: "POST",
-      maxHeaderSize: undefined,
-      [Symbol(maxHeaderSize)]: undefined,
-      insecureHTTPParser: undefined,
-      joinDuplicateHeaders: undefined,
-      [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575020576802229451/elements",
-      _events: [Object ...],
-      _eventsCount: 6,
-      finished: true,
-      [Symbol(res)]: null,
-      [Symbol(upgradeOrConnect)]: false,
-      [Symbol(parser)]: null,
-      [Symbol(maxHeadersCount)]: null,
-      [Symbol(reusedSocket)]: false,
-      [Symbol(headers)]: Headers [Object ...],
-      [Symbol(options)]: [Object ...],
-      _httpMessage: [Circular],
-      [Symbol(emitState)]: 14,
-      setSocketKeepAlive: [Function],
-      setNoDelay: [Function],
-      [Symbol(kClearTimeout)]: [Function],
-      _redirectable: [Object ...],
-      [Symbol(bodyChunks)]: [
-        <Buffer 7b 22 65 6c 65 6d 65 6e 74 22 3a 7b 22 74 61 67 22 3a 22 61 63 74 69 6f 6e 22 2c 22 61 63 74 69 6f 6e 73 22 3a 5b 7b 22 74 61 67 22 3a 22 62 75 74 74 ... 397 more bytes>
-      ],
-      [Symbol(fetchRequest)]: null,
-      [Symbol(fakeSocket)]: [Object ...],
-      res: [Object ...],
-      _closed: true,
-      complete: true,
-      setTimeout: [Function: setTimeout],
-      clearTimeout: [Function: clearTimeout],
-      path: [Getter],
-      port: [Getter],
-      method: [Getter],
-      host: [Getter],
-      protocol: [Getter],
-      agent: [Getter/Setter],
-      aborted: [Getter/Setter],
-      writable: [Getter],
-      _keepAliveTimeout: 0,
-      _defaultKeepAlive: true,
-      shouldKeepAlive: true,
-      _onPendingData: [Function: nop2],
-      outputSize: 0,
-      outputData: [],
-      strictContentLength: false,
-      _removedTE: false,
-      _removedContLen: false,
-      _removedConnection: false,
-      usesChunkedEncodingByDefault: true,
-      _headerNames: [Getter/Setter],
-      appendHeader: [Function: appendHeader],
-      _implicitHeader: [Function: _implicitHeader],
-      getHeader: [Function: getHeader],
-      pipe: [Function: pipe],
-      getHeaderNames: [Function: getHeaderNames],
-      getRawHeaderNames: [Function: getRawHeaderNames],
-      getHeaders: [Function: getHeaders],
-      removeHeader: [Function: removeHeader],
-      setHeader: [Function: setHeader],
-      setHeaders: [Function: setHeaders],
-      hasHeader: [Function: hasHeader],
-      headers: [Getter/Setter],
-      addTrailers: [Function: addTrailers],
-      connection: [Getter/Setter],
-      socket: [Getter/Setter],
-      chunkedEncoding: [Getter/Setter],
-      writableObjectMode: [Getter],
-      writableLength: [Getter],
-      writableHighWaterMark: [Getter],
-      writableNeedDrain: [Getter],
-      writableEnded: [Getter],
-      writableFinished: [Getter],
-      _send: [Function: _send],
-      _writeRaw: [Function: _writeRaw],
-      writableCorked: [Getter/Setter],
-      cork: [Function: cork],
-      uncork: [Function: uncork],
-      _headers: [Getter/Setter],
-      eventNames: [Function: eventNames],
-      setMaxListeners: [Function: setMaxListeners],
-      getMaxListeners: [Function: getMaxListeners],
-      emit: [Function: emit],
-      addListener: [Function: addListener],
-      on: [Function: addListener],
-      prependListener: [Function: prependListener],
-      once: [Function: once],
-      prependOnceListener: [Function: prependOnceListener],
-      removeListener: [Function: removeListener],
-      off: [Function: removeListener],
-      removeAllListeners: [Function: removeAllListeners],
-      listeners: [Function: listeners],
-      rawListeners: [Function: rawListeners],
-      listenerCount: [Function: listenerCount],
-      [Symbol(kCapture)]: false,
-    },
-    data: {
-      code: 99992402,
-      msg: "field validation failed",
-      error: [Object ...],
-    },
-  },
-  toJSON: [Function: toJSON],
-  isAxiosError: true,
-  toString: [Function: toString],
-}
+🎯 [CardButtons] addFollowupButtons completed
+✅ [CardButtons] Card finalized with 3 follow-up buttons
 [FeishuMention] Finalization result: {
-  error: "Request failed with status code 400",
-}
-[error]: [
-  [
+  followups: [
     {
-      message: "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
-      config: [Object ...],
-      request: [Object ...],
-      response: [Object ...],
+      text: "Tell me more",
+      type: "question",
+    }, {
+      text: "How do I apply this?",
+      type: "question",
+    }, {
+      text: "What's next?",
+      type: "action",
     }
-  ]
-]
+  ],
+}
