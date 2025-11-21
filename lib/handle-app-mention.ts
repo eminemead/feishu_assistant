@@ -85,16 +85,23 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
         console.log(`[FeishuMention] Response generated (length=${result?.length || 0}): "${result?.substring(0, 50) || 'N/A'}..."`);
 
-        // Finalize card with follow-up suggestions
-        // This handles: disabling streaming, generating followups, formatting as markdown, and updating card
+        // Finalize card with follow-up suggestions and send buttons in separate message
+        // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons
         console.log(`[FeishuMention] Finalizing card with suggestions. cardId=${card.cardId}, result length=${result?.length || 0}`);
-        await finalizeCardWithFollowups(
+        const finalizeResult = await finalizeCardWithFollowups(
             card.cardId,
             card.elementId,
             result,
-            cleanText  // context for question generation
+            cleanText,  // context for question generation
+            3,          // max followups
+            {
+                conversationId: chatId,
+                rootId: messageId,
+                threadId: rootId,
+                sendButtonsAsSeperateMessage: true
+            }
         );
-        console.log(`[FeishuMention] Card finalized with suggestions`);
+        console.log(`[FeishuMention] Card finalized with suggestions${finalizeResult.buttonMessageId ? ` (buttons: ${finalizeResult.buttonMessageId})` : ''}`);
 
         // Track successful response
         const duration = Date.now() - startTime;
@@ -123,7 +130,14 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             card.cardId,
             card.elementId,
             errorMessage,
-            cleanText
+            cleanText,
+            3,
+            {
+                conversationId: chatId,
+                rootId: messageId,
+                threadId: rootId,
+                sendButtonsAsSeperateMessage: true
+            }
         ).catch(() => {
             // If finalization fails, fall back to basic finalization
             return finalizeCard(card.cardId);

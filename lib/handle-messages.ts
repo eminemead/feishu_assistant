@@ -73,13 +73,20 @@ export async function handleNewMessage(data: FeishuMessageData) {
       console.log("Could not extract image_key from result");
     }
 
-    // Finalize card with follow-up suggestions
-    // This handles: disabling streaming, generating followups, formatting as markdown, and updating card
+    // Finalize card with follow-up suggestions and send buttons in separate message
+    // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons
     await finalizeCardWithFollowups(
       card.cardId,
       card.elementId,
       result,
-      cleanText  // context for question generation
+      cleanText,  // context for question generation
+      3,          // max followups
+      {
+        conversationId: chatId,
+        rootId: messageId,
+        threadId: rootId,
+        sendButtonsAsSeperateMessage: true
+      }
     );
   } catch (error) {
     console.error("Error generating response:", error);
@@ -94,7 +101,14 @@ export async function handleNewMessage(data: FeishuMessageData) {
       card.cardId,
       card.elementId,
       errorMessage,
-      cleanText
+      cleanText,
+      3,
+      {
+        conversationId: chatId,
+        rootId: messageId,
+        threadId: rootId,
+        sendButtonsAsSeperateMessage: true
+      }
     ).catch(() => {
       // If finalization fails, fall back to basic finalization
       return finalizeCard(card.cardId);
