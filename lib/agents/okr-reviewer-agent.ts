@@ -246,6 +246,13 @@ export function getOkrReviewerAgent(): Agent {
         "关键结果",
         "okr指标",
         "指标",
+        "okr分析",
+        "分析",
+        "图表",
+        "可视化",
+        "visualization",
+        "chart",
+        "analysis",
       ],
     });
   }
