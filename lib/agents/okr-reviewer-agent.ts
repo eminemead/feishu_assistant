@@ -3,6 +3,7 @@ import * as duckdb from "duckdb";
 import { okrVisualizationTool } from "./okr-visualization-tool";
 import { getPrimaryModel } from "../shared/model-fallback";
 import { createOkrReviewTool } from "../tools";
+import { chartGenerationTool } from "../tools/chart-generation-tool";
 import { getUserDataScope } from "../auth/user-data-scope";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
@@ -222,12 +223,15 @@ export function getOkrReviewerAgent(): Agent {
 - You analyze OKR metrics and manager performance using the mgr_okr_review tool.
 - The mgr_okr_review tool checks has_metric_percentage per city company to evaluate if management criteria are met.
 - Use okr_visualization tool to generate heatmap visualizations when users request charts or visualizations.
+- Use the chart_generation tool to create comprehensive OKR visualizations (bar charts, pie charts) when users request analysis with charts, visualizations, or comprehensive reports.
 - 使用mgr_okr_review工具分析OKR指标和经理绩效。
 - mgr_okr_review工具检查各城市公司的指标覆盖率(has_metric_percentage)以评估管理标准是否达到。
-- 使用okr_visualization工具生成热力图可视化，当用户请求图表或可视化时。`,
+- 使用okr_visualization工具生成热力图可视化，当用户请求图表或可视化时。
+- 使用chart_generation工具生成综合OKR可视化（条形图、饼图），当用户请求带图表的分析、可视化或综合报告时。`,
       tools: {
         mgr_okr_review: mgrOkrReviewTool,
         okr_visualization: okrVisualizationTool as any, // Type assertion to avoid type issues
+        chart_generation: chartGenerationTool,
       },
       matchOn: [
         "okr",
