@@ -17,4 +17,5 @@
 
 export { createSearchWebTool } from "./search-web-tool";
 export { createOkrReviewTool } from "./okr-review-tool";
+export { chartGenerationTool, CHART_TOOL_EXAMPLES } from "./chart-generation-tool";
 
