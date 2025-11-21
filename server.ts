@@ -32,15 +32,74 @@ const appSecret = process.env.FEISHU_APP_SECRET!;
 const eventDispatcher = new lark.EventDispatcher({
   encryptKey: encryptKey || "",
   verificationToken: verificationToken || "",
-})
-  // Add a catch-all handler to see what events we're receiving
-  .register({
-    "*": async (data: any, eventType: string) => {
-      console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
-      console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
+});
 
-      // Handle card.action.trigger_v1 from WebSocket in catch-all
-      if (eventType === "card.action.trigger_v1") {
+// Handle card action triggers (both webhook and WebSocket modes)
+(eventDispatcher as any).register({
+  "card.action.trigger": async (data: any) => {
+    try {
+      console.log("🔘 [CardAction] Card action trigger received");
+      console.log("🔘 [CardAction] Action data:", JSON.stringify(data, null, 2));
+      
+      const botUserId = await getBotId();
+      const actionValue = (data as any).action?.value;
+
+      if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
+        console.log(
+          `🔘 [CardAction] Button clicked: "${actionValue}"`
+        );
+
+        // Extract context from action_id
+        const actionId = (data as any).action?.action_id;
+        let chatId = "";
+        let rootId = "";
+
+        if (actionId && typeof actionId === "string" && actionId.includes("|")) {
+          const parts = actionId.split("|");
+          chatId = parts[0];
+          rootId = parts[1] || chatId;
+          console.log(
+            `🔘 [CardAction] Extracted context: chatId=${chatId}, rootId=${rootId}`
+          );
+        } else {
+          console.warn(
+            `⚠️ [CardAction] action_id doesn't have context format: ${actionId}`
+          );
+        }
+
+        if (chatId && rootId) {
+          // Process button click
+          handleButtonFollowup({
+            chatId,
+            messageId: "",
+            rootId,
+            botUserId,
+            userId: (data as any).operator?.operator_id || "",
+            buttonValue: actionValue,
+            isMention: false,
+          })
+            .then(() => {
+              console.log(`✅ [CardAction] Button followup processed successfully`);
+            })
+            .catch((err) => {
+              console.error(`❌ [CardAction] Error processing button followup:`, err);
+            });
+        }
+      }
+    } catch (error) {
+      console.error("❌ [CardAction] Error handling card action:", error);
+    }
+  },
+});
+
+// Add a catch-all handler to see what events we're receiving
+eventDispatcher.register({
+  "*": async (data: any, eventType: string) => {
+    console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
+    console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
+
+    // Handle card.action.trigger_v1 from WebSocket in catch-all as fallback
+    if (eventType === "card.action.trigger_v1") {
         try {
           console.log("🔘 [WebSocket] Card action trigger received via WebSocket");
           const botUserId = await getBotId();
@@ -94,9 +153,10 @@ const eventDispatcher = new lark.EventDispatcher({
         }
       }
     },
-  } as any)
-  .register({
-    "im.message.receive_v1": async (data) => {
+  } as any);
+
+eventDispatcher.register({
+  "im.message.receive_v1": async (data) => {
       try {
         // Deduplicate events by event_id
         const eventId = (data as any).event_id || (data as any).event?.event_id;
