@@ -10,6 +10,7 @@
 import { getNextCardSequence, client as feishuClient, updateCardElement } from "./feishu-utils";
 import { generateFollowupQuestions, FollowupOption } from "./tools/generate-followups-tool";
 import { formatSuggestionsAsMarkdown } from "./format-suggestions";
+import { addDirectButtonsToCard } from "./add-direct-buttons-to-card";
 
 /**
  * Finalize card and add follow-up text-based suggestions
@@ -69,6 +70,32 @@ export async function finalizeCardWithFollowups(
     console.log(`🎯 [CardSuggestions] Disabling streaming mode...`);
     await finalizeCardSettings(cardId, contentWithSuggestions, feishuClient);
     console.log(`✅ [CardSuggestions] Streaming mode disabled`);
+
+    // Step 5: TEST - Try adding buttons as DIRECT elements (no action wrapper)
+    // Theory: Feishu rejects `tag: "action"` but might accept direct `tag: "button"` elements
+    if (followups && followups.length > 0) {
+      console.log(`🔘 [CardSuggestions] Testing direct button elements (EXPERIMENTAL)...`);
+      const buttonSequence = getNextCardSequence(cardId);
+      const directButtons = followups.map((f, idx) => ({
+        text: f.text,
+        value: f.text,
+        type: idx === 0 ? "primary" as const : "default" as const,
+      }));
+
+      const directResult = await addDirectButtonsToCard(
+        cardId,
+        directButtons,
+        buttonSequence
+      );
+
+      if (directResult.success) {
+        console.log(`🎉 [CardSuggestions] EXPERIMENTAL: Direct buttons work! (no action wrapper)`);
+        // If direct buttons work, we might want to remove the text suggestions
+        // For now, keep them as fallback
+      } else {
+        console.log(`⚠️ [CardSuggestions] Direct buttons failed: ${directResult.method}`);
+      }
+    }
 
     return { followups };
   } catch (error) {
