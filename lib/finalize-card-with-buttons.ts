@@ -205,5 +205,4 @@ async function finalizeCardSettings(
  */
 export const _testOnly = {
   finalizeCardSettings,
-  FinalizeCardConfig,
 };
