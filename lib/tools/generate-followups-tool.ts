@@ -105,6 +105,9 @@ export interface FollowupOption {
   text: string;
   type: "question" | "recommendation" | "action";
   rationale?: string;
+  id?: string;
+  emoji?: string;
+  category?: string;
 }
 
 /**
@@ -157,8 +160,29 @@ Return exactly ${maxOptions} follow-ups as JSON array.`,
     });
 
     const followups = result.followups.slice(0, maxOptions);
-    console.log(`✅ [Followups] Generated ${followups.length} follow-up options`);
-    return followups;
+    
+    // Add emoji and category based on type
+    const emojiMap: Record<string, string> = {
+      question: '❓',
+      recommendation: '💡',
+      action: '⚡',
+    };
+    
+    const categoryMap: Record<string, string> = {
+      question: 'clarification',
+      recommendation: 'suggestion',
+      action: 'next-step',
+    };
+    
+    const followupsWithMetadata = followups.map((f) => ({
+      ...f,
+      emoji: emojiMap[f.type] || '📝',
+      category: categoryMap[f.type] || 'other',
+      id: `followup_${Math.random().toString(36).substr(2, 9)}`,
+    }));
+    
+    console.log(`✅ [Followups] Generated ${followupsWithMetadata.length} follow-up options with metadata`);
+    return followupsWithMetadata;
   } catch (error) {
     console.error("❌ [Followups] Error generating follow-ups:", error);
     // Return default follow-ups on error
@@ -166,14 +190,23 @@ Return exactly ${maxOptions} follow-ups as JSON array.`,
       {
         text: "Tell me more",
         type: "question",
+        emoji: '❓',
+        category: 'clarification',
+        id: 'default_1',
       },
       {
         text: "How do I apply this?",
-        type: "question",
+        type: "recommendation",
+        emoji: '💡',
+        category: 'suggestion',
+        id: 'default_2',
       },
       {
         text: "What's next?",
         type: "action",
+        emoji: '⚡',
+        category: 'next-step',
+        id: 'default_3',
       },
     ];
   }

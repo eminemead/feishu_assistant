@@ -35,12 +35,7 @@ export async function finalizeCardWithFollowups(
   try {
     console.log(`🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=${cardId}, contentLength=${finalContent?.length || 0}`);
 
-    // Step 1: Finalize card settings (disable streaming mode)
-    console.log(`🎯 [CardSuggestions] Disabling streaming mode...`);
-    await finalizeCardSettings(cardId, finalContent, feishuClient);
-    console.log(`✅ [CardSuggestions] Streaming mode disabled`);
-
-    // Step 2: Generate follow-up questions
+    // Step 1: Generate follow-up questions (while streaming is still active)
     console.log(`🎯 [CardSuggestions] Generating follow-up suggestions...`);
     const followups = await generateFollowupQuestions(
       finalContent || "",
@@ -49,34 +44,37 @@ export async function finalizeCardWithFollowups(
     );
     console.log(`🎯 [CardSuggestions] generateFollowupQuestions returned ${followups?.length || 0} followups`);
 
-    if (!followups || followups.length === 0) {
+    let contentWithSuggestions = finalContent || '';
+    
+    // Step 2: If suggestions were generated, format and append them
+    if (followups && followups.length > 0) {
+      console.log(`🎯 [CardSuggestions] Formatting ${followups.length} suggestions as markdown...`);
+      const suggestionsMarkdown = formatSuggestionsAsMarkdown(followups, {
+        style: 'numbered',
+        separator: true,
+        emoji: true,
+        category: false,
+      });
+      contentWithSuggestions = finalContent + suggestionsMarkdown;
+      
+      // Step 3: Update card element with suggestions (BEFORE disabling streaming)
+      console.log(`🎯 [CardSuggestions] Updating card element with suggestions...`);
+      await updateCardElement(cardId, elementId, contentWithSuggestions);
+      console.log(`✅ [CardSuggestions] Card updated with ${followups.length} text-based suggestions`);
+    } else {
       console.log(`⚠️ [CardSuggestions] No follow-ups generated`);
-      return { followups: [] };
     }
 
-    // Step 3: Format suggestions as markdown
-    console.log(`🎯 [CardSuggestions] Formatting ${followups.length} suggestions as markdown...`);
-    const suggestionsMarkdown = formatSuggestionsAsMarkdown(followups, {
-      style: 'numbered',
-      separator: true,
-      emoji: true,
-      category: false,
-    });
-
-    // Step 4: Append suggestions to final content
-    const contentWithSuggestions = (finalContent || '') + suggestionsMarkdown;
-
-    // Step 5: Update card element with suggestions
-    console.log(`🎯 [CardSuggestions] Updating card element with suggestions...`);
-    const sequence = getNextCardSequence(cardId);
-    await updateCardElement(cardId, elementId, contentWithSuggestions, sequence);
-    console.log(`✅ [CardSuggestions] Card updated with ${followups.length} text-based suggestions`);
+    // Step 4: Finally, disable streaming mode
+    console.log(`🎯 [CardSuggestions] Disabling streaming mode...`);
+    await finalizeCardSettings(cardId, contentWithSuggestions, feishuClient);
+    console.log(`✅ [CardSuggestions] Streaming mode disabled`);
 
     return { followups };
   } catch (error) {
     console.error("❌ [CardSuggestions] Error finalizing card:", error);
     
-    // Gracefully degrade: card still works even if suggestions fail
+    // Gracefully degrade: still disable streaming even if suggestions failed
     try {
       await finalizeCardSettings(cardId, finalContent, feishuClient);
     } catch (finalizeError) {

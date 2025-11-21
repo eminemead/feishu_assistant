@@ -1,6 +1,5 @@
-[error]: [ 'appId is needed' ]
-[error]: [ 'appSecret is needed' ]
-[info]: [ 'client ready' ]
+$ bun server.ts
+[info]: [ "client ready" ]
 🔧 AI SDK Devtools: Enabled with enhanced features
    - StreamInterceptor support
    - Token usage tracking
@@ -8,9 +7,19 @@
 ⚠️ [Auth] Supabase URL or ANON_KEY not configured. RLS features will be disabled.
 ⚠️ [Auth] SUPABASE_JWT_SECRET not configured. JWT generation will fail.
 ⚠️ [Auth] Supabase credentials not configured. RLS features will be disabled.
-[info]: [ 'event-dispatch is ready' ]
+[info]: [ "event-dispatch is ready" ]
 🔧 Devtools available at: http://localhost:3000/devtools
 📋 [Startup] Starting server initialization...
 📋 [Startup] Mode: Subscription (WebSocket)
 📋 [Startup] Step 1: Initializing WebSocket connection...
-❌ [Startup] ERROR: FEISHU_APP_ID and FEISHU_APP_SECRET are required
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+🔧 Devtools API: http://localhost:3000/devtools/api/events
+🔧 Devtools Sessions: http://localhost:3000/devtools/api/sessions
+🔧 Devtools Stats: http://localhost:3000/devtools/api/stats
+✅ [Startup] Step 1: WebSocket connection established
+📋 [Startup] Ready to receive Feishu events
+📋 [Startup] Step 2: Starting HTTP server...
+✅ [Startup] Step 2: HTTP server started on port 3000
+✨ [Startup] Server is ready to accept requests
+📊 [Startup] Health check: curl http://localhost:3000/health
+[info]: [ "[ws]", "ws client ready" ]
