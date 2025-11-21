@@ -1,0 +1,133 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                  BUTTON UI FEATURE - READY FOR TESTING                      ║
+║                                                                              ║
+║  Implementation of Hypothesis 1: Buttons in Separate Message                ║
+║  Status: Build successful, code integrated, ready for real-world test       ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+QUICK TEST (5 minutes)
+═══════════════════════
+
+1. Start server:
+   NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
+
+2. In Feishu chat:
+   - Mention the bot OR send regular message
+   - Wait for response to complete
+
+3. Verify results:
+   - Response should show with streaming text + text suggestions
+   - BELOW response should see separate message with interactive buttons
+   - Click a button → conversation continues
+
+4. Check logs:
+   tail -100f server.log | grep -i "button\|separate"
+
+Expected success logs:
+   ✅ [CardSuggestions] Buttons sent in separate message
+   ✅ [FollowupButtons] Successfully sent buttons message
+
+
+EXPECTED BEHAVIOR
+═════════════════
+
+In Feishu chat, you should see:
+
+┌─────────────────────────────────────┐
+│ Bot Response (with streaming effect)│
+│                                     │
+│ Suggestions:                        │
+│ 1. Suggestion text                  │  ← Text fallback
+│ 2. Suggestion text                  │
+│ 3. Suggestion text                  │
+└─────────────────────────────────────┘
+
+┌────────────────────────────────────┐
+│  [  Suggestion 1 ] [Suggestion 2 ] │  ← Interactive buttons!
+│  [  Suggestion 3 ]                 │     (in separate message)
+└────────────────────────────────────┘
+
+
+VERIFY SUCCESS
+══════════════
+
+✅ Response streams normally (typewriter effect)
+✅ Text suggestions appear in response
+✅ SEPARATE message with buttons appears below
+✅ Buttons are clickable (text changes to link on hover)
+✅ Clicking button sends it as new query
+✅ Conversation continues normally
+✅ No errors in logs, no 99992402 errors
+
+
+IF BUTTONS DON'T APPEAR
+═════════════════════════
+
+1. Check logs:
+   grep -i "error\|failed" server.log | tail -20
+
+2. Verify config passed:
+   grep -i "conversationId\|rootId" server.log
+
+3. Check if button message sent:
+   grep -i "FollowupButtons" server.log
+
+4. Check Feishu for ANY new messages below response
+   (even if not styled as buttons)
+
+
+IMPORTANT FILES
+════════════════
+
+Implementation:
+  lib/finalize-card-with-buttons.ts      ← Main logic
+  lib/send-follow-up-buttons-message.ts  ← Button sending
+  lib/handle-app-mention.ts              ← @mention integration
+  lib/handle-messages.ts                 ← Message integration
+
+Documentation:
+  IMPLEMENTATION_COMPLETE.md             ← How it works
+  SESSION_SUMMARY_FINAL.md               ← Complete overview
+  NEXT_SESSION_PROMPT.md                 ← Next steps
+
+
+KEY INSIGHT
+═══════════
+
+The problem: Feishu blocks action elements (buttons) in streaming cards
+The solution: Send buttons in a SEPARATE non-streaming message!
+Why it works: Non-streaming messages CAN have action elements
+
+This completely bypasses the 99992402 error by using a different message.
+
+
+ROLLBACK (If Needed)
+════════════════════
+
+If buttons cause issues:
+  git revert 83846d6  # Revert implementation commit
+  
+This removes buttons but keeps text suggestions as fallback.
+
+
+SUCCESS CRITERIA
+═════════════════
+
+Testing is successful when:
+  ✅ Buttons appear in separate message
+  ✅ Buttons are functional and clickable
+  ✅ Clicking button continues conversation
+  ✅ No 99992402 or other errors
+  ✅ Feature works in both @mention and regular messages
+
+
+NEXT: Start server and test in Feishu!
+═════════════════════════════════════════
+
+$ NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
+
+Then mention the bot in Feishu and verify buttons appear.
+
+Questions? Check IMPLEMENTATION_COMPLETE.md for detailed testing guide.
