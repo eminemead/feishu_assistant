@@ -186,11 +186,29 @@ export async function managerAgent(
     devtoolsTracker.trackAgentCall("Manager", query, { manualRoute: "okr_reviewer" });
     try {
       const okrAgent = getOkrReviewerAgent();
-      const result = await okrAgent.stream({ messages });
+      
+      // Create execution context with memory support (same as manager)
+      const executionContext: any = {
+        _memoryAddition: "",
+      };
+      
+      if (chatId && rootId) {
+        const conversationId = getConversationId(chatId!, rootId!);
+        const userScopeId = userId ? getUserScopeId(userId) : getUserScopeId(chatId!);
+        executionContext.chatId = conversationId;
+        executionContext.userId = userScopeId;
+        if (userId) {
+          executionContext.feishuUserId = userId;
+        }
+        console.log(`[OKR] Memory context: conversationId=${conversationId}, userId=${userScopeId}`);
+      }
+      
+      const result = await okrAgent.stream({ messages, executionContext });
       
       let accumulatedText = "";
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
+        // Stream updates in batches
         if (updateStatus && accumulatedText.length % 50 === 0) {
           updateStatus(accumulatedText);
         }
@@ -206,9 +224,12 @@ export async function managerAgent(
       devtoolsTracker.trackResponse("okr_reviewer", accumulatedText, duration, { manualRoute: true });
       healthMonitor.trackAgentCall("okr_reviewer", duration, true);
       
+      console.log(`[OKR] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
     } catch (error) {
       console.error(`[Manager] Error routing to OKR Reviewer:`, error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      devtoolsTracker.trackError("okr_reviewer", error instanceof Error ? error : new Error(errorMsg), { manualRoute: true });
       // Fall through to manager if specialist fails
     }
   }
