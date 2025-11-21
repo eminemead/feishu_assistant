@@ -14,12 +14,12 @@ describe("Card Finalization with Buttons", () => {
       // Just verify the function accepts parameters without calling API
       // In real usage, would need mocked Feishu SDK
       const canCallWithMinimal = () =>
-        finalizeCardWithFollowups("card-123");
+        finalizeCardWithFollowups("card-123", "element-456");
       const canCallWithFull = () =>
         finalizeCardWithFollowups(
           "card-123",
+          "element-456",
           "Final content",
-          "image-key-123",
           "OKR review context",
           3
         );

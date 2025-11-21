@@ -85,20 +85,16 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
     console.log(`[FeishuMention] Response generated (length=${result?.length || 0}): "${result?.substring(0, 50) || 'N/A'}..."`);
 
-    // Finalize card with follow-up buttons
-    console.log(`[FeishuMention] About to finalize card with followups. cardId=${card.cardId}, result length=${result?.length || 0}`);
-    try {
-      const finalizeResult = await finalizeCardWithFollowups(
-        card.cardId,
-        result,
-        undefined, // imageKey
-        cleanText  // context for button generation
-      );
-      console.log(`[FeishuMention] Finalization result:`, finalizeResult);
-    } catch (finalizeError) {
-      console.error(`[FeishuMention] Error in finalizeCardWithFollowups:`, finalizeError);
-      throw finalizeError;
-    }
+    // Finalize card with follow-up suggestions
+    // This handles: disabling streaming, generating followups, formatting as markdown, and updating card
+    console.log(`[FeishuMention] Finalizing card with suggestions. cardId=${card.cardId}, result length=${result?.length || 0}`);
+    await finalizeCardWithFollowups(
+      card.cardId,
+      card.elementId,
+      result,
+      cleanText  // context for question generation
+    );
+    console.log(`[FeishuMention] Card finalized with suggestions`);
     
     // Track successful response
     const duration = Date.now() - startTime;
@@ -122,14 +118,14 @@ export async function handleNewAppMention(data: FeishuMentionData) {
       card.elementId,
       errorMessage
     );
-    // Finalize with error message but still try to add buttons
+    // Finalize with error message but still try to add suggestions
     await finalizeCardWithFollowups(
       card.cardId,
+      card.elementId,
       errorMessage,
-      undefined,
       cleanText
     ).catch(() => {
-      // If button finalization fails, fall back to basic finalization
+      // If finalization fails, fall back to basic finalization
       return finalizeCard(card.cardId);
     });
   }

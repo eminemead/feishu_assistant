@@ -73,12 +73,13 @@ export async function handleNewMessage(data: FeishuMessageData) {
       console.log("Could not extract image_key from result");
     }
 
-    // Finalize card with follow-up buttons and optional image
+    // Finalize card with follow-up suggestions
+    // This handles: disabling streaming, generating followups, formatting as markdown, and updating card
     await finalizeCardWithFollowups(
       card.cardId,
+      card.elementId,
       result,
-      imageKey,
-      cleanText  // context for button generation
+      cleanText  // context for question generation
     );
   } catch (error) {
     console.error("Error generating response:", error);
@@ -88,14 +89,14 @@ export async function handleNewMessage(data: FeishuMessageData) {
       card.elementId,
       errorMessage
     );
-    // Finalize with error message but still try to add buttons
+    // Finalize with error message but still try to add suggestions
     await finalizeCardWithFollowups(
       card.cardId,
+      card.elementId,
       errorMessage,
-      undefined,
       cleanText
     ).catch(() => {
-      // If button finalization fails, fall back to basic finalization
+      // If finalization fails, fall back to basic finalization
       return finalizeCard(card.cardId);
     });
   }
