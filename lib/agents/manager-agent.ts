@@ -173,6 +173,46 @@ export async function managerAgent(
   const startTime = Date.now();
   console.log(`[Manager] Received query: "${query}"`);
   
+  // Manual routing: Check if query matches specialist agent patterns
+  const lowerQuery = query.toLowerCase();
+  const shouldRouteToOkr = /okr|objective|key result|manager review|has_metric|覆盖率|指标覆盖率|经理评审|目标|关键结果|okr指标|指标|okr分析|分析|图表|可视化|visualization|chart|analysis/.test(lowerQuery);
+  const shouldRouteToAlignment = /alignment|对齐|目标对齐/.test(lowerQuery);
+  const shouldRouteToPnl = /pnl|profit|loss|损益|利润|亏损|EBIT/.test(lowerQuery);
+  const shouldRouteToDpaPm = /dpa|data team|AE|DA/.test(lowerQuery);
+  
+  // If a specialist matches, route directly to them instead of manager
+  if (shouldRouteToOkr) {
+    console.log(`[Manager] Manual routing detected: OKR Reviewer matches query`);
+    devtoolsTracker.trackAgentCall("Manager", query, { manualRoute: "okr_reviewer" });
+    try {
+      const okrAgent = getOkrReviewerAgent();
+      const result = await okrAgent.stream({ messages });
+      
+      let accumulatedText = "";
+      for await (const textDelta of result.textStream) {
+        accumulatedText += textDelta;
+        if (updateStatus && accumulatedText.length % 50 === 0) {
+          updateStatus(accumulatedText);
+        }
+      }
+      
+      // Final update
+      if (updateStatus) {
+        updateStatus(accumulatedText);
+      }
+      
+      // Track response
+      const duration = Date.now() - startTime;
+      devtoolsTracker.trackResponse("okr_reviewer", accumulatedText, duration, { manualRoute: true });
+      healthMonitor.trackAgentCall("okr_reviewer", duration, true);
+      
+      return accumulatedText;
+    } catch (error) {
+      console.error(`[Manager] Error routing to OKR Reviewer:`, error);
+      // Fall through to manager if specialist fails
+    }
+  }
+  
   // Track agent call
   devtoolsTracker.trackAgentCall("Manager", query);
   
@@ -253,32 +293,40 @@ export async function managerAgent(
      const processStreams = async () => {
        // Process fullStream to catch handoff events
        const fullStreamPromise = (async () => {
-         try {
-           for await (const part of result.fullStream) {
-             // Check for agent-handoff events in the stream
-             if (part && typeof part === 'object') {
-               const event = part as any;
-               // Look for handoff indicators in the stream parts
-               if (event.type === 'agent-handoff' || event.type === 'handoff' || 
-                   (event.agent && event.agent !== 'Manager')) {
-                 routedAgent = event.to || event.agent || event.agentName;
-                 updateStatus?.(`Routing to ${routedAgent}...`);
-                 console.log(`[Manager] Routing decision detected: "${query}" → ${routedAgent}`);
-                 
-                 // Track agent handoff
-                 devtoolsTracker.trackAgentHandoff("Manager", routedAgent, `Query: ${query.substring(0, 50)}...`);
-               }
-             }
-           }
-         } catch (e) {
-           // Log errors in fullStream processing but don't fail
-           if (e instanceof Error && !e.message.includes('break')) {
-             console.warn(`[Manager] FullStream processing warning:`, e.message);
-           } else {
-             console.log(`[Manager] FullStream processing completed`);
-           }
-         }
-       })();
+          try {
+            let partCount = 0;
+            for await (const part of result.fullStream) {
+              partCount++;
+              // Debug: log first few parts to understand structure
+              if (partCount <= 5) {
+                console.log(`[Manager] fullStream part ${partCount}:`, JSON.stringify(part, null, 2).substring(0, 200));
+              }
+              
+              // Check for agent-handoff events in the stream
+              if (part && typeof part === 'object') {
+                const event = part as any;
+                // Look for handoff indicators in the stream parts
+                if (event.type === 'agent-handoff' || event.type === 'handoff' || 
+                    (event.agent && event.agent !== 'Manager')) {
+                  routedAgent = event.to || event.agent || event.agentName;
+                  updateStatus?.(`Routing to ${routedAgent}...`);
+                  console.log(`[Manager] Routing decision detected: "${query}" → ${routedAgent}`);
+                  
+                  // Track agent handoff
+                  devtoolsTracker.trackAgentHandoff("Manager", routedAgent, `Query: ${query.substring(0, 50)}...`);
+                }
+              }
+            }
+            console.log(`[Manager] fullStream completed with ${partCount} parts`);
+          } catch (e) {
+            // Log errors in fullStream processing but don't fail
+            if (e instanceof Error && !e.message.includes('break')) {
+              console.warn(`[Manager] FullStream processing warning:`, e.message);
+            } else {
+              console.log(`[Manager] FullStream processing completed`);
+            }
+          }
+        })();
 
       // Process textStream with batched updates for better performance
       const textStreamPromise = (async () => {
