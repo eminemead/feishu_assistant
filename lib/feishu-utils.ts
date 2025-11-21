@@ -15,6 +15,48 @@ export const client = new lark.Client({
   domain: lark.Domain.Feishu,
 });
 
+/**
+ * Parse text from Feishu message content
+ * Handles both simple text format and post format (with nested elements/content arrays)
+ * 
+ * @param content - JSON string of message content
+ * @returns Extracted text
+ */
+export function parseMessageContent(content: string): string {
+  try {
+    const contentObj = JSON.parse(content);
+    
+    // Simple text format: { "text": "..." }
+    if (contentObj.text) {
+      return contentObj.text;
+    }
+    
+    // Post format: { "content": [[{ "tag": "text", "text": "..." }, ...]] }
+    if (contentObj.content && Array.isArray(contentObj.content)) {
+      const textParts: string[] = [];
+      
+      // Iterate through elements in the post
+      for (const elementGroup of contentObj.content) {
+        if (Array.isArray(elementGroup)) {
+          for (const element of elementGroup) {
+            if (element.tag === "text" && element.text) {
+              textParts.push(element.text);
+            }
+          }
+        }
+      }
+      
+      return textParts.join("");
+    }
+    
+    // Fallback: return empty string if no recognized format
+    return "";
+  } catch (e) {
+    console.error("Error parsing message content:", e);
+    return "";
+  }
+}
+
 // Request verification for Feishu events
 export async function isValidFeishuRequest({
   request,
@@ -146,8 +188,8 @@ export async function getThread(
     if (!content) continue;
 
     try {
-      const contentObj = JSON.parse(content);
-      let text = contentObj.text || "";
+      // Use parseMessageContent helper to handle both text and post formats
+      let text = parseMessageContent(content);
 
       // Remove bot mention if present (Feishu uses <at user_id="..."> format)
       if (!isBot && text.includes(`<at user_id="${botUserId}">`)) {

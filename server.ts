@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
-import { getBotId, client } from "./lib/feishu-utils";
+import { getBotId, client, parseMessageContent } from "./lib/feishu-utils";
 import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
 import { healthMonitor } from "./lib/health-monitor";
 import { handleCardAction, parseCardActionCallback } from "./lib/handle-card-action";
@@ -192,8 +192,8 @@ eventDispatcher.register({
       console.log(`📩 [WebSocket] Message details: chatId=${chatId}, messageId=${messageId}, chatType=${message.chat_type}`);
 
       try {
-        const contentObj = JSON.parse(content);
-        messageText = contentObj.text || "";
+        // Use helper function that handles both text and post formats
+        messageText = parseMessageContent(content);
 
         // Check if bot is mentioned using mentions array (Subscription Mode)
         // @ts-ignore - mentions array exists in subscription mode

@@ -511,3 +511,162 @@ Handling app mention
     }
   ]
 ]
+📨 [WebSocket] Event received: im.message.receive_v1
+📨 [WebSocket] Event data: {
+  "schema": "2.0",
+  "event_id": "6c181449e809be1d903c5ab64c2f72e7",
+  "token": "",
+  "create_time": "1763715605414",
+  "event_type": "im.message.receive_v1",
+  "tenant_key": "2de1f662118f575d",
+  "app_id": "cli_a6af6b76c6f0d013",
+  "message": {
+    "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
+    "chat_type": "group",
+    "content": "{\"title\":\"\",\"content\":[[{\"tag\":\"at\",\"user_id\":\"@_user_1\",\"user_name\":\"Evi\",\"style\":[]},{\"tag\":\"text\",\"text\":\" \",\"style\":[]},{\"tag\":\"text\",\"text\":\"给我看下11月的OKR分析\",\"style\":[]}]]}",
+    "create_time": "1763715605026",
+    "mentions": [
+      {
+        "id": {
+          "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+          "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+          "user_id": ""
+        },
+        "key": "@_user_1",
+        "name": "Evi",
+        "tenant_key": "2de1f662118f575d"
+      }
+    ],
+    "message_id": "om_x100b5d36ef800080c296c3490319e64",
+    "message_type": "post",
+    "parent_id": "om_x100b5edb3c20e4a0c291114d498450e",
+    "root_id": "om_x100b5edb3c20e4a0c291114d498450e",
+    "thread_id": "omt_1a7b7fe7f08f1b85",
+    "update_time": "1763715605115",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_3_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.268 Safari/537.36 Lark/7.56.5 LarkLocale/zh_CN ttnet SDK-Version/7.56.19"
+  },
+  "sender": {
+    "sender_id": {
+      "open_id": "ou_db4d1d08c4fcd3f1f4c253eab32ff580",
+      "union_id": "on_80d62273b85f0904e27382a59cc1f730",
+      "user_id": "xiaofei.yin"
+    },
+    "sender_type": "user",
+    "tenant_key": "2de1f662118f575d"
+  }
+}
+🤖 [WebSocket] Bot User ID: cli_a6af6b76c6f0d013
+👤 [Auth] Extracted user ID: ou_db4d1d08c4fcd3f1f4c253eab32ff580
+📩 [WebSocket] Message details: chatId=oc_cd4b98905e12ec0cb68adc529440e623, messageId=om_x100b5d36ef800080c296c3490319e64, chatType=group
+🔍 [WebSocket] Mentions array: [
+  {
+    "id": {
+      "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+      "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+      "user_id": ""
+    },
+    "key": "@_user_1",
+    "name": "Evi",
+    "tenant_key": "2de1f662118f575d"
+  }
+]
+🔍 [WebSocket] Found 1 mention(s) in group message
+✅ [WebSocket] Bot mention detected via mentions array
+👥 [WebSocket] Processing group mention: "..."
+Handling app mention
+📤 [Card] Creating and sending streaming card to chat_id:oc_cd4b98905e12ec0cb68adc529440e623
+✅ [Card] Created streaming card: cardId=7575100847010598095, elementId=md_15605737
+📨 [Card] Sending card message with cardId: 7575100847010598095
+📨 [Card] Sending as thread reply to message: om_x100b5d36ef800080c296c3490319e64
+✅ [Card] Card sent successfully: messageId=om_x100b5d36efa7bcbcc328123234242ea, cardId=7575100847010598095
+[Thread] Fetching thread history: rootId=om_x100b5edb3c20e4a0c291114d498450e, messageId=om_x100b5d36ef800080c296c3490319e64
+❌ Failed to fetch thread after 1 attempt: Thread fetch timeout after 5000ms
+⚠️ Proceeding with empty thread context (falling back to current message only)
+⚠️ [Thread] Thread history empty or fetch failed, using current message only
+[Thread] Fallback: Starting fresh with current message only
+[Thread] Processing with 1 message(s)
+[FeishuMention] Generating response...
+[Manager] Received query: ""
+[Manager] Starting stream for query: "" with primary model
+[Manager] Memory context: conversationId=feishu:oc_cd4b98905e12ec0cb68adc529440e623:om_x100b5edb3c20e4a0c291114d498450e, userId=user:ou_db4d1d08c4fcd3f1f4c253eab32ff580, feishuUserId=ou_db4d1d08c4fcd3f1f4c253eab32ff580
+[Manager] Stream created, starting to read textStream...
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=1, contentLength=2
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=2, contentLength=53
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=3, contentLength=104
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=4, contentLength=156
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=5, contentLength=206
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=6, contentLength=258
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=7, contentLength=308
+[Manager] Finished reading textStream. Total chunks: 154, Final text length: 308
+[Manager] Final result received: {
+  text: "N/A",
+  textLength: 0,
+  accumulatedLength: 308,
+  usage: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Query handled directly (no handoff): ""
+[Manager] Returning final text (length=308)
+[FeishuMention] Response generated (length=308): "您好！我是Feishu/Lark AI助手，可以帮助您将查询路由到相应的专家代理。
+
+根据您的需求，..."
+[FeishuMention] Finalizing card with suggestions. cardId=7575100847010598095, result length=308
+🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=7575100847010598095, contentLength=308
+🎯 [CardSuggestions] Generating follow-up suggestions...
+🔄 [Followups] Generating 3 follow-up questions for response: "您好！我是Feishu/Lark AI助手，可以帮助您将查询路由到相应的专家代理。
+
+根据您的需求，..."
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🔄 [Followups] LLM raw response (first 300 chars): "[
+  {"text": "您希望评估哪个团队的OKR进展？", "type": "question"},
+  {"text": "建议先明确目标对齐再制定关键结果", "type": "recommendation"},
+  {"text": "点击连接Alignment Agent确认目标一致性", "type": "action"}
+]..."
+🔄 [Followups] Extracted JSON (first 200 chars): "[
+  {"text": "您希望评估哪个团队的OKR进展？", "type": "question"},
+  {"text": "建议先明确目标对齐再制定关键结果", "type": "recommendation"},
+  {"text": "点击连接Alignment Agent确认目标一致性", "type": "action"}
+]..."
+✅ [Followups] Generated 3 follow-up options with metadata
+🎯 [CardSuggestions] generateFollowupQuestions returned 3 followups
+🎯 [CardSuggestions] Formatting 3 suggestions as markdown...
+🎯 [CardSuggestions] Updating card element with suggestions...
+🔄 [Card] Updating card element: cardId=7575100847010598095, elementId=md_15605737, sequence=8, contentLength=462
+✅ [CardSuggestions] Card updated with 3 text-based suggestions
+🎯 [CardSuggestions] Disabling streaming mode...
+✅ [CardSuggestions] Streaming mode disabled
+🔘 [CardSuggestions] Sending buttons in separate message (Hypothesis 1)...
+🔘 [FollowupButtons] Sending 3 buttons in separate message...
+🔘 [FollowupButtons] Creating card via CardKit...
+🔘 [FollowupButtons] Card created: 7575100920033529037
+🔘 [FollowupButtons] Sending as thread reply to rootId=om_x100b5d36ef800080c296c3490319e64...
+🔘 [FollowupButtons] API response: {
+  "code": 0,
+  "data": {
+    "body": {
+      "content": "{\"title\":\"Suggestions\",\"elements\":[[{\"tag\":\"img\",\"image_key\":\"img_v3_02ad_e19fca1f-912a-450e-95de-3c229091b53g\"},{\"tag\":\"text\",\"text\":\"请升级至最新版本客户端，以查看内容\"},{\"tag\":\"text\",\"text\":\"\"}]]}"
+    },
+    "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
+    "create_time": "1763715623850",
+    "deleted": false,
+    "message_id": "om_x100b5d36ecb410acc2c4078884a41d0",
+    "msg_type": "interactive",
+    "parent_id": "om...
+🔘 [FollowupButtons] isSuccess=true, code=0, has message_id=true
+✅ [FollowupButtons] Successfully sent buttons message: om_x100b5d36ecb410acc2c4078884a41d0
+✅ [CardSuggestions] Buttons sent in separate message: om_x100b5d36ecb410acc2c4078884a41d0
+[FeishuMention] Card finalized with suggestions (buttons: om_x100b5d36ecb410acc2c4078884a41d0)
+⚠️ [WebSocket] Duplicate event ignored: 6c181449e809be1d903c5ab64c2f72e7
+[error]: [
+  [
+    {
+      message: "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+      config: [Object ...],
+      request: [Object ...],
+      response: [Object ...],
+    }
+  ]
+]
