@@ -24,10 +24,13 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     console.log("Handling app mention");
 
     // Remove bot mention from message text
-    let cleanText = messageText.replace(
-        /<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g,
-        ""
-    ).trim();
+    // Handle both XML format (<at ...>) and plain text format (@_user_1, @user_id, etc.)
+    let cleanText = messageText
+        // Remove XML-style mentions: <at user_id="...">...</at>
+        .replace(/<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g, "")
+        // Remove plain text mentions: @_user_1, @user_id, etc. (at start of message)
+        .replace(/^@[^\s]+\s+/, "")
+        .trim();
 
     // Track in devtools
     devtoolsTracker.trackAgentCall("FeishuMention", cleanText, {
