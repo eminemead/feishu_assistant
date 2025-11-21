@@ -14,7 +14,7 @@
  * - Matches Feishu's design patterns for interactive messages
  */
 
-import { client as feishuClient, sendCardMessage } from "./feishu-utils";
+import { client as feishuClient } from "./feishu-utils";
 import { FollowupOption } from "./tools/generate-followups-tool";
 
 interface SendButtonsResult {
@@ -87,28 +87,42 @@ export async function sendFollowupButtonsMessage(
 
     // Send as separate message (NOT streaming_mode)
     console.log(`🔘 [FollowupButtons] Sending card message...`);
-    const response = await sendCardMessage(
-      conversationId,
-      JSON.stringify(cardData),
-      rootId,
-      threadId
-    );
+    
+    // Create card first
+    const createResp = await feishuClient.im.message.create({
+      params: {
+        receive_id_type: "chat_id",
+      },
+      data: {
+        receive_id: conversationId,
+        msg_type: "interactive",
+        content: JSON.stringify({
+          type: "card",
+          data: JSON.stringify(cardData),
+        }),
+      },
+    });
 
-    if (!response?.message_id) {
-      console.error(`❌ [FollowupButtons] No message_id in response:`, response);
+    const isSuccess = typeof createResp.success === 'function' 
+      ? createResp.success() 
+      : (createResp.code === 0 || createResp.code === undefined);
+    const responseData = createResp.data || createResp;
+
+    if (!isSuccess || !responseData?.message_id) {
+      console.error(`❌ [FollowupButtons] Failed to create message:`, JSON.stringify(createResp, null, 2));
       return {
         success: false,
-        error: "No message_id in response",
-        details: JSON.stringify(response),
+        error: `Failed to create message: ${createResp.msg || createResp.error}`,
+        details: JSON.stringify(createResp),
       };
     }
 
-    console.log(`✅ [FollowupButtons] Successfully sent buttons message: ${response.message_id}`);
+    console.log(`✅ [FollowupButtons] Successfully sent buttons message: ${responseData.message_id}`);
 
     return {
       success: true,
-      messageId: response.message_id,
-      details: `Sent ${followups.length} button(s) in message ${response.message_id}`,
+      messageId: responseData.message_id,
+      details: `Sent ${followups.length} button(s) in message ${responseData.message_id}`,
     };
   } catch (error) {
     console.error(`❌ [FollowupButtons] Failed to send buttons:`, error);
