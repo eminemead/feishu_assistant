@@ -38,27 +38,84 @@ const eventDispatcher = new lark.EventDispatcher({
     "*": async (data: any, eventType: string) => {
       console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
       console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
+
+      // Handle card.action.trigger_v1 from WebSocket in catch-all
+      if (eventType === "card.action.trigger_v1") {
+        try {
+          console.log("🔘 [WebSocket] Card action trigger received via WebSocket");
+          const botUserId = await getBotId();
+          const actionValue = (data as any).action?.value;
+
+          if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
+            console.log(
+              `🔘 [CardAction] Button clicked via WebSocket: "${actionValue}"`
+            );
+
+            // Extract context from action_id (format: chatId|rootId|index)
+            const actionId = (data as any).action?.action_id;
+            let chatId = "";
+            let rootId = "";
+
+            if (actionId && typeof actionId === "string" && actionId.includes("|")) {
+              const parts = actionId.split("|");
+              chatId = parts[0];
+              rootId = parts[1] || chatId;
+              console.log(
+                `🔘 [CardAction] Extracted context: chatId=${chatId}, rootId=${rootId}`
+              );
+            } else {
+              // Fallback: try to get from trigger info
+              chatId = (data as any).trigger?.chat_id || "unknown";
+              rootId = (data as any).trigger?.message_id || chatId;
+              console.warn(
+                `⚠️ [CardAction] action_id doesn't have context, using trigger info: ${chatId}`
+              );
+            }
+
+            // Process button click as background task
+            handleButtonFollowup({
+              chatId,
+              messageId: (data as any).trigger?.message_id || "",
+              rootId,
+              botUserId,
+              userId: (data as any).operator?.operator_id || "",
+              buttonValue: actionValue,
+              isMention: false,
+            })
+              .then(() => {
+                console.log(`✅ [CardAction] WebSocket button followup processed successfully`);
+              })
+              .catch((err) => {
+                console.error(`❌ [CardAction] WebSocket button followup error:`, err);
+              });
+          }
+        } catch (error) {
+          console.error("❌ [CardAction] Error handling WebSocket card action:", error);
+        }
+      }
     },
   } as any)
   .register({
-  "im.message.receive_v1": async (data) => {
-    try {
-      // Deduplicate events by event_id
-      const eventId = (data as any).event_id || (data as any).event?.event_id;
-      if (eventId && processedEvents.has(eventId)) {
-        console.log(`⚠️ [WebSocket] Duplicate event ignored: ${eventId}`);
-        return;
-      }
-      if (eventId) {
-        processedEvents.add(eventId);
-        // Clean up old event IDs (keep last 1000)
-        if (processedEvents.size > 1000) {
-          const firstId = processedEvents.values().next().value;
-          processedEvents.delete(firstId);
+    "im.message.receive_v1": async (data) => {
+      try {
+        // Deduplicate events by event_id
+        const eventId = (data as any).event_id || (data as any).event?.event_id;
+        if (eventId && processedEvents.has(eventId)) {
+          console.log(`⚠️ [WebSocket] Duplicate event ignored: ${eventId}`);
+          return;
         }
-      }
+        if (eventId) {
+          processedEvents.add(eventId);
+          // Clean up old event IDs (keep last 1000)
+          if (processedEvents.size > 1000) {
+            const firstId = processedEvents.values().next().value as string;
+            if (firstId) {
+              processedEvents.delete(firstId);
+            }
+          }
+        }
 
-      console.log("📨 [WebSocket] Event received: im.message.receive_v1");
+        console.log("📨 [WebSocket] Event received: im.message.receive_v1");
       console.log("📨 [WebSocket] Event data:", JSON.stringify(data, null, 2));
       const botUserId = await getBotId();
       console.log(`🤖 [WebSocket] Bot User ID: ${botUserId}`);
