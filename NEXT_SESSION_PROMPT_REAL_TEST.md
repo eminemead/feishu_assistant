@@ -1,213 +1,259 @@
-# Next Session - Real Feishu Button Testing
+# Next Session - Button Click Testing (UPDATED)
 
-**Previous Session**: 2025-11-21 (Button click handler implementation)  
-**Current Session**: 2025-11-21 (Implementation complete, ready for testing)  
-**Completed Issue**: feishu_assistant-kug (closed)
+**Previous Session**: 2025-11-21 (Multiple button callback fixes)  
+**Current Status**: Ready for real-world testing  
+**Issue**: feishu_assistant-kug (closed)
 
-## Current Status
+## What's Been Fixed
 
-✅ **Implementation Complete**: Button click handler is fully implemented and tested in isolation.
+✅ **Session Progress:**
+- Initial button handler implementation
+- Added explicit `card.action.trigger` event handler
+- Fixed action_id placement in Feishu Card JSON (moved to behaviors array)
+- Server now receives button clicks via WebSocket
+- Context encoding working (chatId|rootId|index format)
 
-**What Works**:
-- Buttons encode conversation context (chatId, rootId) in action_id
-- Server receives and parses button callbacks correctly
-- Context is extracted and routed to message handler
-- Response generation flow is ready
+## Current State
 
-**What Needs Testing**: Real Feishu integration test.
+The button click handler is **FULLY IMPLEMENTED** and the server is running. What's needed now:
 
-## The Next Task
+**Real Feishu testing to verify:**
+1. Buttons render correctly in Feishu
+2. Button clicks are detected (no error 200672)
+3. Responses appear in conversation thread
+4. Conversation context is preserved
+5. New suggestions appear on responses
 
-**Test the button flow end-to-end with real Feishu**.
+## Testing Instructions
 
-### Step-by-Step Testing
+### 1. Verify Server is Running
 
-1. **Start the server** (if not already running)
-   ```bash
-   bun run dev
-   # Should see: "listening on http://0.0.0.0:3000"
-   ```
+```bash
+curl http://localhost:3000/health | jq .status
+# Should show: "healthy"
+```
 
-2. **In Feishu, send a message to the bot**
-   - Open the bot's group chat or direct message
-   - Send: "What is artificial intelligence?"
-   - Wait for response
+### 2. Send a Message to the Bot in Feishu
 
-3. **Observe the response**
-   - You should see a card with the AI explanation
-   - Below that, a separate message with 3 suggestion buttons
-   - Example: "Tell me more", "Give examples", "Historical context"
+- Open Feishu chat with the bot
+- Send a question: **"What is artificial intelligence?"**
+- Wait for response (~5-10 seconds)
 
-4. **Click one of the buttons**
-   - Click the first button "Tell me more"
-   - Wait for new response
+### 3. Observe the Response
 
-5. **Verify the response**
-   - Response should appear in the SAME THREAD (not standalone)
-   - Response should be relevant to "Tell me more"
-   - Should mention the previous context
-   - Should include new suggestions
+You should see:
+- **Card with response text** (the bot's explanation)
+- **Separate message below it with 3 suggestion buttons**
+  - Example: "Tell me more", "Give examples", "Explain applications"
 
-6. **Chain multiple clicks**
-   - Click another suggestion from the new response
-   - Verify it continues the conversation
+### 4. Click a Suggestion Button
 
-7. **Monitor server logs**
-   ```bash
-   # In another terminal:
-   tail -f server.log | grep -E "CardAction|ButtonFollowup|Extracted"
-   ```
+- Click any button (e.g., "Tell me more")
+- Wait for response (~3-5 seconds)
 
-   You should see:
-   ```
-   🔘 [CardAction] Detected button followup action: "Tell me more"
-   🔘 [CardAction] Extracted chatId from action_id: oc_abc123
-   ✅ [ButtonFollowup] Extracted context from action_id: chatId=oc_abc123, rootId=msg_xyz
-   🔘 [ButtonFollowup] Processing button click as new query: buttonValue="Tell me more"
-   💬 [ButtonFollowup] Routing to message handler
-   ✅ [ButtonFollowup] Button followup processed successfully
-   ```
+### 5. Verify the Response
+
+Expected behavior:
+- ✅ No error message appears
+- ✅ New response appears **in the same thread** (below the button click)
+- ✅ Response is relevant to the button click
+- ✅ Response mentions previous context
+- ✅ New suggestion buttons appear
+
+### 6. Chain Multiple Clicks (Optional)
+
+- Click another button from the new response
+- Verify conversation continues naturally
+- You can keep clicking to explore the topic
+
+### 7. Monitor Server Logs
+
+In a separate terminal, watch the logs:
+
+```bash
+tail -f /Users/xiaofei.yin/work_repo/feishu_assistant/server.log | grep -E "CardAction|ButtonFollowup|action_id"
+```
+
+**What you should see:**
+```
+🔘 [CardAction] Card action trigger received
+🔘 [CardAction] Button clicked: "Tell me more"
+🔘 [CardAction] Extracted context: chatId=oc_abc123, rootId=msg_xyz789
+✅ [CardAction] Button followup processed successfully
+```
 
 ## Success Criteria
 
-All of these must be true:
+All of these should be true:
 
-- [ ] Buttons appear in separate message from main response
-- [ ] Clicking button generates immediate feedback (toast message)
-- [ ] Response appears in thread (continues conversation)
+- [ ] Buttons appear in Feishu (separate message below response)
+- [ ] Clicking button doesn't show error 200672
+- [ ] Response appears **in thread** (continues conversation)
 - [ ] Response text is relevant to button click
 - [ ] New suggestions appear on new response
-- [ ] Can chain multiple button clicks (click → respond → click → respond...)
-- [ ] Server logs show clean callback handling
-- [ ] No errors in server logs
-- [ ] Response time is reasonable (<5 seconds)
+- [ ] Can click multiple buttons in sequence
+- [ ] Server logs show clean processing (no errors)
+- [ ] Conversation flows naturally
 
-## If Something Goes Wrong
+## If It Works
 
-### Symptom: Button click doesn't generate response
+When button clicks work properly, you'll see this flow in logs:
 
-**Check**:
-1. Is server running? `curl http://localhost:3000/health`
-2. Check logs for "CardAction" lines
-3. Check Feishu logs for callback sending
+```
+🔘 [CardAction] Card action trigger received
+🔘 [CardAction] Action data: { ... "action_id": "oc_xyz|msg_abc|0" ... }
+🔘 [CardAction] Button clicked: "Tell me more"
+🔘 [CardAction] Extracted context: chatId=oc_xyz, rootId=msg_abc
+🔘 [ButtonFollowup] Processing button click as new query: buttonValue="Tell me more"
+💬 [ButtonFollowup] Routing to message handler
+[Manager] Received query: "Tell me more"
+[Manager] Starting stream for query
+✅ [ButtonFollowup] Button followup processed successfully
+```
 
-**Debug**:
+Then response generation proceeds normally.
+
+## Troubleshooting
+
+### Problem: Still getting error 200672
+
+**Causes:**
+- action_id not being sent back by Feishu
+- Buttons not rendering correctly
+- Callback URL configuration issue
+
+**Check:**
+1. Verify buttons appear in Feishu (they do render as separate message)
+2. Check server logs for `[CardAction] Action data`
+3. Look for `action_id` field in the action data
+
+**If action_id is undefined:**
+- This means Feishu isn't sending it back
+- Button might not have `action_id` in the callback behavior properly set
+- Check lib/send-follow-up-buttons-message.ts line 76-79
+
+### Problem: No response after clicking
+
+**Check logs for:**
+1. Is CardAction handler being called?
+   ```bash
+   grep "CardAction" server.log | tail -5
+   ```
+
+2. Is context being extracted?
+   ```bash
+   grep "Extracted context" server.log
+   ```
+
+3. Is response generation starting?
+   ```bash
+   grep "Manager.*query" server.log | tail -1
+   ```
+
+**Likely causes:**
+- Context not extracted (missing action_id)
+- Response generation failing (model timeout, rate limit)
+- Response not being sent to correct thread
+
+### Problem: Response appears as standalone message
+
+**Check:**
+1. Look for rootId in logs - should match thread message ID
+2. Verify `rootId` is being extracted from action_id correctly
+
+**Debug:**
 ```bash
-tail -f server.log | grep -i error
+grep "Extracted context" server.log | tail -3
 ```
 
-### Symptom: Response appears as standalone message, not in thread
+Should show: `chatId=oc_xyz, rootId=msg_abc`
 
-**Check**:
-1. Look for "ButtonFollowup" logs with extracted rootId
-2. Check `rootId` value in logs (should be message ID, not chat ID)
-3. Verify response is using same rootId for threading
+## Quick Restart
 
-**Fix if needed**:
-- Check `lib/handle-messages.ts` line 86
-- Verify `rootId: rootId` is correct (not `messageId`)
+If you need to restart the server:
 
-### Symptom: Context lost (response doesn't reference previous message)
-
-**Check**:
-1. Logs should show extracted chatId and rootId
-2. Message handler should fetch thread context
-3. Check if `getThread()` is being called
-
-**Debug**:
-```bash
-tail -f server.log | grep "getThread\|Extracted context"
-```
-
-### Symptom: Suggestions don't appear on new response
-
-**Check**:
-1. Verify response text is long enough (>100 chars)
-2. Check if `generateFollowupQuestions` is working
-3. Look for "CardSuggestions" logs
-
-## Files to Reference
-
-If you need to debug:
-
-1. **Implementation details**: `BUTTON_CALLBACK_IMPLEMENTATION.md`
-2. **Testing guide**: `BUTTON_TESTING_GUIDE.md`
-3. **Session summary**: `SESSION_SUMMARY_BUTTON_HANDLERS.md`
-
-## Key Code Sections
-
-**Button creation with context** (working):
-```
-lib/send-follow-up-buttons-message.ts:60-76
-```
-
-**Context parsing** (working):
-```
-lib/handle-button-followup.ts:107-137
-```
-
-**Server routing** (working):
-```
-server.ts:282-307
-```
-
-**Message handling** (should work):
-```
-lib/handle-messages.ts:19-52
-```
-
-## Next Steps if Testing Succeeds
-
-1. ✅ Close any remaining button-related issues
-2. ✅ Update CHANGELOG.md with button feature
-3. ✅ Create follow-up issues for improvements:
-   - Support more than 3 suggestions
-   - Allow customizing suggestion categories
-   - Add button icons/emojis
-   - Support button styling options
-
-## Next Steps if Testing Fails
-
-1. Identify root cause (logs will show it)
-2. Create new issue: `bd create "Button test failure: [description]" -p 0`
-3. Debug using steps in "If Something Goes Wrong" section
-4. Update implementation if needed
-5. Re-test
-
-## Quick Reference
-
-**To test button webhook in isolation**:
-```bash
-curl -X POST http://localhost:3000/webhook/card \
-  -H "Content-Type: application/json" \
-  -d '{
-    "schema":"2.0",
-    "header":{"event_id":"test","app_id":"test"},
-    "event":{
-      "action":{
-        "action_id":"oc_test_chat|msg_test_root|0",
-        "value":"Tell me more"
-      },
-      "trigger":{"trigger_type":"card.action.trigger"},
-      "operator":{"operator_id":"ou_test","operator_type":"user"},
-      "token":"test"
-    }
-  }'
-```
-
-**To restart server**:
 ```bash
 pkill -f "bun run dev"
-bun run dev
+sleep 2
+nohup bun run dev > server.log 2>&1 &
+sleep 3
+curl http://localhost:3000/health
 ```
 
-**To check server health**:
-```bash
-curl http://localhost:3000/health | jq .status
+## Key Files (Latest Fixes)
+
+1. **Button creation**: `lib/send-follow-up-buttons-message.ts` (line 76-79)
+   - action_id is now in behaviors.action_id
+
+2. **Server handler**: `server.ts` (line 38-85)
+   - Explicit card.action.trigger handler
+   - Extracts context from action_id
+
+3. **Button routing**: `lib/handle-button-followup.ts` (line 101-153)
+   - Parses action_id format
+   - Routes to message handler
+
+4. **Message handling**: `lib/handle-messages.ts` (line 86)
+   - Uses correct rootId for threading
+
+## Latest Changes
+
+These are the fixes made in this session:
+
+1. ✅ Added explicit `card.action.trigger` event handler
+2. ✅ Fixed action_id placement in Feishu Card JSON behavior
+3. ✅ Improved context extraction in WebSocket handler
+4. ✅ Verified server receives callbacks correctly
+
+## Expected Behavior Flow
+
 ```
+User clicks "Tell me more" button
+         ↓
+Feishu sends: POST (WebSocket) card.action.trigger
+  with action.action_id = "oc_chatId|msg_rootId|0"
+         ↓
+Server receives in card.action.trigger handler
+         ↓
+Extracts: chatId=oc_chatId, rootId=msg_rootId, value="Tell me more"
+         ↓
+Routes to: handleButtonFollowup({ chatId, rootId, buttonValue })
+         ↓
+Calls: handleNewMessage({ messageText: "Tell me more", rootId })
+         ↓
+Response generated with streaming
+         ↓
+Sent as reply to rootId (thread)
+         ↓
+New suggestions generated and sent
+         ↓
+User sees: "Tell me more" continues conversation naturally
+```
+
+## If Testing Succeeds
+
+- Mark issue as verified complete
+- Document what worked
+- Move to next issues (error handling, performance, etc.)
+
+## If Testing Fails
+
+1. Document the exact failure
+2. Check logs for error details
+3. Create new issue with debugging info
+4. Fix and re-test
+
+## Session Notes
+
+- Server is currently running and healthy
+- All code changes have been committed and pushed
+- Button implementation is feature-complete
+- Only real-world testing remains
 
 ---
 
-**You have everything you need!** The button handler is implemented and ready to test with real Feishu. Good luck! 🚀
+**Status**: 🚀 **READY FOR REAL FEISHU TESTING**
 
-After testing confirms success, mark this as complete and we can move on to other issues like error handling or performance optimization.
+The implementation is complete. This is just verifying it works end-to-end with real user interactions in Feishu.
+
+**Go test it and let me know the results!**
