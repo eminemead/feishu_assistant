@@ -90,6 +90,8 @@ export function analyzeHasMetricPercentage(period: string, userId?: string): Pro
           return;
         }
 
+        console.log(`[OKR] Analyzing period: "${period}" from table: ${tableName}`);
+
         // Build query with optional user filtering
         let accountFilter = '';
         const queryParams: any[] = [period];
@@ -130,9 +132,12 @@ export function analyzeHasMetricPercentage(period: string, userId?: string): Pro
           db.close();
 
           if (err) {
+            console.error(`[OKR] Query error for period "${period}":`, err);
             reject(err);
             return;
           }
+          
+          console.log(`[OKR] Query returned ${result.length} rows for period "${period}"`);
 
           // Calculate has_metric percentage
           const processed = result.map((row: any) => ({
