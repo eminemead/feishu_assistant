@@ -27,8 +27,18 @@ export async function handleNewMessage(data: FeishuMessageData) {
     ""
   ).trim();
 
-  // Create streaming card
-  const card = await createAndSendStreamingCard(chatId, "chat_id", {});
+  // Create streaming card - reply in thread if this is a thread message
+  const card = await createAndSendStreamingCard(
+    chatId,
+    "chat_id",
+    {},
+    rootId && rootId !== messageId
+      ? {
+          replyToMessageId: rootId,
+          replyInThread: true,
+        }
+      : undefined
+  );
 
   // Create update function for streaming
   let currentContent = "";
@@ -105,7 +115,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
       3,
       {
         conversationId: chatId,
-        rootId: messageId,
+        rootId: rootId,
         threadId: rootId,
         sendButtonsAsSeperateMessage: true
       }

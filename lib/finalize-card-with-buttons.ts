@@ -16,7 +16,6 @@
 import { getNextCardSequence, client as feishuClient, updateCardElement } from "./feishu-utils";
 import { generateFollowupQuestions, FollowupOption } from "./tools/generate-followups-tool";
 import { formatSuggestionsAsMarkdown } from "./format-suggestions";
-import { addDirectButtonsToCard } from "./add-direct-buttons-to-card";
 import { sendFollowupButtonsMessage } from "./send-follow-up-buttons-message";
 
 export interface FinalizeCardConfig {
