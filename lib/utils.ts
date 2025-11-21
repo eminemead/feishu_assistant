@@ -1,3 +1,12 @@
 import Exa from "exa-js";
 
-export const exa = new Exa(process.env.EXA_API_KEY);
+let exaInstance: Exa | null = null;
+
+export const getExa = () => {
+  if (!exaInstance && process.env.EXA_API_KEY) {
+    exaInstance = new Exa(process.env.EXA_API_KEY);
+  }
+  return exaInstance;
+};
+
+export const exa = getExa();

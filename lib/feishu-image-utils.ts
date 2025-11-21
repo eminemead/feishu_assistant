@@ -107,7 +107,7 @@ export async function addImageToCard(
   // If elementId provided, update existing element
   // Otherwise, we'd need to add to card body (requires card update)
   if (elementId) {
-    const resp = await client.cardkit.v1.card.element.update({
+    const resp = await client.cardkit.v1.cardElement.update({
       path: {
         card_id: cardId,
         element_id: elementId,

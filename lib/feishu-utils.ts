@@ -341,9 +341,9 @@ export async function addImageElementToCard(
   const sequence = cardSequences.get(cardId)! + 1;
   cardSequences.set(cardId, sequence);
 
-  // Add image element to card using card element API
+  // Add image element to card using cardElement.create API
   // Note: This creates a new element in the card body
-  const resp = await client.cardkit.v1.card.element.create({
+  const resp = await client.cardkit.v1.cardElement.create({
     path: {
       card_id: cardId,
     },

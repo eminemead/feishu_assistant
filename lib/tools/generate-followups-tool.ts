@@ -122,6 +122,15 @@ export async function generateFollowupQuestions(
     );
 
     const model = getPrimaryModel();
+    if (!model) {
+      console.error(`❌ [Followups] No model available`);
+      throw new Error("Model not available");
+    }
+    
+    if (typeof generateObject !== 'function') {
+      console.error(`❌ [Followups] generateObject is not a function: ${typeof generateObject}`);
+      throw new Error("generateObject is not available");
+    }
 
     const result = await generateObject({
       model,
