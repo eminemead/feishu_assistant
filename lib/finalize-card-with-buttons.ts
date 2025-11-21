@@ -1,10 +1,11 @@
 /**
- * Enhanced card finalization with text-based follow-up suggestions
+ * Enhanced card finalization with button follow-up suggestions
  * 
- * NOTE: Feishu CardKit API does not support adding action elements (buttons) to cards
- * after creation. Error 99992402 is returned for any attempt. See docs/implementation/feishu-api-findings.md
+ * Buttons are now created at card initialization time (in handle-app-mention.ts)
+ * based on the user's question. This function disables streaming mode and
+ * optionally generates additional text-based suggestions as a fallback.
  * 
- * Alternative: Suggestions are displayed as formatted text in markdown content.
+ * See lib/generate-buttons-parallel.ts for button generation logic.
  */
 
 import { getNextCardSequence, client as feishuClient, updateCardElement } from "./feishu-utils";

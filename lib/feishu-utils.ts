@@ -175,6 +175,12 @@ export interface StreamingCardConfig {
   title?: string;
   initialContent?: string;
   elementId?: string;
+  buttons?: Array<{
+    id?: string;
+    text: string;
+    value?: string;
+    type?: "default" | "primary" | "danger";
+  }>;
 }
 
 /**
@@ -222,6 +228,21 @@ export async function createStreamingCard(
           content: config.initialContent || "",
           element_id: elementId,
         },
+        ...(config.buttons && config.buttons.length > 0 ? [
+          {
+            tag: "action",
+            actions: config.buttons.map((btn, idx) => ({
+              tag: "button",
+              text: {
+                content: btn.text,
+                tag: "plain_text",
+              },
+              type: btn.type || "default",
+              size: "medium",
+              value: btn.value || btn.text,
+            })),
+          },
+        ] : []),
       ],
     },
   };
