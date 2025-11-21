@@ -49,32 +49,24 @@ const eventDispatcher = new lark.EventDispatcher({
           `🔘 [CardAction] Button clicked: "${actionValue}"`
         );
 
-        // Extract context from action_id
-        const actionId = (data as any).action?.action_id;
-        let chatId = "";
-        let rootId = "";
+        // Extract context from Feishu callback data (not action_id)
+        // Feishu provides context.open_chat_id and context.open_message_id directly
+        const context = (data as any).context || {};
+        const chatId = context.open_chat_id || "";
+        const rootId = context.open_message_id || "";
 
-        if (actionId && typeof actionId === "string" && actionId.includes("|")) {
-          const parts = actionId.split("|");
-          chatId = parts[0];
-          rootId = parts[1] || chatId;
+        if (chatId && rootId) {
           console.log(
             `🔘 [CardAction] Extracted context: chatId=${chatId}, rootId=${rootId}`
           );
-        } else {
-          console.warn(
-            `⚠️ [CardAction] action_id doesn't have context format: ${actionId}`
-          );
-        }
-
-        if (chatId && rootId) {
+          
           // Process button click
           handleButtonFollowup({
             chatId,
             messageId: "",
             rootId,
             botUserId,
-            userId: (data as any).operator?.operator_id || "",
+            userId: (data as any).operator?.open_id || (data as any).operator?.user_id || "",
             buttonValue: actionValue,
             isMention: false,
           })
@@ -84,6 +76,10 @@ const eventDispatcher = new lark.EventDispatcher({
             .catch((err) => {
               console.error(`❌ [CardAction] Error processing button followup:`, err);
             });
+        } else {
+          console.warn(
+            `⚠️ [CardAction] Missing context: chatId=${chatId}, rootId=${rootId}`
+          );
         }
       }
     } catch (error) {
@@ -110,43 +106,37 @@ eventDispatcher.register({
               `🔘 [CardAction] Button clicked via WebSocket: "${actionValue}"`
             );
 
-            // Extract context from action_id (format: chatId|rootId|index)
-            const actionId = (data as any).action?.action_id;
-            let chatId = "";
-            let rootId = "";
+            // Extract context from Feishu callback (Feishu provides context directly)
+            const context = (data as any).context || (data as any).trigger || {};
+            const chatId = context.open_chat_id || context.chat_id || "";
+            const rootId = context.open_message_id || context.message_id || "";
 
-            if (actionId && typeof actionId === "string" && actionId.includes("|")) {
-              const parts = actionId.split("|");
-              chatId = parts[0];
-              rootId = parts[1] || chatId;
+            if (chatId && rootId) {
               console.log(
                 `🔘 [CardAction] Extracted context: chatId=${chatId}, rootId=${rootId}`
               );
+
+              // Process button click as background task
+              handleButtonFollowup({
+                chatId,
+                messageId: rootId,
+                rootId,
+                botUserId,
+                userId: (data as any).operator?.open_id || (data as any).operator?.user_id || "",
+                buttonValue: actionValue,
+                isMention: false,
+              })
+                .then(() => {
+                  console.log(`✅ [CardAction] WebSocket button followup processed successfully`);
+                })
+                .catch((err) => {
+                  console.error(`❌ [CardAction] WebSocket button followup error:`, err);
+                });
             } else {
-              // Fallback: try to get from trigger info
-              chatId = (data as any).trigger?.chat_id || "unknown";
-              rootId = (data as any).trigger?.message_id || chatId;
               console.warn(
-                `⚠️ [CardAction] action_id doesn't have context, using trigger info: ${chatId}`
+                `⚠️ [CardAction] Missing context: chatId=${chatId}, rootId=${rootId}`
               );
             }
-
-            // Process button click as background task
-            handleButtonFollowup({
-              chatId,
-              messageId: (data as any).trigger?.message_id || "",
-              rootId,
-              botUserId,
-              userId: (data as any).operator?.operator_id || "",
-              buttonValue: actionValue,
-              isMention: false,
-            })
-              .then(() => {
-                console.log(`✅ [CardAction] WebSocket button followup processed successfully`);
-              })
-              .catch((err) => {
-                console.error(`❌ [CardAction] WebSocket button followup error:`, err);
-              });
           }
         } catch (error) {
           console.error("❌ [CardAction] Error handling WebSocket card action:", error);

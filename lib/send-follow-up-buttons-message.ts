@@ -14,7 +14,7 @@
  * - Matches Feishu's design patterns for interactive messages
  */
 
-import { client as feishuClient } from "./feishu-utils";
+import { client as feishuClient, sendCardMessage } from "./feishu-utils";
 import { FollowupOption } from "./tools/generate-followups-tool";
 
 interface SendButtonsResult {
