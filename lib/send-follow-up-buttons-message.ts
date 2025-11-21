@@ -52,8 +52,12 @@ export async function sendFollowupButtonsMessage(
 
     console.log(`🔘 [FollowupButtons] Sending ${followups.length} buttons in separate message...`);
 
-    // Convert followups to button elements
-    const actions = followups.map((followup, index) => {
+    // Create card with button components (NOT action elements)
+    // Feishu Card JSON 2.0 no longer supports "action" tag
+    // Instead, use "button" components directly in elements array
+    // See: https://open.feishu.cn/document/feishu-cards/card-json-v2-components/interactive-components/button
+    
+    const buttonElements = followups.map((followup, index) => {
       const isFirst = index === 0;
       return {
         tag: "button",
@@ -62,13 +66,18 @@ export async function sendFollowupButtonsMessage(
           tag: "plain_text",
         },
         type: isFirst ? "primary" : "default",
-        value: followup.text, // What gets sent when user clicks
+        behaviors: [
+          {
+            type: "callback",
+            value: followup.text, // What gets sent when user clicks
+          },
+        ],
       };
     });
 
-    // Create card with action elements (this works in non-streaming messages)
+    // Create card with button components (JSON 2.0 style)
     const cardData = {
-      schema: "2.0",
+      schema: "2.0",  // Standard v2 - now with button components instead of action elements
       header: {
         title: {
           content: "Suggestions",
@@ -76,40 +85,88 @@ export async function sendFollowupButtonsMessage(
         },
       },
       body: {
-        elements: [
-          {
-            tag: "action",
-            actions: actions,
-          },
-        ],
+        elements: buttonElements,  // Buttons directly in elements array
       },
     };
 
-    // Send as separate message (NOT streaming_mode)
-    console.log(`🔘 [FollowupButtons] Sending card message...`);
+    // TRY APPROACH 1: Create card via CardKit first, then send via message
+    console.log(`🔘 [FollowupButtons] Creating card via CardKit...`);
     
-    // Create card first
-    const createResp = await feishuClient.im.message.create({
-      params: {
-        receive_id_type: "chat_id",
-      },
-      data: {
-        receive_id: conversationId,
-        msg_type: "interactive",
-        content: JSON.stringify({
-          type: "card",
+    let cardEntityId: string | undefined;
+    try {
+      const cardCreateResp = await feishuClient.cardkit.v1.card.create({
+        data: {
+          type: "card_json",
           data: JSON.stringify(cardData),
-        }),
-      },
-    });
+        },
+      });
+      
+      const isCardSuccess = typeof cardCreateResp.success === 'function' 
+        ? cardCreateResp.success() 
+        : (cardCreateResp.code === 0 || cardCreateResp.code === undefined);
+      
+      if (isCardSuccess && cardCreateResp.data?.card_id) {
+        cardEntityId = cardCreateResp.data.card_id;
+        console.log(`🔘 [FollowupButtons] Card created: ${cardEntityId}`);
+      } else {
+        console.warn(`⚠️ [FollowupButtons] CardKit creation failed:`, cardCreateResp);
+      }
+    } catch (error) {
+      console.warn(`⚠️ [FollowupButtons] CardKit creation error:`, error);
+    }
+    
+    // If CardKit succeeded, send via message reference
+    let createResp: any;
+    if (cardEntityId) {
+      console.log(`🔘 [FollowupButtons] Sending card reference message...`);
+      createResp = await feishuClient.im.message.create({
+        params: {
+          receive_id_type: "chat_id",
+        },
+        data: {
+          receive_id: conversationId,
+          msg_type: "interactive",
+          content: JSON.stringify({
+            type: "card",
+            data: {
+              card_id: cardEntityId,
+            },
+          }),
+        },
+      });
+    } else {
+      // Fallback: Try inline card data (may not support buttons)
+      console.log(`🔘 [FollowupButtons] CardKit failed, trying inline card...`);
+      createResp = await feishuClient.im.message.create({
+        params: {
+          receive_id_type: "chat_id",
+        },
+        data: {
+          receive_id: conversationId,
+          msg_type: "interactive",
+          content: JSON.stringify({
+            type: "card",
+            data: JSON.stringify(cardData),
+          }),
+        },
+      });
+    }
+    
+    console.log(`🔘 [FollowupButtons] API response:`, JSON.stringify(createResp, null, 2).substring(0, 500) + "...");
 
     const isSuccess = typeof createResp.success === 'function' 
       ? createResp.success() 
       : (createResp.code === 0 || createResp.code === undefined);
     const responseData = createResp.data || createResp;
 
+    console.log(`🔘 [FollowupButtons] isSuccess=${isSuccess}, code=${createResp.code}, has message_id=${!!responseData?.message_id}`);
+
     if (!isSuccess || !responseData?.message_id) {
-      console.error(`❌ [FollowupButtons] Failed to create message:`, JSON.stringify(createResp, null, 2));
+      console.error(`❌ [FollowupButtons] Failed to create message`);
+      console.error(`   Code: ${createResp.code}`);
+      console.error(`   Msg: ${createResp.msg}`);
+      console.error(`   Error: ${createResp.error}`);
+      console.error(`   Full response:`, JSON.stringify(createResp, null, 2));
       return {
         success: false,
         error: `Failed to create message: ${createResp.msg || createResp.error}`,

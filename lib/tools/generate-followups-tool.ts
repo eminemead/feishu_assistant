@@ -1,4 +1,4 @@
-import { tool, generateText } from "ai";
+import { tool, generateText, generateObject } from "ai";
 import { z } from "zod";
 import { getPrimaryModel } from "../shared/model-fallback";
 
