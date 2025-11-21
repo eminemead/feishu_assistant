@@ -23,3 +23,952 @@ $ bun server.ts
 ✨ [Startup] Server is ready to accept requests
 📊 [Startup] Health check: curl http://localhost:3000/health
 [info]: [ "[ws]", "ws client ready" ]
+📨 [WebSocket] Event received: im.message.receive_v1
+📨 [WebSocket] Event data: {
+  "schema": "2.0",
+  "event_id": "5b7f97fa64d7918c1c309e7630dd3e55",
+  "token": "",
+  "create_time": "1763702684255",
+  "event_type": "im.message.receive_v1",
+  "tenant_key": "2de1f662118f575d",
+  "app_id": "cli_a6af6b76c6f0d013",
+  "message": {
+    "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
+    "chat_type": "group",
+    "content": "{\"text\":\"@_user_1 new behavior check\"}",
+    "create_time": "1763702684033",
+    "mentions": [
+      {
+        "id": {
+          "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+          "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+          "user_id": ""
+        },
+        "key": "@_user_1",
+        "name": "Evi",
+        "tenant_key": "2de1f662118f575d"
+      }
+    ],
+    "message_id": "om_x100b5ecb377314b0c38c0e1d44368b0",
+    "message_type": "text",
+    "parent_id": "om_x100b5edb3c20e4a0c291114d498450e",
+    "root_id": "om_x100b5edb3c20e4a0c291114d498450e",
+    "thread_id": "omt_1a7b7fe7f08f1b85",
+    "update_time": "1763702684033",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_3_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.268 Safari/537.36 Lark/7.56.5 LarkLocale/zh_CN ttnet SDK-Version/7.56.19"
+  },
+  "sender": {
+    "sender_id": {
+      "open_id": "ou_db4d1d08c4fcd3f1f4c253eab32ff580",
+      "union_id": "on_80d62273b85f0904e27382a59cc1f730",
+      "user_id": "xiaofei.yin"
+    },
+    "sender_type": "user",
+    "tenant_key": "2de1f662118f575d"
+  }
+}
+🤖 [WebSocket] Bot User ID: cli_a6af6b76c6f0d013
+👤 [Auth] Extracted user ID: ou_db4d1d08c4fcd3f1f4c253eab32ff580
+📩 [WebSocket] Message details: chatId=oc_cd4b98905e12ec0cb68adc529440e623, messageId=om_x100b5ecb377314b0c38c0e1d44368b0, chatType=group
+🔍 [WebSocket] Mentions array: [
+  {
+    "id": {
+      "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+      "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+      "user_id": ""
+    },
+    "key": "@_user_1",
+    "name": "Evi",
+    "tenant_key": "2de1f662118f575d"
+  }
+]
+🔍 [WebSocket] Found 1 mention(s) in group message
+✅ [WebSocket] Bot mention detected via mentions array
+👥 [WebSocket] Processing group mention: "@_user_1 new behavior check..."
+Handling app mention
+[Devtools] agent_call: {
+  agent: "FeishuMention",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+📤 [Card] Creating and sending streaming card to chat_id:oc_cd4b98905e12ec0cb68adc529440e623
+✅ [Card] Created streaming card: cardId=7575045348625468606, elementId=md_02684371
+📨 [Card] Sending card message with cardId: 7575045348625468606
+📨 [Card] Sending as thread reply to message: om_x100b5ecb377314b0c38c0e1d44368b0
+✅ [Card] Card sent successfully: messageId=om_x100b5ecb3702b8a0c3b41edfc4d3276, cardId=7575045348625468606
+[Thread] Fetching thread history: rootId=om_x100b5edb3c20e4a0c291114d498450e, messageId=om_x100b5ecb377314b0c38c0e1d44368b0
+❌ Failed to fetch thread after 1 attempt: Thread fetch timeout after 5000ms
+⚠️ Proceeding with empty thread context (falling back to current message only)
+⚠️ [Thread] Thread history empty or fetch failed, using current message only
+[Thread] Fallback: Starting fresh with current message only
+[Thread] Processing with 1 message(s)
+[FeishuMention] Generating response...
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
+[Manager] Received query: "@_user_1 new behavior check"
+[Devtools] agent_call: {
+  agent: "Manager",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+[Manager] Starting stream for query: "@_user_1 new behavior check" with primary model
+[Manager] Memory context: conversationId=feishu:oc_cd4b98905e12ec0cb68adc529440e623:om_x100b5edb3c20e4a0c291114d498450e, userId=user:ou_db4d1d08c4fcd3f1f4c253eab32ff580, feishuUserId=ou_db4d1d08c4fcd3f1f4c253eab32ff580
+[Manager] Stream created, starting to read textStream...
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=1, contentLength=1
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=2, contentLength=52
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=3, contentLength=102
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=4, contentLength=153
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=5, contentLength=185
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=6, contentLength=188
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=7, contentLength=239
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=8, contentLength=269
+[Manager] Finished reading textStream. Total chunks: 139, Final text length: 269
+[Manager] Final result received: {
+  text: "N/A",
+  textLength: 0,
+  accumulatedLength: 269,
+  usage: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Query handled directly (no handoff): "@_user_1 new behavior check"
+[Devtools] response: {
+  agent: "Manager",
+  tool: undefined,
+  duration: 6191,
+  error: undefined,
+  tokens: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Returning final text (length=269)
+[FeishuMention] Response generated (length=269): "我注意到你提到了"new behavior check"，但这个查询比较简短，我需要更多上下文来为你..."
+[FeishuMention] Finalizing card with suggestions. cardId=7575045348625468606, result length=269
+🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=7575045348625468606, contentLength=269
+🎯 [CardSuggestions] Generating follow-up suggestions...
+🔄 [Followups] Generating 3 follow-up questions for response: "我注意到你提到了"new behavior check"，但这个查询比较简短，我需要更多上下文来为你..."
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+❌ [Followups] Error generating follow-ups: 151 | 
+152 | Types must be: "question", "recommendation", or "action"`,
+153 |     });
+154 | 
+155 |     // Parse the JSON response
+156 |     const jsonMatch = text.match(/\[[\s\S]*\]/);
+                                 ^
+TypeError: (await generateText({
+      model,
+      prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
+
+Agent Response: "${response}"
+${context ? `
+Context: ${context}` : ""}
+
+Each follow-up should be:
+1. Concise (max 60 characters)
+2. Actionable and relevant to the response
+3. Encourage deeper exploration or next steps
+
+Return ONLY a JSON array with this exact structure. No markdown, no code blocks, just raw JSON:
+[
+  {"text": "question text", "type": "question"},
+  {"text": "recommendation text", "type": "recommendation"},
+  {"text": "action text", "type": "action"}
+]
+
+Types must be: "question", "recommendation", or "action"`
+    })).match is not a function. (In '(await generateText({
+      model,
+      prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
+
+Agent Response: "${response}"
+${context ? `
+Context: ${context}` : ""}
+
+Each follow-up should be:
+1. Concise (max 60 characters)
+2. Actionable and relevant to the response
+3. Encourage deeper exploration or next steps
+
+Return ONLY a JSON array with this exact structure. No markdown, no code blocks, just raw JSON:
+[
+  {"text": "question text", "type": "question"},
+  {"text": "recommendation text", "type": "recommendation"},
+  {"text": "action text", "type": "action"}
+]
+
+Types must be: "question", "recommendation", or "action"`
+    })).match(/\[[\s\S]*\]/)', '(await generateText({
+      model,
+      prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
+
+Agent Response: "${response}"
+${context ? `
+Context: ${context}` : ""}
+
+Each follow-up should be:
+1. Concise (max 60 characters)
+2. Actionable and relevant to the response
+3. Encourage deeper exploration or next steps
+
+Return ONLY a JSON array with this exact structure. No markdown, no code blocks, just raw JSON:
+[
+  {"text": "question text", "type": "question"},
+  {"text": "recommendation text", "type": "recommendation"},
+  {"text": "action text", "type": "action"}
+]
+
+Types must be: "question", "recommendation", or "action"`
+    })).match' is undefined)
+      at generateFollowupQuestions (/Users/xiaofei.yin/work_repo/feishu_assistant/lib/tools/generate-followups-tool.ts:156:28)
+
+🎯 [CardSuggestions] generateFollowupQuestions returned 3 followups
+🎯 [CardSuggestions] Formatting 3 suggestions as markdown...
+🎯 [CardSuggestions] Updating card element with suggestions...
+🔄 [Card] Updating card element: cardId=7575045348625468606, elementId=md_02684371, sequence=9, contentLength=409
+✅ [CardSuggestions] Card updated with 3 text-based suggestions
+🎯 [CardSuggestions] Disabling streaming mode...
+✅ [CardSuggestions] Streaming mode disabled
+🔘 [CardSuggestions] Testing direct button elements (EXPERIMENTAL)...
+🔘 [DirectButtons] Testing direct button elements (no action wrapper)...
+🔘 [DirectButtons] Approach 1: Button row in div container...
+[error]: [
+  [
+    {
+      message: "Request failed with status code 400",
+      config: [Object ...],
+      request: [Object ...],
+      response: [Object ...],
+    }, {
+      code: 99992402,
+      msg: "field validation failed",
+      error: [Object ...],
+      log_id: "202511211324594AE2F5BA205E804EABC6",
+      troubleshooter: "排查建议查看(Troubleshooting suggestions): https://open.feishu.cn/search?from=openapi&log_id=202511211324594AE2F5BA205E804EABC6&code=99992402&method_id=7355916510231330818",
+      field_violations: [
+        [Object ...], [Object ...]
+      ],
+    }
+  ]
+]
+❌ [DirectButtons] Exception: AxiosError {
+  message: "Request failed with status code 400",
+  name: "AxiosError",
+  code: "ERR_BAD_REQUEST",
+  config: {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false,
+    },
+    adapter: [Function: httpAdapter],
+    transformRequest: [
+      [Function: transformRequest]
+    ],
+    transformResponse: [
+      [Function: transformResponse]
+    ],
+    timeout: 0,
+    xsrfCookieName: "XSRF-TOKEN",
+    xsrfHeaderName: "X-XSRF-TOKEN",
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: {
+      FormData: [Function: FormData],
+    },
+    validateStatus: [Function: validateStatus],
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json",
+      "User-Agent": "oapi-node-sdk/1.0.0",
+      Authorization: "Bearer t-g104blcy4EYKLL44CNRHJTB73TNMFT45P4HS2LLH",
+      "Content-Length": 547,
+    },
+    url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+    method: "post",
+    data: "{\"element\":\"{\\\"tag\\\":\\\"div\\\",\\\"flex\\\":[1,1],\\\"elements\\\":[{\\\"tag\\\":\\\"button\\\",\\\"text\\\":{\\\"content\\\":\\\"Tell me more\\\",\\\"tag\\\":\\\"plain_text\\\"},\\\"type\\\":\\\"primary\\\",\\\"size\\\":\\\"medium\\\",\\\"value\\\":\\\"Tell me more\\\"},{\\\"tag\\\":\\\"button\\\",\\\"text\\\":{\\\"content\\\":\\\"How do I apply this?\\\",\\\"tag\\\":\\\"plain_text\\\"},\\\"type\\\":\\\"default\\\",\\\"size\\\":\\\"medium\\\",\\\"value\\\":\\\"How do I apply this?\\\"},{\\\"tag\\\":\\\"button\\\",\\\"text\\\":{\\\"content\\\":\\\"What's next?\\\",\\\"tag\\\":\\\"plain_text\\\"},\\\"type\\\":\\\"default\\\",\\\"size\\\":\\\"medium\\\",\\\"value\\\":\\\"What's next?\\\"}]}\",\"sequence\":11}",
+    params: {},
+    paramsSerializer: [Function: paramsSerializer],
+  },
+  request: ClientRequest {
+    write: [Function],
+    end: [Function],
+    flushHeaders: [Function],
+    destroy: [Function],
+    _ensureTls: [Function],
+    abort: [Function],
+    [Symbol(tls)]: null,
+    [Symbol(kAbortController)]: AbortController {
+      signal: [AbortSignal ...],
+      abort: [Function: abort],
+    },
+    [Symbol(agent)]: Agent {
+      _events: [Object ...],
+      _eventsCount: 0,
+      _maxListeners: undefined,
+      [Symbol(kCapture)]: false,
+      defaultPort: 443,
+      protocol: "https:",
+      options: [Object ...],
+      requests: [Object ...],
+      sockets: [Object ...],
+      freeSockets: [Object ...],
+      keepAliveMsecs: 1000,
+      keepAlive: true,
+      maxSockets: Infinity,
+      maxFreeSockets: 256,
+      scheduling: "lifo",
+      maxTotalSockets: undefined,
+      totalSocketCount: 0,
+      maxCachedSessions: 100,
+      createConnection: undefined,
+      getName: [Function],
+      addRequest: [Function],
+      createSocket: [Function],
+      removeSocket: [Function],
+      keepSocketAlive: [Function],
+      reuseSocket: [Function],
+      destroy: [Function],
+      setMaxListeners: [Function: setMaxListeners],
+      getMaxListeners: [Function: getMaxListeners],
+      emit: [Function: emit],
+      addListener: [Function: addListener],
+      on: [Function: addListener],
+      prependListener: [Function: prependListener],
+      once: [Function: once],
+      prependOnceListener: [Function: prependOnceListener],
+      removeListener: [Function: removeListener],
+      off: [Function: removeListener],
+      removeAllListeners: [Function: removeAllListeners],
+      listeners: [Function: listeners],
+      rawListeners: [Function: rawListeners],
+      listenerCount: [Function: listenerCount],
+      eventNames: [Function: eventNames],
+    },
+    destroyed: false,
+    [Symbol(protocol)]: "https:",
+    [Symbol(port)]: 443,
+    [Symbol(useDefaultPort)]: true,
+    [Symbol(host)]: "open.feishu.cn",
+    [Symbol(socketPath)]: undefined,
+    [Symbol(method)]: "POST",
+    maxHeaderSize: undefined,
+    [Symbol(maxHeaderSize)]: undefined,
+    insecureHTTPParser: undefined,
+    joinDuplicateHeaders: undefined,
+    [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+    _events: [Object: null prototype] {
+      abort: [
+        [Function]
+      ],
+      aborted: [
+        [Function]
+      ],
+      connect: [
+        [Function]
+      ],
+      error: [
+        [Function]
+      ],
+      socket: [
+        [Function]
+      ],
+      timeout: [
+        [Function]
+      ],
+    },
+    _eventsCount: 6,
+    finished: true,
+    [Symbol(res)]: null,
+    [Symbol(upgradeOrConnect)]: false,
+    [Symbol(parser)]: null,
+    [Symbol(maxHeadersCount)]: null,
+    [Symbol(reusedSocket)]: false,
+    [Symbol(headers)]: Headers {
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json",
+      "user-agent": "oapi-node-sdk/1.0.0",
+      "authorization": "Bearer t-g104blcy4EYKLL44CNRHJTB73TNMFT45P4HS2LLH",
+      "content-length": "547",
+    },
+    [Symbol(options)]: {
+      maxRedirects: 21,
+      maxBodyLength: 10485760,
+      protocol: "https:",
+      path: "/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      method: "POST",
+      headers: [Object ...],
+      agent: undefined,
+      agents: [Object ...],
+      auth: undefined,
+      hostname: "open.feishu.cn",
+      port: null,
+      nativeProtocols: [Object ...],
+      pathname: "/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      _defaultAgent: [Object ...],
+      host: "open.feishu.cn",
+    },
+    _httpMessage: [Circular],
+    [Symbol(emitState)]: 14,
+    setSocketKeepAlive: [Function],
+    setNoDelay: [Function],
+    [Symbol(kClearTimeout)]: [Function],
+    _redirectable: Writable {
+      _events: [Object ...],
+      _writableState: [Object ...],
+      _maxListeners: undefined,
+      [Symbol(kCapture)]: false,
+      _options: [Object ...],
+      _ended: true,
+      _ending: true,
+      _redirectCount: 0,
+      _redirects: [],
+      _requestBodyLength: 547,
+      _requestBodyBuffers: [],
+      _eventsCount: NaN,
+      _onNativeResponse: [Function],
+      _currentRequest: [Circular],
+      _currentUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      abort: [Function],
+      destroy: [Function],
+      write: [Function],
+      end: [Function],
+      setHeader: [Function],
+      removeHeader: [Function],
+      setTimeout: [Function],
+      flushHeaders: [Function],
+      getHeader: [Function],
+      setNoDelay: [Function],
+      setSocketKeepAlive: [Function],
+      aborted: [Getter],
+      connection: [Getter],
+      socket: [Getter],
+      _sanitizeOptions: [Function],
+      _performRequest: [Function],
+      _processResponse: [Function],
+      pipe: [Function],
+      cork: [Function],
+      uncork: [Function],
+      setDefaultEncoding: [Function: setDefaultEncoding],
+      _write: [Function],
+      _writev: null,
+      closed: [Getter],
+      destroyed: [Getter/Setter],
+      writable: [Getter/Setter],
+      writableFinished: [Getter],
+      writableObjectMode: [Getter],
+      writableBuffer: [Getter],
+      writableEnded: [Getter],
+      writableNeedDrain: [Getter],
+      writableHighWaterMark: [Getter],
+      writableCorked: [Getter],
+      writableLength: [Getter],
+      errored: [Getter],
+      writableAborted: [Getter],
+      _undestroy: [Function: undestroy],
+      _destroy: [Function],
+      [Symbol(nodejs.rejection)]: [Function],
+      [Symbol(Symbol.asyncDispose)]: [Function],
+      eventNames: [Function: eventNames],
+      setMaxListeners: [Function: setMaxListeners],
+      getMaxListeners: [Function: getMaxListeners],
+      emit: [Function: emit],
+      addListener: [Function: addListener],
+      on: [Function: addListener],
+      prependListener: [Function: prependListener],
+      once: [Function: once],
+      prependOnceListener: [Function: prependOnceListener],
+      removeListener: [Function: removeListener],
+      off: [Function: removeListener],
+      removeAllListeners: [Function: removeAllListeners],
+      listeners: [Function: listeners],
+      rawListeners: [Function: rawListeners],
+      listenerCount: [Function: listenerCount],
+    },
+    [Symbol(bodyChunks)]: [
+      <Buffer 7b 22 65 6c 65 6d 65 6e 74 22 3a 22 7b 5c 22 74 61 67 5c 22 3a 5c 22 64 69 76 5c 22 2c 5c 22 66 6c 65 78 5c 22 3a 5b 31 2c 31 5d 2c 5c 22 65 6c 65 6d ... 497 more bytes>
+    ],
+    [Symbol(fetchRequest)]: null,
+    [Symbol(fakeSocket)]: Socket {
+      _events: [Object ...],
+      _readableState: [Object ...],
+      _writableState: [Object ...],
+      allowHalfOpen: true,
+      _maxListeners: undefined,
+      [Symbol(kCapture)]: false,
+      [Symbol(::bunternal::)]: undefined,
+      bytesRead: 0,
+      bytesWritten: 0,
+      connecting: false,
+      timeout: 0,
+      isServer: false,
+      _httpMessage: [Circular],
+      _onTimeout: [Function],
+      address: [Function: address],
+      bufferSize: [Getter],
+      connect: [Function: connect],
+      _destroy: [Function: _destroy],
+      _final: [Function: _final],
+      localAddress: [Getter],
+      localFamily: [Getter],
+      localPort: [Getter],
+      pending: [Getter],
+      _read: [Function: _read],
+      readyState: [Getter],
+      ref: [Function: ref],
+      remoteAddress: [Getter/Setter],
+      remotePort: [Getter/Setter],
+      remoteFamily: [Getter/Setter],
+      resetAndDestroy: [Function: resetAndDestroy],
+      setKeepAlive: [Function: setKeepAlive],
+      setNoDelay: [Function: setNoDelay],
+      setTimeout: [Function: setTimeout],
+      unref: [Function: unref],
+      _write: [Function: _write],
+      destroy: [Function: destroy],
+      write: [Function],
+      cork: [Function],
+      uncork: [Function],
+      setDefaultEncoding: [Function: setDefaultEncoding],
+      _writev: null,
+      end: [Function],
+      writable: [Getter/Setter],
+      writableHighWaterMark: [Getter],
+      writableObjectMode: [Getter],
+      writableBuffer: [Getter],
+      writableLength: [Getter],
+      writableFinished: [Getter],
+      writableCorked: [Getter],
+      writableEnded: [Getter],
+      writableNeedDrain: [Getter],
+      destroyed: [Getter/Setter],
+      _undestroy: [Function: undestroy],
+      push: [Function],
+      unshift: [Function],
+      isPaused: [Function],
+      setEncoding: [Function],
+      read: [Function],
+      pipe: [Function],
+      unpipe: [Function],
+      on: [Function],
+      addListener: [Function],
+      removeListener: [Function],
+      off: [Function],
+      removeAllListeners: [Function],
+      resume: [Function],
+      pause: [Function],
+      wrap: [Function],
+      iterator: [Function],
+      readable: [Getter/Setter],
+      readableDidRead: [Getter],
+      readableAborted: [Getter],
+      readableHighWaterMark: [Getter],
+      readableBuffer: [Getter],
+      readableFlowing: [Getter/Setter],
+      readableLength: [Getter],
+      readableObjectMode: [Getter],
+      readableEncoding: [Getter],
+      errored: [Getter],
+      closed: [Getter],
+      readableEnded: [Getter],
+      drop: [Function],
+      filter: [Function],
+      flatMap: [Function],
+      map: [Function],
+      take: [Function],
+      compose: [Function],
+      every: [Function],
+      forEach: [Function],
+      reduce: [Function],
+      toArray: [Function],
+      some: [Function],
+      find: [Function],
+      [Symbol(nodejs.rejection)]: [Function],
+      [Symbol(Symbol.asyncDispose)]: [Function],
+      [Symbol(Symbol.asyncIterator)]: [Function],
+      eventNames: [Function: eventNames],
+    },
+    res: IncomingMessage {
+      [Symbol(aborted)]: false,
+      [Symbol(eofInProgress)]: true,
+      _consuming: true,
+      _dumped: false,
+      complete: true,
+      _closed: false,
+      [Symbol(noBody)]: false,
+      _events: [Object ...],
+      _readableState: [Object ...],
+      _maxListeners: undefined,
+      [Symbol(kCapture)]: false,
+      _eventsCount: NaN,
+      [Symbol(FetchAPI)]: Response (0 KB) {
+        ok: false,
+        url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+        status: 400,
+        statusText: "Bad Request",
+        headers: Headers [Object ...],
+        redirected: false,
+        bodyUsed: true
+      },
+      [Symbol(type)]: 1,
+      [Symbol(bodyStream)]: undefined,
+      [Symbol(statusMessage)]: "Bad Request",
+      [Symbol(statusCode)]: 400,
+      url: "/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      headers: [Object ...],
+      rawHeaders: [
+        "content-type", "application/json; charset=utf-8", "content-length", "431", "connection",
+        "keep-alive", "date", "Fri, 21 Nov 2025 05:24:59 GMT", "server-timing", "inner; dur=31, cdn-cache;desc=MISS,edge;dur=0,origin;dur=60",
+        "via", "vcache15.cn1402[60,0]", "timing-allow-origin", "*", "Server", "Tengine", "X-Tt-Logid",
+        "202511211324594AE2F5BA205E804EABC6", "X-Lgw-Dst-Svc", "jV_LGJT4qWrMVSbZaEvQExSn0PWsBy_7ztMdTT-qeK05l_E4nJiaEkJWzVhcPA9HMLJOXapO62TELz0jAQIxLauqTRQuzFpGbBJReu8R0ATQgLoyppVS89MzJjDP0Dwo_Hnh0cNG2DkCHxtt0CjTgyjjM5uHz4-OkdI246-baxsHmuGQxnfREFmcgz3ElJ-4i7_ZXKKM3ViAaB1XI9uo63DDVp0tDC8tFIZRFbKg8m7ej8DWMYM8kyGbMGLyW8k=",
+        "Tt_stable", "1", "X-Request-Id", "6f19aecd-85b4-45da-a2c6-acffd1f4493a", "Request-Id",
+        "6f19aecd-85b4-45da-a2c6-acffd1f4493a", "x-tt-trace-host", "01f5563db8f7e8f46fe210cc28722285d5f9ef89fb6fce48841510a08db62d77e9f31e087fb929726aaff8d05b90d7588e20c1be383a8b2f0010e237c8871c9d954472e978124c05ba401cffc66c890264b8c9042354427bb1341d8cab27d92fcfc0bb1cb27d59339e729df3d9ce6cc896",
+        "x-tt-trace-tag", "id=03;cdn-cache=miss;type=dyn", "x-tt-trace-id", "00-2511211324594AE2F5BA205E804EABC6-78B3250B0C8FBF9A-00",
+        "X-Timestamp", "1763702699.134", "x-alicdn-da-ups-status", "endOs,0,400", "EagleId",
+        "65597d2317637026990876097e"
+      ],
+      [Symbol(fakeSocket)]: [Object ...],
+      req: [Circular],
+      setTimeout: [Function],
+      responseUrl: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      redirects: [],
+      [Symbol(kAutoDestroyed)]: true,
+      httpVersion: "1.1",
+      _construct: [Function: _construct],
+      _dump: [Function: _dump],
+      _read: [Function: _read],
+      _finish: [Function: _finish],
+      _destroy: [Function: IncomingMessage_destroy],
+      aborted: [Getter/Setter],
+      connection: [Getter],
+      statusCode: [Getter/Setter],
+      statusMessage: [Getter/Setter],
+      httpVersionMajor: [Getter/Setter],
+      httpVersionMinor: [Getter/Setter],
+      rawTrailers: [Getter/Setter],
+      trailers: [Getter/Setter],
+      socket: [Getter/Setter],
+      destroy: [Function: destroy],
+      _undestroy: [Function: undestroy],
+      push: [Function],
+      unshift: [Function],
+      isPaused: [Function],
+      setEncoding: [Function],
+      read: [Function],
+      pipe: [Function],
+      unpipe: [Function],
+      on: [Function],
+      addListener: [Function],
+      removeListener: [Function],
+      off: [Function],
+      removeAllListeners: [Function],
+      resume: [Function],
+      pause: [Function],
+      wrap: [Function],
+      iterator: [Function],
+      readable: [Getter/Setter],
+      readableDidRead: [Getter],
+      readableAborted: [Getter],
+      readableHighWaterMark: [Getter],
+      readableBuffer: [Getter],
+      readableFlowing: [Getter/Setter],
+      readableLength: [Getter],
+      readableObjectMode: [Getter],
+      readableEncoding: [Getter],
+      errored: [Getter],
+      closed: [Getter],
+      destroyed: [Getter/Setter],
+      readableEnded: [Getter],
+      drop: [Function],
+      filter: [Function],
+      flatMap: [Function],
+      map: [Function],
+      take: [Function],
+      compose: [Function],
+      every: [Function],
+      forEach: [Function],
+      reduce: [Function],
+      toArray: [Function],
+      some: [Function],
+      find: [Function],
+      [Symbol(nodejs.rejection)]: [Function],
+      [Symbol(Symbol.asyncDispose)]: [Function],
+      [Symbol(Symbol.asyncIterator)]: [Function],
+      eventNames: [Function: eventNames],
+      setMaxListeners: [Function: setMaxListeners],
+      getMaxListeners: [Function: getMaxListeners],
+      emit: [Function: emit],
+      prependListener: [Function: prependListener],
+      once: [Function: once],
+      prependOnceListener: [Function: prependOnceListener],
+      listeners: [Function: listeners],
+      rawListeners: [Function: rawListeners],
+      listenerCount: [Function: listenerCount],
+    },
+    _closed: true,
+    complete: true,
+    setTimeout: [Function: setTimeout],
+    clearTimeout: [Function: clearTimeout],
+    path: [Getter],
+    port: [Getter],
+    method: [Getter],
+    host: [Getter],
+    protocol: [Getter],
+    agent: [Getter/Setter],
+    aborted: [Getter/Setter],
+    writable: [Getter],
+    _keepAliveTimeout: 0,
+    _defaultKeepAlive: true,
+    shouldKeepAlive: true,
+    _onPendingData: [Function: nop2],
+    outputSize: 0,
+    outputData: [],
+    strictContentLength: false,
+    _removedTE: false,
+    _removedContLen: false,
+    _removedConnection: false,
+    usesChunkedEncodingByDefault: true,
+    _headerNames: [Getter/Setter],
+    appendHeader: [Function: appendHeader],
+    _implicitHeader: [Function: _implicitHeader],
+    getHeader: [Function: getHeader],
+    pipe: [Function: pipe],
+    getHeaderNames: [Function: getHeaderNames],
+    getRawHeaderNames: [Function: getRawHeaderNames],
+    getHeaders: [Function: getHeaders],
+    removeHeader: [Function: removeHeader],
+    setHeader: [Function: setHeader],
+    setHeaders: [Function: setHeaders],
+    hasHeader: [Function: hasHeader],
+    headers: [Getter/Setter],
+    addTrailers: [Function: addTrailers],
+    connection: [Getter/Setter],
+    socket: [Getter/Setter],
+    chunkedEncoding: [Getter/Setter],
+    writableObjectMode: [Getter],
+    writableLength: [Getter],
+    writableHighWaterMark: [Getter],
+    writableNeedDrain: [Getter],
+    writableEnded: [Getter],
+    writableFinished: [Getter],
+    _send: [Function: _send],
+    _writeRaw: [Function: _writeRaw],
+    writableCorked: [Getter/Setter],
+    cork: [Function: cork],
+    uncork: [Function: uncork],
+    _headers: [Getter/Setter],
+    eventNames: [Function: eventNames],
+    setMaxListeners: [Function: setMaxListeners],
+    getMaxListeners: [Function: getMaxListeners],
+    emit: [Function: emit],
+    addListener: [Function: addListener],
+    on: [Function: addListener],
+    prependListener: [Function: prependListener],
+    once: [Function: once],
+    prependOnceListener: [Function: prependOnceListener],
+    removeListener: [Function: removeListener],
+    off: [Function: removeListener],
+    removeAllListeners: [Function: removeAllListeners],
+    listeners: [Function: listeners],
+    rawListeners: [Function: rawListeners],
+    listenerCount: [Function: listenerCount],
+    [Symbol(kCapture)]: false,
+  },
+  response: {
+    status: 400,
+    statusText: "Bad Request",
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "content-length": "431",
+      connection: "keep-alive",
+      date: "Fri, 21 Nov 2025 05:24:59 GMT",
+      "server-timing": "inner; dur=31, cdn-cache;desc=MISS,edge;dur=0,origin;dur=60",
+      via: "vcache15.cn1402[60,0]",
+      "timing-allow-origin": "*",
+      server: "Tengine",
+      "x-tt-logid": "202511211324594AE2F5BA205E804EABC6",
+      "x-lgw-dst-svc": "jV_LGJT4qWrMVSbZaEvQExSn0PWsBy_7ztMdTT-qeK05l_E4nJiaEkJWzVhcPA9HMLJOXapO62TELz0jAQIxLauqTRQuzFpGbBJReu8R0ATQgLoyppVS89MzJjDP0Dwo_Hnh0cNG2DkCHxtt0CjTgyjjM5uHz4-OkdI246-baxsHmuGQxnfREFmcgz3ElJ-4i7_ZXKKM3ViAaB1XI9uo63DDVp0tDC8tFIZRFbKg8m7ej8DWMYM8kyGbMGLyW8k=",
+      tt_stable: "1",
+      "x-request-id": "6f19aecd-85b4-45da-a2c6-acffd1f4493a",
+      "request-id": "6f19aecd-85b4-45da-a2c6-acffd1f4493a",
+      "x-tt-trace-host": "01f5563db8f7e8f46fe210cc28722285d5f9ef89fb6fce48841510a08db62d77e9f31e087fb929726aaff8d05b90d7588e20c1be383a8b2f0010e237c8871c9d954472e978124c05ba401cffc66c890264b8c9042354427bb1341d8cab27d92fcfc0bb1cb27d59339e729df3d9ce6cc896",
+      "x-tt-trace-tag": "id=03;cdn-cache=miss;type=dyn",
+      "x-tt-trace-id": "00-2511211324594AE2F5BA205E804EABC6-78B3250B0C8FBF9A-00",
+      "x-timestamp": "1763702699.134",
+      "x-alicdn-da-ups-status": "endOs,0,400",
+      eagleid: "65597d2317637026990876097e",
+    },
+    config: {
+      transitional: [Object ...],
+      adapter: [Function: httpAdapter],
+      transformRequest: [
+        [Function: transformRequest]
+      ],
+      transformResponse: [
+        [Function: transformResponse]
+      ],
+      timeout: 0,
+      xsrfCookieName: "XSRF-TOKEN",
+      xsrfHeaderName: "X-XSRF-TOKEN",
+      maxContentLength: -1,
+      maxBodyLength: -1,
+      env: [Object ...],
+      validateStatus: [Function: validateStatus],
+      headers: [Object ...],
+      url: "https://open.feishu.cn/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      method: "post",
+      data: "{\"element\":\"{\\\"tag\\\":\\\"div\\\",\\\"flex\\\":[1,1],\\\"elements\\\":[{\\\"tag\\\":\\\"button\\\",\\\"text\\\":{\\\"content\\\":\\\"Tell me more\\\",\\\"tag\\\":\\\"plain_text\\\"},\\\"type\\\":\\\"primary\\\",\\\"size\\\":\\\"medium\\\",\\\"value\\\":\\\"Tell me more\\\"},{\\\"tag\\\":\\\"button\\\",\\\"text\\\":{\\\"content\\\":\\\"How do I apply this?\\\",\\\"tag\\\":\\\"plain_text\\\"},\\\"type\\\":\\\"default\\\",\\\"size\\\":\\\"medium\\\",\\\"value\\\":\\\"How do I apply this?\\\"},{\\\"tag\\\":\\\"button\\\",\\\"text\\\":{\\\"content\\\":\\\"What's next?\\\",\\\"tag\\\":\\\"plain_text\\\"},\\\"type\\\":\\\"default\\\",\\\"size\\\":\\\"medium\\\",\\\"value\\\":\\\"What's next?\\\"}]}\",\"sequence\":11}",
+      params: [Object ...],
+      paramsSerializer: [Function: paramsSerializer],
+    },
+    request: ClientRequest {
+      write: [Function],
+      end: [Function],
+      flushHeaders: [Function],
+      destroy: [Function],
+      _ensureTls: [Function],
+      abort: [Function],
+      [Symbol(tls)]: null,
+      [Symbol(kAbortController)]: [AbortController ...],
+      [Symbol(agent)]: [Object ...],
+      destroyed: false,
+      [Symbol(protocol)]: "https:",
+      [Symbol(port)]: 443,
+      [Symbol(useDefaultPort)]: true,
+      [Symbol(host)]: "open.feishu.cn",
+      [Symbol(socketPath)]: undefined,
+      [Symbol(method)]: "POST",
+      maxHeaderSize: undefined,
+      [Symbol(maxHeaderSize)]: undefined,
+      insecureHTTPParser: undefined,
+      joinDuplicateHeaders: undefined,
+      [Symbol(path)]: "/open-apis/cardkit/v1/cards/7575045348625468606/elements",
+      _events: [Object ...],
+      _eventsCount: 6,
+      finished: true,
+      [Symbol(res)]: null,
+      [Symbol(upgradeOrConnect)]: false,
+      [Symbol(parser)]: null,
+      [Symbol(maxHeadersCount)]: null,
+      [Symbol(reusedSocket)]: false,
+      [Symbol(headers)]: Headers [Object ...],
+      [Symbol(options)]: [Object ...],
+      _httpMessage: [Circular],
+      [Symbol(emitState)]: 14,
+      setSocketKeepAlive: [Function],
+      setNoDelay: [Function],
+      [Symbol(kClearTimeout)]: [Function],
+      _redirectable: [Object ...],
+      [Symbol(bodyChunks)]: [
+        <Buffer 7b 22 65 6c 65 6d 65 6e 74 22 3a 22 7b 5c 22 74 61 67 5c 22 3a 5c 22 64 69 76 5c 22 2c 5c 22 66 6c 65 78 5c 22 3a 5b 31 2c 31 5d 2c 5c 22 65 6c 65 6d ... 497 more bytes>
+      ],
+      [Symbol(fetchRequest)]: null,
+      [Symbol(fakeSocket)]: [Object ...],
+      res: [Object ...],
+      _closed: true,
+      complete: true,
+      setTimeout: [Function: setTimeout],
+      clearTimeout: [Function: clearTimeout],
+      path: [Getter],
+      port: [Getter],
+      method: [Getter],
+      host: [Getter],
+      protocol: [Getter],
+      agent: [Getter/Setter],
+      aborted: [Getter/Setter],
+      writable: [Getter],
+      _keepAliveTimeout: 0,
+      _defaultKeepAlive: true,
+      shouldKeepAlive: true,
+      _onPendingData: [Function: nop2],
+      outputSize: 0,
+      outputData: [],
+      strictContentLength: false,
+      _removedTE: false,
+      _removedContLen: false,
+      _removedConnection: false,
+      usesChunkedEncodingByDefault: true,
+      _headerNames: [Getter/Setter],
+      appendHeader: [Function: appendHeader],
+      _implicitHeader: [Function: _implicitHeader],
+      getHeader: [Function: getHeader],
+      pipe: [Function: pipe],
+      getHeaderNames: [Function: getHeaderNames],
+      getRawHeaderNames: [Function: getRawHeaderNames],
+      getHeaders: [Function: getHeaders],
+      removeHeader: [Function: removeHeader],
+      setHeader: [Function: setHeader],
+      setHeaders: [Function: setHeaders],
+      hasHeader: [Function: hasHeader],
+      headers: [Getter/Setter],
+      addTrailers: [Function: addTrailers],
+      connection: [Getter/Setter],
+      socket: [Getter/Setter],
+      chunkedEncoding: [Getter/Setter],
+      writableObjectMode: [Getter],
+      writableLength: [Getter],
+      writableHighWaterMark: [Getter],
+      writableNeedDrain: [Getter],
+      writableEnded: [Getter],
+      writableFinished: [Getter],
+      _send: [Function: _send],
+      _writeRaw: [Function: _writeRaw],
+      writableCorked: [Getter/Setter],
+      cork: [Function: cork],
+      uncork: [Function: uncork],
+      _headers: [Getter/Setter],
+      eventNames: [Function: eventNames],
+      setMaxListeners: [Function: setMaxListeners],
+      getMaxListeners: [Function: getMaxListeners],
+      emit: [Function: emit],
+      addListener: [Function: addListener],
+      on: [Function: addListener],
+      prependListener: [Function: prependListener],
+      once: [Function: once],
+      prependOnceListener: [Function: prependOnceListener],
+      removeListener: [Function: removeListener],
+      off: [Function: removeListener],
+      removeAllListeners: [Function: removeAllListeners],
+      listeners: [Function: listeners],
+      rawListeners: [Function: rawListeners],
+      listenerCount: [Function: listenerCount],
+      [Symbol(kCapture)]: false,
+    },
+    data: {
+      code: 99992402,
+      msg: "field validation failed",
+      error: [Object ...],
+    },
+  },
+  toJSON: [Function: toJSON],
+  isAxiosError: true,
+  toString: [Function: toString],
+}
+⚠️ [CardSuggestions] Direct buttons failed: direct-buttons
+[FeishuMention] Card finalized with suggestions
+[Devtools] response: {
+  agent: "FeishuMention",
+  tool: undefined,
+  duration: 14670,
+  error: undefined,
+}
+⚠️ [WebSocket] Duplicate event ignored: 5b7f97fa64d7918c1c309e7630dd3e55
+[error]: [
+  [
+    {
+      message: "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+      config: [Object ...],
+      request: [Object ...],
+      response: [Object ...],
+    }
+  ]
+]
