@@ -23,3 +23,221 @@ $ bun server.ts
 ✨ [Startup] Server is ready to accept requests
 📊 [Startup] Health check: curl http://localhost:3000/health
 [info]: [ "[ws]", "ws client ready" ]
+📨 [WebSocket] Event received: im.message.receive_v1
+📨 [WebSocket] Event data: {
+  "schema": "2.0",
+  "event_id": "a8669a77563ca65ffbcd7d86684a12d8",
+  "token": "",
+  "create_time": "1763705229656",
+  "event_type": "im.message.receive_v1",
+  "tenant_key": "2de1f662118f575d",
+  "app_id": "cli_a6af6b76c6f0d013",
+  "message": {
+    "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
+    "chat_type": "group",
+    "content": "{\"text\":\"@_user_1 you should now suggest something new\"}",
+    "create_time": "1763705229252",
+    "mentions": [
+      {
+        "id": {
+          "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+          "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+          "user_id": ""
+        },
+        "key": "@_user_1",
+        "name": "Evi",
+        "tenant_key": "2de1f662118f575d"
+      }
+    ],
+    "message_id": "om_x100b5d34561fb0b0c227712ab97f927",
+    "message_type": "text",
+    "parent_id": "om_x100b5edb3c20e4a0c291114d498450e",
+    "root_id": "om_x100b5edb3c20e4a0c291114d498450e",
+    "thread_id": "omt_1a7b7fe7f08f1b85",
+    "update_time": "1763705229301"
+  },
+  "sender": {
+    "sender_id": {
+      "open_id": "ou_db4d1d08c4fcd3f1f4c253eab32ff580",
+      "union_id": "on_80d62273b85f0904e27382a59cc1f730",
+      "user_id": "xiaofei.yin"
+    },
+    "sender_type": "user",
+    "tenant_key": "2de1f662118f575d"
+  }
+}
+🤖 [WebSocket] Bot User ID: cli_a6af6b76c6f0d013
+👤 [Auth] Extracted user ID: ou_db4d1d08c4fcd3f1f4c253eab32ff580
+📩 [WebSocket] Message details: chatId=oc_cd4b98905e12ec0cb68adc529440e623, messageId=om_x100b5d34561fb0b0c227712ab97f927, chatType=group
+🔍 [WebSocket] Mentions array: [
+  {
+    "id": {
+      "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+      "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+      "user_id": ""
+    },
+    "key": "@_user_1",
+    "name": "Evi",
+    "tenant_key": "2de1f662118f575d"
+  }
+]
+🔍 [WebSocket] Found 1 mention(s) in group message
+✅ [WebSocket] Bot mention detected via mentions array
+👥 [WebSocket] Processing group mention: "@_user_1 you should now suggest something new..."
+Handling app mention
+[Devtools] agent_call: {
+  agent: "FeishuMention",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+📤 [Card] Creating and sending streaming card to chat_id:oc_cd4b98905e12ec0cb68adc529440e623
+✅ [Card] Created streaming card: cardId=7575056279926279396, elementId=md_05229948
+📨 [Card] Sending card message with cardId: 7575056279926279396
+📨 [Card] Sending as thread reply to message: om_x100b5d34561fb0b0c227712ab97f927
+✅ [Card] Card sent successfully: messageId=om_x100b5d34562a3cacc4d418e1d8ce268, cardId=7575056279926279396
+[Thread] Fetching thread history: rootId=om_x100b5edb3c20e4a0c291114d498450e, messageId=om_x100b5d34561fb0b0c227712ab97f927
+❌ Failed to fetch thread after 1 attempt: Thread fetch timeout after 5000ms
+⚠️ Proceeding with empty thread context (falling back to current message only)
+⚠️ [Thread] Thread history empty or fetch failed, using current message only
+[Thread] Fallback: Starting fresh with current message only
+[Thread] Processing with 1 message(s)
+[FeishuMention] Generating response...
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
+[Manager] Received query: "@_user_1 you should now suggest something new"
+[Devtools] agent_call: {
+  agent: "Manager",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+[Manager] Starting stream for query: "@_user_1 you should now suggest something new" with primary model
+[Manager] Memory context: conversationId=feishu:oc_cd4b98905e12ec0cb68adc529440e623:om_x100b5edb3c20e4a0c291114d498450e, userId=user:ou_db4d1d08c4fcd3f1f4c253eab32ff580, feishuUserId=ou_db4d1d08c4fcd3f1f4c253eab32ff580
+[Manager] Stream created, starting to read textStream...
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=1, contentLength=1
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=2, contentLength=52
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=3, contentLength=111
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=4, contentLength=163
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=5, contentLength=214
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=6, contentLength=249
+[Cache] MISS
+[Devtools] tool_call: {
+  agent: undefined,
+  tool: "searchWeb",
+  duration: 0,
+  error: undefined,
+}
+[Devtools] error: {
+  agent: "searchWeb",
+  tool: undefined,
+  duration: undefined,
+  error: "x-api-key header is invalid",
+}
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=7, contentLength=250
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=8, contentLength=301
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=9, contentLength=352
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=10, contentLength=405
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=11, contentLength=462
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=12, contentLength=514
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=13, contentLength=571
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=14, contentLength=623
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=15, contentLength=681
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=16, contentLength=733
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=17, contentLength=785
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=18, contentLength=836
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=19, contentLength=886
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=20, contentLength=938
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=21, contentLength=988
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=22, contentLength=1038
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=23, contentLength=1057
+[Manager] Finished reading textStream. Total chunks: 232, Final text length: 1057
+[Manager] Final result received: {
+  text: "N/A",
+  textLength: 0,
+  accumulatedLength: 1057,
+  usage: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Query handled directly (no handoff): "@_user_1 you should now suggest something new"
+[Devtools] response: {
+  agent: "Manager",
+  tool: undefined,
+  duration: 7425,
+  error: undefined,
+  tokens: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Returning final text (length=1057)
+[FeishuMention] Response generated (length=1057): "I notice you're asking @_user_1 to suggest somethi..."
+[FeishuMention] Finalizing card with suggestions. cardId=7575056279926279396, result length=1057
+🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=7575056279926279396, contentLength=1057
+🎯 [CardSuggestions] Generating follow-up suggestions...
+🔄 [Followups] Generating 3 follow-up questions for response: "I notice you're asking @_user_1 to suggest somethi..."
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🔄 [Followups] LLM raw response (first 300 chars): "[
+  {"text": "What specific challenge needs a fresh solution?", "type": "question"},
+  {"text": "Consider clarifying goals to target better ideas", "type": "recommendation"},
+  {"text": "Share your focus area to get tailored suggestions", "type": "action"}
+]..."
+🔄 [Followups] Extracted JSON (first 200 chars): "[
+  {"text": "What specific challenge needs a fresh solution?", "type": "question"},
+  {"text": "Consider clarifying goals to target better ideas", "type": "recommendation"},
+  {"text": "Share your fo..."
+✅ [Followups] Generated 3 follow-up options with metadata
+🎯 [CardSuggestions] generateFollowupQuestions returned 3 followups
+🎯 [CardSuggestions] Formatting 3 suggestions as markdown...
+🎯 [CardSuggestions] Updating card element with suggestions...
+🔄 [Card] Updating card element: cardId=7575056279926279396, elementId=md_05229948, sequence=24, contentLength=1297
+✅ [CardSuggestions] Card updated with 3 text-based suggestions
+🎯 [CardSuggestions] Disabling streaming mode...
+✅ [CardSuggestions] Streaming mode disabled
+🔘 [CardSuggestions] Sending buttons in separate message (Hypothesis 1)...
+🔘 [FollowupButtons] Sending 3 buttons in separate message...
+🔘 [FollowupButtons] Creating card via CardKit...
+🔘 [FollowupButtons] Card created: 7575056347941194974
+🔘 [FollowupButtons] Sending as thread reply to rootId=om_x100b5d34561fb0b0c227712ab97f927...
+🔘 [FollowupButtons] API response: {
+  "code": 0,
+  "data": {
+    "body": {
+      "content": "{\"title\":\"Suggestions\",\"elements\":[[{\"tag\":\"img\",\"image_key\":\"img_v3_02ad_e19fca1f-912a-450e-95de-3c229091b53g\"},{\"tag\":\"text\",\"text\":\"请升级至最新版本客户端，以查看内容\"},{\"tag\":\"text\",\"text\":\"\"}]]}"
+    },
+    "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
+    "create_time": "1763705246313",
+    "deleted": false,
+    "message_id": "om_x100b5d34572c2cb4c3e6c89f9dfda48",
+    "msg_type": "interactive",
+    "parent_id": "om...
+🔘 [FollowupButtons] isSuccess=true, code=0, has message_id=true
+✅ [FollowupButtons] Successfully sent buttons message: om_x100b5d34572c2cb4c3e6c89f9dfda48
+✅ [CardSuggestions] Buttons sent in separate message: om_x100b5d34572c2cb4c3e6c89f9dfda48
+[FeishuMention] Card finalized with suggestions (buttons: om_x100b5d34572c2cb4c3e6c89f9dfda48)
+[Devtools] response: {
+  agent: "FeishuMention",
+  tool: undefined,
+  duration: 16419,
+  error: undefined,
+}
+⚠️ [WebSocket] Duplicate event ignored: a8669a77563ca65ffbcd7d86684a12d8
+[warn]: [ "no card.action.trigger handle" ]
+[error]: [
+  [
+    {
+      message: "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+      config: [Object ...],
+      request: [Object ...],
+      response: [Object ...],
+    }
+  ]
+]

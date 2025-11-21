@@ -116,40 +116,85 @@ export async function sendFollowupButtonsMessage(
     }
     
     // If CardKit succeeded, send via message reference
+    // Use im.message.reply to send as thread reply (not standalone chat message)
     let createResp: any;
-    if (cardEntityId) {
-      console.log(`🔘 [FollowupButtons] Sending card reference message...`);
-      createResp = await feishuClient.im.message.create({
-        params: {
-          receive_id_type: "chat_id",
-        },
-        data: {
-          receive_id: conversationId,
-          msg_type: "interactive",
-          content: JSON.stringify({
-            type: "card",
-            data: {
-              card_id: cardEntityId,
-            },
-          }),
-        },
-      });
+    const messageContent = JSON.stringify({
+      type: "card",
+      data: cardEntityId ? { card_id: cardEntityId } : JSON.stringify(cardData),
+    });
+
+    if (rootId) {
+      // Send as reply in thread
+      console.log(`🔘 [FollowupButtons] Sending as thread reply to rootId=${rootId}...`);
+      
+      if (cardEntityId) {
+        createResp = await feishuClient.im.message.reply({
+          path: {
+            message_id: rootId,
+          },
+          data: {
+            msg_type: "interactive",
+            content: JSON.stringify({
+              type: "card",
+              data: {
+                card_id: cardEntityId,
+              },
+            }),
+            reply_in_thread: true,
+          },
+        });
+      } else {
+        // Fallback: Try inline card data
+        console.log(`🔘 [FollowupButtons] CardKit failed, trying inline card...`);
+        createResp = await feishuClient.im.message.reply({
+          path: {
+            message_id: rootId,
+          },
+          data: {
+            msg_type: "interactive",
+            content: JSON.stringify({
+              type: "card",
+              data: JSON.stringify(cardData),
+            }),
+            reply_in_thread: true,
+          },
+        });
+      }
     } else {
-      // Fallback: Try inline card data (may not support buttons)
-      console.log(`🔘 [FollowupButtons] CardKit failed, trying inline card...`);
-      createResp = await feishuClient.im.message.create({
-        params: {
-          receive_id_type: "chat_id",
-        },
-        data: {
-          receive_id: conversationId,
-          msg_type: "interactive",
-          content: JSON.stringify({
-            type: "card",
-            data: JSON.stringify(cardData),
-          }),
-        },
-      });
+      // Fallback: Send to chat if no rootId
+      console.log(`⚠️ [FollowupButtons] No rootId, sending to chat instead of thread...`);
+      
+      if (cardEntityId) {
+        createResp = await feishuClient.im.message.create({
+          params: {
+            receive_id_type: "chat_id",
+          },
+          data: {
+            receive_id: conversationId,
+            msg_type: "interactive",
+            content: JSON.stringify({
+              type: "card",
+              data: {
+                card_id: cardEntityId,
+              },
+            }),
+          },
+        });
+      } else {
+        createResp = await feishuClient.im.message.create({
+          params: {
+            receive_id_type: "chat_id",
+          },
+          data: {
+            receive_id: conversationId,
+            msg_type: "interactive",
+            content: JSON.stringify({
+              type: "card",
+              data: JSON.stringify(cardData),
+            }),
+          },
+        });
+      }
     }
     
     console.log(`🔘 [FollowupButtons] API response:`, JSON.stringify(createResp, null, 2).substring(0, 500) + "...");

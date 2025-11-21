@@ -130,7 +130,7 @@ export async function generateFollowupQuestions(
     }
 
     // Use generateText with JSON parsing instead of generateObject
-    const text = await generateText({
+    const result = await generateText({
       model,
       prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
 
@@ -152,13 +152,28 @@ Return ONLY a JSON array with this exact structure. No markdown, no code blocks,
 Types must be: "question", "recommendation", or "action"`,
     });
 
+    // Extract text from result (may be string or object with .text property)
+    const text = typeof result === 'string' ? result : (result?.text || String(result));
+    
     // Parse the JSON response
+    console.log(`🔄 [Followups] LLM raw response (first 300 chars): "${text.substring(0, 300)}..."`);
+    
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
+      console.error(`❌ [Followups] Could not find JSON array in response. Looking for pattern starting with '[' and ending with ']'`);
       throw new Error("Could not extract JSON from response");
     }
 
-    const followups = JSON.parse(jsonMatch[0]).slice(0, maxOptions);
+    console.log(`🔄 [Followups] Extracted JSON (first 200 chars): "${jsonMatch[0].substring(0, 200)}..."`);
+    
+    let followups;
+    try {
+      followups = JSON.parse(jsonMatch[0]).slice(0, maxOptions);
+    } catch (parseError) {
+      console.error(`❌ [Followups] JSON parse failed:`, parseError);
+      console.error(`   JSON text: "${jsonMatch[0].substring(0, 300)}..."`);
+      throw parseError;
+    }
     
     // Validate and add metadata
     const emojiMap: Record<string, string> = {
