@@ -1574,3 +1574,13 @@ Return exactly ${maxOptions} follow-ups as JSON array.`
 [FeishuMention] Finalization result: {
   error: "Request failed with status code 400",
 }
+[error]: [
+  [
+    {
+      message: "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+      config: [Object ...],
+      request: [Object ...],
+      response: [Object ...],
+    }
+  ]
+]
