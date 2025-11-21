@@ -57,8 +57,14 @@ export async function sendFollowupButtonsMessage(
     // Instead, use "button" components directly in elements array
     // See: https://open.feishu.cn/document/feishu-cards/card-json-v2-components/interactive-components/button
     
+    // Encode context in action_id so we can extract it from the callback
+    // Format: chatId|rootId|followup (encode context needed for response generation)
+    const contextPrefix = `${conversationId}|${rootId}`;
+    
     const buttonElements = followups.map((followup, index) => {
       const isFirst = index === 0;
+      // Include context in action_id so callback handler can extract it
+      const actionId = `${contextPrefix}|${index}`;
       return {
         tag: "button",
         text: {
@@ -66,6 +72,8 @@ export async function sendFollowupButtonsMessage(
           tag: "plain_text",
         },
         type: isFirst ? "primary" : "default",
+        // Set both action_id (for context) and callback value (what gets sent)
+        id: actionId,
         behaviors: [
           {
             type: "callback",

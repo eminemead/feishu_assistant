@@ -106,6 +106,7 @@ export function extractButtonFollowupContext(
 ): ButtonFollowupContext | null {
   try {
     const actionValue = payload.event?.action?.value;
+    const actionId = payload.event?.action?.action_id;
     const operatorId = payload.event?.operator?.operator_id;
     const eventId = payload.header?.event_id;
 
@@ -118,10 +119,25 @@ export function extractButtonFollowupContext(
       return null;
     }
 
+    // Try to extract context from action_id (format: chatId|rootId|index)
+    let extractedChatId = chatId;
+    let extractedRootId = chatId;
+    
+    if (actionId && typeof actionId === "string") {
+      const parts = actionId.split("|");
+      if (parts.length >= 2) {
+        extractedChatId = parts[0];
+        extractedRootId = parts[1];
+        console.log(
+          `✅ [ButtonFollowup] Extracted context from action_id: chatId=${extractedChatId}, rootId=${extractedRootId}`
+        );
+      }
+    }
+
     return {
-      chatId,
+      chatId: extractedChatId,
       messageId: eventId || "",
-      rootId: chatId, // Use chatId as root for new followup threads
+      rootId: extractedRootId, // Use extracted rootId for proper thread context
       botUserId,
       userId: operatorId || "",
       buttonValue,

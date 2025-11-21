@@ -279,19 +279,30 @@ app.post("/webhook/card", async (c) => {
     if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
       console.log(`🔘 [CardAction] Detected button followup action: "${actionValue}"`);
 
-      // Extract button followup context
-      const chatId = cardActionPayload.event?.action?.action_id?.split("_")[0] || 
-                     cardActionPayload.header?.app_id || "";
+      // Extract button followup context from action_id which contains chatId|rootId|index
+      const actionId = cardActionPayload.event?.action?.action_id;
+      let chatId = "";
+      
+      if (actionId && typeof actionId === "string" && actionId.includes("|")) {
+        // Parse context from action_id
+        const parts = actionId.split("|");
+        chatId = parts[0];
+        console.log(`🔘 [CardAction] Extracted chatId from action_id: ${chatId}`);
+      } else {
+        // Fallback to app_id if action_id doesn't have context
+        chatId = cardActionPayload.header?.app_id || "unknown";
+        console.warn(`⚠️ [CardAction] action_id doesn't have context format, using app_id: ${chatId}`);
+      }
       
       const buttonContext = extractButtonFollowupContext(
         cardActionPayload,
-        chatId || "unknown",
+        chatId,
         botUserId,
         false // Determine from message context if needed
       );
 
       if (buttonContext) {
-        console.log(`✅ [CardAction] Extracted button followup context, processing as new query...`);
+        console.log(`✅ [CardAction] Extracted button followup context: chatId=${buttonContext.chatId}, rootId=${buttonContext.rootId}, value="${buttonContext.buttonValue}"`);
         // Process button click as a new user message (in background)
         handleButtonFollowup(buttonContext)
           .then(() => {

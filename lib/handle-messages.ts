@@ -83,7 +83,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
       3,          // max followups
       {
         conversationId: chatId,
-        rootId: messageId,
+        rootId: rootId,  // Use actual rootId (root of conversation thread)
         threadId: rootId,
         sendButtonsAsSeperateMessage: true
       }
