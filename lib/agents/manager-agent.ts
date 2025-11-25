@@ -6,7 +6,19 @@ import { getPnlAgent } from "./pnl-agent";
 import { getDpaPmAgent } from "./dpa-pm-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
-import { getPrimaryModel, getFallbackModel, isRateLimitError } from "../shared/model-fallback";
+import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import {
+  getPrimaryModel,
+  getFallbackModel,
+  isRateLimitError,
+  isModelRateLimited,
+  markModelRateLimited,
+  clearModelRateLimit,
+  getConsecutiveFailures,
+  sleep,
+  calculateBackoffDelay,
+  DEFAULT_RETRY_CONFIG,
+} from "../shared/model-fallback";
 import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
 
@@ -20,6 +32,108 @@ let currentModelTier: "primary" | "fallback" = "primary";
 let managerAgentPrimary: Agent | null = null;
 let managerAgentFallback: Agent | null = null;
 let isInitializing = false;
+
+/**
+ * Wrapper to handle rate limit retries with exponential backoff
+ * Automatically switches to fallback model if primary is rate limited
+ */
+async function executeWithRateLimitRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  onRateLimitSwitch?: () => void
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= DEFAULT_RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      // Check if current model is in cooldown
+      if (isModelRateLimited(currentModelTier)) {
+        const tier = currentModelTier;
+        console.warn(
+          `⚠️ [Retry] ${tier} model is in cooldown. ` +
+          `Switching to ${tier === "primary" ? "fallback" : "primary"} model.`
+        );
+        
+        // Switch to fallback if primary is rate limited
+        if (currentModelTier === "primary") {
+          currentModelTier = "fallback";
+          onRateLimitSwitch?.();
+        }
+        
+        // Force a delay before retrying with different model
+        await sleep(1000);
+        continue;
+      }
+      
+      // Attempt the operation
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Check if it's a rate limit error
+      if (isRateLimitError(error)) {
+        console.warn(
+          `⚠️ [Retry] Rate limit error on attempt ${attempt}/${DEFAULT_RETRY_CONFIG.maxRetries}`
+        );
+        
+        markModelRateLimited(currentModelTier);
+        
+        // If primary is rate limited, switch to fallback
+        if (currentModelTier === "primary") {
+          console.warn(`⚠️ [Retry] Primary model rate limited. Switching to fallback model.`);
+          currentModelTier = "fallback";
+          onRateLimitSwitch?.();
+        } else {
+          // Fallback is also rate limited, we're in trouble
+          // But continue retrying with backoff in case it recovers
+          console.error(
+            `❌ [Retry] Both models are rate limited! ` +
+            `Primary failures: ${getConsecutiveFailures("primary")}, ` +
+            `Fallback failures: ${getConsecutiveFailures("fallback")}`
+          );
+        }
+        
+        // Only retry if we haven't exceeded max attempts
+        if (attempt < DEFAULT_RETRY_CONFIG.maxRetries) {
+          const delayMs = calculateBackoffDelay(attempt, DEFAULT_RETRY_CONFIG);
+          console.log(`[Retry] Waiting ${delayMs}ms before retry ${attempt + 1}...`);
+          await sleep(delayMs);
+          continue;
+        }
+      } else {
+        // Non-rate-limit error, don't retry
+        throw error;
+      }
+    }
+  }
+  
+  // All retries exhausted
+  if (lastError) {
+    console.error(`❌ [Retry] ${operationName} failed after ${DEFAULT_RETRY_CONFIG.maxRetries} retries`);
+    throw lastError;
+  }
+  
+  throw new Error(`${operationName} failed: unknown error`);
+}
+
+/**
+ * Clear rate limit state on successful request completion
+ * Resets failure counters when we get a successful response
+ */
+function clearRateLimitOnSuccess(): void {
+  const primaryFailures = getConsecutiveFailures("primary");
+  const fallbackFailures = getConsecutiveFailures("fallback");
+  
+  if (primaryFailures > 0 || fallbackFailures > 0) {
+    console.log(
+      `✅ [RateLimit] Request successful! ` +
+      `Clearing rate limit state. ` +
+      `(Primary failures: ${primaryFailures}, Fallback failures: ${fallbackFailures})`
+    );
+    clearModelRateLimit("primary");
+    clearModelRateLimit("fallback");
+  }
+}
 
 /**
  * Initialize agents for both model tiers (lazy - called on first request)
@@ -252,7 +366,9 @@ export async function managerAgent(
      };
      
      // Add memory context if chatId and rootId are provided
-     if (chatId && rootId) {
+    const supabaseUserId = userId ? getSupabaseUserId(userId) : undefined;
+
+    if (chatId && rootId) {
        // TypeScript narrowing: chatId and rootId are guaranteed to be strings here
        const conversationId = getConversationId(chatId!, rootId!);
        // Use actual userId if provided, otherwise fallback to chatId-based scope
@@ -264,11 +380,12 @@ export async function managerAgent(
        executionContext.userId = userScopeId;
        
        // Store actual Feishu userId for Supabase RLS
-       if (userId) {
-         executionContext.feishuUserId = userId;
+      if (userId) {
+        executionContext.feishuUserId = supabaseUserId || userId;
+        executionContext.feishuExternalId = userId;
        }
        
-       console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}, feishuUserId=${userId || 'N/A'}`);
+      console.log(`[Manager] Memory context: conversationId=${conversationId}, userId=${userScopeId}, feishuUserId=${(supabaseUserId || userId) || 'N/A'}, externalFeishuId=${userId || 'N/A'}`);
      }
      
      // Use Agent.stream() with execution context
@@ -282,30 +399,36 @@ export async function managerAgent(
      
      let result;
      try {
-       result = (selectedAgent.stream as any)({
-         messages,
-         executionContext,
-       });
+       result = await executeWithRateLimitRetry(
+         () =>
+           Promise.resolve(
+             (selectedAgent.stream as any)({
+               messages,
+               executionContext,
+             })
+           ),
+         "Stream creation",
+         () => {
+           // Called when switching models due to rate limit
+           devtoolsTracker.trackError("Manager", new Error("Rate limit - switching to fallback"), {
+             query,
+             errorType: "RATE_LIMIT",
+             action: "Auto-switched to fallback model",
+           });
+         }
+       );
        console.log(`[Manager] Stream created, starting to read textStream...`);
      } catch (streamError) {
        console.error(`[Manager] Error creating stream:`, streamError);
        
-       // Check if it's a rate limit error
-        if (isRateLimitError(streamError)) {
-         console.warn(`⚠️ [Manager] Rate limit detected (429). Switching to fallback model.`);
-         if (currentModelTier === "primary") {
-           currentModelTier = "fallback";
-           const error = streamError instanceof Error ? streamError : new Error(String(streamError));
-           devtoolsTracker.trackError("Manager", error, {
-             query,
-             errorType: "RATE_LIMIT",
-             action: "Switched to fallback model",
-           });
-           // Retry with fallback model
-           console.log(`[Manager] Retrying with fallback model...`);
-           return managerAgent(messages, updateStatus, chatId, rootId, userId);
-         }
-       }
+       // Track error and continue
+       const error = streamError instanceof Error ? streamError : new Error(String(streamError));
+       devtoolsTracker.trackError("Manager", error, {
+         query,
+         errorType: "STREAM_CREATION_FAILED",
+         phase: "stream_creation",
+       });
+       
        throw streamError;
      }
 
@@ -408,9 +531,16 @@ export async function managerAgent(
           
           // Check if it's a rate limit error
           if (isRateLimitError(streamIterationError)) {
-            console.warn(`⚠️ [Manager] Rate limit detected during streaming (429). Current model tier: ${currentModelTier}`);
+            console.warn(
+              `⚠️ [Manager] Rate limit detected during streaming. ` +
+              `Current model: ${currentModelTier}, ` +
+              `Consecutive failures: ${getConsecutiveFailures(currentModelTier)}`
+            );
+            
+            markModelRateLimited(currentModelTier);
+            
             if (currentModelTier === "primary") {
-              console.warn(`⚠️ [Manager] Switching to fallback model and retrying...`);
+              console.warn(`⚠️ [Manager] Switching to fallback model...`);
               currentModelTier = "fallback";
               const error = streamIterationError instanceof Error ? streamIterationError : new Error(String(streamIterationError));
               devtoolsTracker.trackError("Manager", error, {
@@ -420,6 +550,21 @@ export async function managerAgent(
               });
               // Retry with fallback model
               return managerAgent(messages, updateStatus, chatId, rootId, userId);
+            } else {
+              // Fallback also hit rate limit - we've exhausted options
+              console.error(
+                `❌ [Manager] Both models rate limited! ` +
+                `Primary: ${getConsecutiveFailures("primary")} failures, ` +
+                `Fallback: ${getConsecutiveFailures("fallback")} failures`
+              );
+              const error = streamIterationError instanceof Error ? streamIterationError : new Error(String(streamIterationError));
+              devtoolsTracker.trackError("Manager", error, {
+                query,
+                errorType: "RATE_LIMIT_EXHAUSTED",
+                primaryFailures: getConsecutiveFailures("primary"),
+                fallbackFailures: getConsecutiveFailures("fallback"),
+                action: "All retry options exhausted",
+              });
             }
           } else {
             // Log unexpected errors with context
@@ -473,6 +618,9 @@ export async function managerAgent(
      const finalResultText = typeof finalResult?.text === 'string' ? finalResult.text : '';
      const finalText = accumulatedText || finalResultText || "";
       const duration = Date.now() - startTime;
+      
+      // Clear rate limit state on successful completion
+      clearRateLimitOnSuccess();
       
       if (!routedAgent) {
         console.log(`[Manager] Query handled directly (no handoff): "${query}"`);

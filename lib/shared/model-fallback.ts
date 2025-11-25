@@ -7,6 +7,12 @@
  * Supported models:
  * - Primary (cheap): kwaipilot/kat-coder-pro:free
  * - Fallback: google/gemini-2.5-flash-lite
+ * 
+ * Rate Limit Handling:
+ * - Exponential backoff: 2s, 4s, 8s (with jitter)
+ * - Max 3 retries per request
+ * - Separate cooldown tracking per model tier
+ * - Automatic fallback to reliable model on rate limit
  */
 
 import { LanguageModel } from "ai";
@@ -19,6 +25,32 @@ export interface ModelConfig {
   tier: ModelTier;
   model: string;
   costNote: string;
+}
+
+/**
+ * Rate limit state per model tier
+ */
+interface RateLimitState {
+  tier: ModelTier;
+  isRateLimited: boolean;
+  cooldownUntil: number; // timestamp
+  consecutiveFailures: number;
+  lastErrorTime: number;
+}
+
+/**
+ * Tracks rate limit state for each model tier
+ */
+const rateLimitStates: Map<ModelTier, RateLimitState> = new Map([
+  ["primary", { tier: "primary", isRateLimited: false, cooldownUntil: 0, consecutiveFailures: 0, lastErrorTime: 0 }],
+  ["fallback", { tier: "fallback", isRateLimited: false, cooldownUntil: 0, consecutiveFailures: 0, lastErrorTime: 0 }],
+]);
+
+export interface RetryConfig {
+  maxRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  jitterFactor: number;
 }
 
 /**
@@ -140,3 +172,100 @@ export function getModelConfig(tier: ModelTier): ModelConfig {
   }
   return config;
 }
+
+/**
+ * Check if a model tier is currently rate limited
+ */
+export function isModelRateLimited(tier: ModelTier): boolean {
+  const state = rateLimitStates.get(tier);
+  if (!state) return false;
+  
+  const now = Date.now();
+  if (state.cooldownUntil > now) {
+    return true;
+  }
+  
+  // Clear cooldown if expired
+  if (state.isRateLimited && state.cooldownUntil <= now) {
+    state.isRateLimited = false;
+    state.consecutiveFailures = 0;
+    console.log(`✅ [RateLimit] ${tier} model cooldown expired, ready to use`);
+  }
+  
+  return false;
+}
+
+/**
+ * Mark a model tier as rate limited
+ * Sets cooldown with exponential backoff based on failure count
+ */
+export function markModelRateLimited(tier: ModelTier): void {
+  const state = rateLimitStates.get(tier);
+  if (!state) return;
+  
+  state.isRateLimited = true;
+  state.consecutiveFailures++;
+  state.lastErrorTime = Date.now();
+  
+  // Exponential backoff: 2s, 4s, 8s
+  const baseDelayMs = 2000;
+  const backoffMultiplier = Math.pow(2, Math.min(state.consecutiveFailures - 1, 2));
+  const delay = baseDelayMs * backoffMultiplier;
+  
+  state.cooldownUntil = Date.now() + delay;
+  
+  console.warn(
+    `⚠️ [RateLimit] ${tier} model hit rate limit. ` +
+    `Cooldown: ${delay}ms (attempt #${state.consecutiveFailures})`
+  );
+}
+
+/**
+ * Clear rate limit state for a model tier
+ */
+export function clearModelRateLimit(tier: ModelTier): void {
+  const state = rateLimitStates.get(tier);
+  if (!state) return;
+  
+  state.isRateLimited = false;
+  state.consecutiveFailures = 0;
+  state.cooldownUntil = 0;
+  console.log(`✅ [RateLimit] Cleared rate limit for ${tier} model`);
+}
+
+/**
+ * Get the number of consecutive failures for a model tier
+ */
+export function getConsecutiveFailures(tier: ModelTier): number {
+  const state = rateLimitStates.get(tier);
+  return state ? state.consecutiveFailures : 0;
+}
+
+/**
+ * Sleep for a given number of milliseconds
+ * Useful for backoff delays
+ */
+export async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate backoff delay with jitter
+ * Prevents thundering herd problem when multiple requests retry simultaneously
+ */
+export function calculateBackoffDelay(attempt: number, config: RetryConfig): number {
+  const exponentialDelay = config.initialDelayMs * Math.pow(2, attempt - 1);
+  const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
+  const jitter = cappedDelay * (Math.random() - 0.5) * 2 * config.jitterFactor;
+  return Math.round(cappedDelay + jitter);
+}
+
+/**
+ * Default retry configuration
+ */
+export const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  initialDelayMs: 2000,
+  maxDelayMs: 8000,
+  jitterFactor: 0.1, // ±10% jitter
+};
