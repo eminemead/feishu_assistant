@@ -70,7 +70,7 @@ export function createOkrReviewTool(
   // @ts-ignore - Type instantiation depth issue
   const mgrOkrReviewToolBase = tool({
     description:
-      "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries DuckDB to analyze if management criteria are met by managers of different levels across different city companies.",
+      "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries StarRocks (or DuckDB as fallback) to analyze if management criteria are met by managers of different levels across different city companies. Results are automatically filtered by user permissions (RLS).",
     // @ts-ignore
     parameters: zodSchema(
       z.object({

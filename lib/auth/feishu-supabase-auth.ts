@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseUserId } from './feishu-supabase-id';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -42,20 +43,23 @@ export async function getOrCreateSupabaseUser(feishuUserId: string): Promise<str
     return null;
   }
 
+  const supabaseUserId = getSupabaseUserId(feishuUserId);
+  const email = `${feishuUserId}@feishu.local`;
+
   try {
     // Check if user already exists
-    const { data: existingUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(feishuUserId);
+    const { data: existingUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(supabaseUserId);
     
     if (existingUser?.user && !getUserError) {
-      console.log(`✅ [Auth] Found existing Supabase user: ${feishuUserId}`);
+      console.log(`✅ [Auth] Found existing Supabase user: ${feishuUserId} → ${supabaseUserId}`);
       return existingUser.user.id;
     }
     
     // User doesn't exist, create new user
-    // Use Feishu user ID as the Supabase user ID for consistent mapping
+    // Use deterministic UUID for Supabase user ID
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      id: feishuUserId, // Use Feishu user ID as Supabase user ID
-      email: `${feishuUserId}@feishu.local`, // Placeholder email (not used for auth)
+      id: supabaseUserId,
+      email, // Placeholder email (not used for auth)
       email_confirm: true, // Auto-confirm since we're using Feishu auth
       user_metadata: {
         feishu_user_id: feishuUserId,
@@ -71,9 +75,9 @@ export async function getOrCreateSupabaseUser(feishuUserId: string): Promise<str
     if (createError) {
       // If user already exists (race condition), try to get it again
       if (createError.message.includes('already exists') || createError.message.includes('duplicate')) {
-        const { data: retryUser } = await supabaseAdmin.auth.admin.getUserById(feishuUserId);
+        const { data: retryUser } = await supabaseAdmin.auth.admin.getUserById(supabaseUserId);
         if (retryUser?.user) {
-          console.log(`✅ [Auth] User created by another process, retrieved: ${feishuUserId}`);
+          console.log(`✅ [Auth] User created by another process, retrieved: ${feishuUserId} → ${supabaseUserId}`);
           return retryUser.user.id;
         }
       }
@@ -86,7 +90,7 @@ export async function getOrCreateSupabaseUser(feishuUserId: string): Promise<str
       return null;
     }
     
-    console.log(`✅ [Auth] Created new Supabase user: ${feishuUserId}`);
+    console.log(`✅ [Auth] Created new Supabase user: ${feishuUserId} → ${supabaseUserId}`);
     return newUser.user.id;
   } catch (error) {
     console.error(`❌ [Auth] Error in getOrCreateSupabaseUser:`, error);

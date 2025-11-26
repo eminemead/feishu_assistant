@@ -6,12 +6,9 @@
  */
 
 import { createSupabaseClientWithUser } from './supabase-jwt';
-
-export interface UserDataScope {
-  allowedAccounts: string[];
-  allowedDepartments: string[];
-  allowedRegions: string[];
-}
+import { getSupabaseUserId } from './feishu-supabase-id';
+import type { UserDataScope } from './types';
+import { getStarrocksUserScope } from '../starrocks/rls-provider';
 
 /**
  * Get user's authorized data access scope
@@ -23,7 +20,13 @@ export interface UserDataScope {
  * @returns User's data access scope
  */
 export async function getUserDataScope(feishuUserId: string): Promise<UserDataScope> {
+  const starrocksScope = await getStarrocksUserScope(feishuUserId);
+  if (starrocksScope) {
+    return starrocksScope;
+  }
+
   const supabase = createSupabaseClientWithUser(feishuUserId);
+  const supabaseUserId = getSupabaseUserId(feishuUserId);
   
   if (!supabase) {
     console.warn(`⚠️ [Auth] Supabase not configured, returning empty data scope for user: ${feishuUserId}`);
@@ -41,7 +44,7 @@ export async function getUserDataScope(feishuUserId: string): Promise<UserDataSc
     const { data, error } = await supabase
       .from('user_data_permissions')
       .select('allowed_accounts, allowed_departments, allowed_regions')
-      .eq('user_id', feishuUserId)
+      .eq('user_id', supabaseUserId)
       .single();
     
     if (error) {

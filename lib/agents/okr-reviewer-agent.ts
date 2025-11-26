@@ -5,8 +5,13 @@ import { getPrimaryModel } from "../shared/model-fallback";
 import { createOkrReviewTool } from "../tools";
 import { chartGenerationTool } from "../tools/chart-generation-tool";
 import { getUserDataScope } from "../auth/user-data-scope";
+import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
+
+// StarRocks table configuration (can be overridden via env vars)
+const STARROCKS_OKR_METRICS_TABLE = process.env.STARROCKS_OKR_METRICS_TABLE || "okr_metrics";
+const STARROCKS_EMPLOYEE_FELLOW_TABLE = process.env.STARROCKS_EMPLOYEE_FELLOW_TABLE || "employee_fellow";
 
 /**
  * Queries DuckDB to get the latest timestamped okr_metrics table
@@ -33,14 +38,161 @@ async function getLatestMetricsTable(con: duckdb.Connection): Promise<string | n
 }
 
 /**
+ * Analyzes has_metric_percentage for managers by city company using StarRocks
+ * 
+ * @param period - Period to analyze (e.g., '10 月', '11 月')
+ * @param userId - Optional Feishu user ID for data filtering (RLS)
+ */
+async function analyzeHasMetricPercentageStarrocks(period: string, userId?: string): Promise<any> {
+  // Get user's data scope if userId is provided
+  let userDataScope: { allowedAccounts: string[] } | null = null;
+  if (userId) {
+    try {
+      const scope = await getUserDataScope(userId);
+      userDataScope = { allowedAccounts: scope.allowedAccounts };
+      
+      // If user has no allowed accounts, return empty result (fail-secure)
+      if (scope.allowedAccounts.length === 0) {
+        console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts, returning empty result`);
+        return {
+          period,
+          table_used: STARROCKS_OKR_METRICS_TABLE,
+          summary: [],
+          total_companies: 0,
+          overall_average: 0,
+          filtered_by_user: true,
+          data_source: 'starrocks'
+        };
+      }
+    } catch (error) {
+      console.error(`❌ [OKR] Error getting user data scope:`, error);
+      return {
+        period,
+        table_used: STARROCKS_OKR_METRICS_TABLE,
+        summary: [],
+        total_companies: 0,
+        overall_average: 0,
+        filtered_by_user: true,
+        error: 'Failed to get user permissions',
+        data_source: 'starrocks'
+      };
+    }
+  }
+
+  try {
+    // Build query with optional user filtering
+    let accountFilter = '';
+    const queryParams: any[] = [period];
+    
+    if (userDataScope && userDataScope.allowedAccounts.length > 0) {
+      // Filter by allowed accounts (project_code from RLS)
+      // StarRocks uses ? for parameters
+      const accountPlaceholders = userDataScope.allowedAccounts.map(() => '?').join(', ');
+      accountFilter = `AND e.fellow_ad_account IN (${accountPlaceholders})`;
+      queryParams.push(...userDataScope.allowedAccounts);
+    }
+
+    const query = `
+      WITH base AS (
+        SELECT COALESCE(e.fellow_city_company_name, 'Unknown') AS company_name,
+               m.metric_type,
+               m.value
+        FROM ${STARROCKS_OKR_METRICS_TABLE} m
+        LEFT JOIN ${STARROCKS_EMPLOYEE_FELLOW_TABLE} e
+          ON m.owner = e.fellow_ad_account
+        WHERE m.period = ?
+          AND e.fellow_workday_cn_title IN ('乐道代理战队长', '乐道区域副总经理', '乐道区域总经理', '乐道区域行销负责人', '乐道战队长', '乐道战队长（兼个人销售）', '乐道片区总', '乐道行销大区负责人', '乐道销售部负责人')
+          ${accountFilter}
+      )
+      SELECT company_name, metric_type,
+             COUNT(*) AS total,
+             SUM(CASE WHEN value IS NULL THEN 1 ELSE 0 END) AS nulls,
+             100.0 * SUM(CASE WHEN value IS NULL THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0) AS null_pct
+      FROM base
+      WHERE company_name != 'Unknown'
+      GROUP BY company_name, metric_type
+    `;
+
+    console.log(`[OKR] Querying StarRocks for period: "${period}"`);
+    const rows = await queryStarrocks<any>(query, queryParams);
+    
+    console.log(`[OKR] StarRocks query returned ${rows.length} rows for period "${period}"`);
+
+    // Process results (same logic as DuckDB version)
+    const processed = rows.map((row: any) => ({
+      company_name: row.company_name,
+      metric_type: row.metric_type,
+      total: Number(row.total) || 0,
+      nulls: Number(row.nulls) || 0,
+      null_pct: parseFloat(row.null_pct) || 0,
+      has_metric_pct: 100.0 - (parseFloat(row.null_pct) || 0),
+    }));
+
+    // Group by company and calculate summary
+    const byCompany: Record<string, any[]> = {};
+    processed.forEach((row) => {
+      if (!byCompany[row.company_name]) {
+        byCompany[row.company_name] = [];
+      }
+      byCompany[row.company_name].push(row);
+    });
+
+    // Generate summary
+    const summary = Object.entries(byCompany).map(([company, metrics]) => {
+      const avgHasMetric = metrics.reduce((sum, m) => sum + m.has_metric_pct, 0) / metrics.length;
+      return {
+        company,
+        average_has_metric_percentage: Math.round(avgHasMetric * 100) / 100,
+        metrics: metrics.map((m) => ({
+          metric_type: m.metric_type,
+          has_metric_percentage: Math.round(m.has_metric_pct * 100) / 100,
+          total: m.total,
+          nulls: m.nulls,
+        })),
+      };
+    });
+
+    // Sort by average has_metric_percentage descending
+    summary.sort((a, b) => b.average_has_metric_percentage - a.average_has_metric_percentage);
+
+    return {
+      period,
+      table_used: STARROCKS_OKR_METRICS_TABLE,
+      summary,
+      total_companies: summary.length,
+      overall_average: summary.length > 0
+        ? Math.round(
+            (summary.reduce((sum, s) => sum + s.average_has_metric_percentage, 0) /
+              summary.length) *
+            100
+          ) / 100
+        : 0,
+      filtered_by_user: userId ? true : false,
+      user_allowed_accounts_count: userDataScope?.allowedAccounts.length || 0,
+      data_source: 'starrocks'
+    };
+  } catch (error: any) {
+    console.error(`❌ [OKR] StarRocks query error for period "${period}":`, error);
+    throw error;
+  }
+}
+
+/**
  * Analyzes has_metric_percentage for managers by city company
  * 
  * Exported for use in visualization tool
+ * Uses StarRocks if configured, otherwise falls back to DuckDB
  * 
  * @param period - Period to analyze (e.g., '10 月', '11 月')
  * @param userId - Optional Feishu user ID for data filtering (RLS)
  */
 export function analyzeHasMetricPercentage(period: string, userId?: string): Promise<any> {
+  // Use StarRocks if configured, otherwise fall back to DuckDB
+  if (hasStarrocksConfig()) {
+    return analyzeHasMetricPercentageStarrocks(period, userId);
+  }
+  
+  // Fallback to DuckDB implementation
   return new Promise(async (resolve, reject) => {
     // Get user's data scope if userId is provided
     let userDataScope: { allowedAccounts: string[] } | null = null;
@@ -148,7 +300,6 @@ export function analyzeHasMetricPercentage(period: string, userId?: string): Pro
             null_pct: parseFloat(row.null_pct) || 0,
             has_metric_pct: 100.0 - (parseFloat(row.null_pct) || 0),
           }));
-
           // Group by company and calculate summary
           const byCompany: Record<string, any[]> = {};
           processed.forEach((row) => {

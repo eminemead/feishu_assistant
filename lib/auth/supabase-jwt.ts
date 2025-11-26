@@ -7,6 +7,7 @@
 
 import jwt from 'jsonwebtoken';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseUserId } from './feishu-supabase-id';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
@@ -39,13 +40,14 @@ export function generateSupabaseJWT(
   }
 
   const now = Math.floor(Date.now() / 1000);
+  const supabaseUserId = getSupabaseUserId(feishuUserId);
   
   const payload = {
     aud: 'authenticated',
     exp: now + expiresInSeconds,
     iat: now,
     iss: SUPABASE_URL,
-    sub: feishuUserId, // This becomes auth.uid() in RLS policies
+    sub: supabaseUserId, // This becomes auth.uid() in RLS policies
     email: `${feishuUserId}@feishu.local`,
     role: 'authenticated',
     app_metadata: {
