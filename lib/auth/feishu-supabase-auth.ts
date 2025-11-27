@@ -29,6 +29,29 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   : null;
 
 /**
+ * Generate a valid placeholder email for Supabase auth
+ * 
+ * Converts arbitrary user IDs to valid email format (required by Supabase auth).
+ * Examples:
+ *   "user_a" → "user-a@feishu.local"
+ *   "user_a@company.com" → "user-a-company-com@feishu.local"
+ *   "ou_abc123" → "ou-abc123@feishu.local"
+ * 
+ * @param feishuUserId - Any user ID string
+ * @returns Valid email-like string for Supabase
+ */
+function generatePlaceholderEmail(feishuUserId: string): string {
+  // Replace invalid email characters with hyphens
+  const sanitized = feishuUserId
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  
+  return `${sanitized}@feishu.local`;
+}
+
+/**
  * Create or get Supabase user from Feishu user ID
  * 
  * Uses Feishu user ID (open_id/user_id) as the Supabase user ID
@@ -44,7 +67,7 @@ export async function getOrCreateSupabaseUser(feishuUserId: string): Promise<str
   }
 
   const supabaseUserId = getSupabaseUserId(feishuUserId);
-  const email = `${feishuUserId}@feishu.local`;
+  const email = generatePlaceholderEmail(feishuUserId);
 
   try {
     // Check if user already exists
