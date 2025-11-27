@@ -188,6 +188,7 @@ eventDispatcher.register({
       // Parse message content
       let messageText = "";
       let isMention = false;
+      let mentionedUserId: string | null = null;
 
       console.log(`📩 [WebSocket] Message details: chatId=${chatId}, messageId=${messageId}, chatType=${message.chat_type}`);
 
@@ -199,6 +200,20 @@ eventDispatcher.register({
         // @ts-ignore - mentions array exists in subscription mode
         const mentions = (message as any).mentions || [];
         console.log(`🔍 [WebSocket] Mentions array:`, JSON.stringify(mentions, null, 2));
+        
+        // Extract mentioned user ID from mentions array
+        // In group chats with mentions, the first mention is the user being addressed
+        if (mentions.length > 0 && message.chat_type === "group") {
+          const firstMention = mentions[0];
+          mentionedUserId = firstMention.id?.open_id || 
+                           firstMention.id?.user_id || 
+                           firstMention.id?.union_id ||
+                           null;
+          
+          if (mentionedUserId) {
+            console.log(`📌 [WebSocket] Extracted mentioned user ID: ${mentionedUserId} (${firstMention.name || 'unknown'})`);
+          }
+        }
         
         // Check mentions array for bot
         // In Subscription Mode, if mentions array exists and has entries in a group chat,
@@ -242,13 +257,17 @@ eventDispatcher.register({
       // Handle group message with mention
       if (isMention) {
         console.log(`👥 [WebSocket] Processing group mention: "${messageText.substring(0, 50)}..."`);
+        // Use mentioned user's ID for memory context (if available), otherwise fall back to sender
+        const contextUserId = mentionedUserId || userId || chatId;
+        console.log(`💾 [WebSocket] Using user ID for memory context: ${contextUserId}${mentionedUserId ? ` (from mention)` : ` (sender)`}`);
+        
         await handleNewAppMention({
           chatId,
           messageId,
           rootId,
           messageText,
           botUserId,
-          userId: userId || chatId, // Fallback to chatId if userId not available
+          userId: contextUserId,
         } as any);
         return;
       }
