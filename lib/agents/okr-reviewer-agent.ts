@@ -10,8 +10,9 @@ import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
 // StarRocks table configuration (can be overridden via env vars)
-const STARROCKS_OKR_METRICS_TABLE = process.env.STARROCKS_OKR_METRICS_TABLE || "okr_metrics";
-const STARROCKS_EMPLOYEE_FELLOW_TABLE = process.env.STARROCKS_EMPLOYEE_FELLOW_TABLE || "employee_fellow";
+// Note: Table names should include schema if needed, e.g., "onvo_dpa_data.okr_metrics"
+const STARROCKS_OKR_METRICS_TABLE_PREFIX = process.env.STARROCKS_OKR_METRICS_TABLE || "onvo_dpa_data.okr_metrics";
+const STARROCKS_EMPLOYEE_FELLOW_TABLE = process.env.STARROCKS_EMPLOYEE_FELLOW_TABLE || "onvo_dpa_data.employee_fellow";
 
 /**
  * Queries DuckDB to get the latest timestamped okr_metrics table
@@ -38,6 +39,51 @@ async function getLatestMetricsTable(con: duckdb.Connection): Promise<string | n
 }
 
 /**
+ * Queries StarRocks to get the latest timestamped okr_metrics table
+ * Handles schema-qualified table names (e.g., "onvo_dpa_data.okr_metrics_20251127")
+ */
+async function getLatestMetricsTableStarrocks(): Promise<string | null> {
+  try {
+    // Extract schema and table prefix from the configured prefix
+    // E.g., "onvo_dpa_data.okr_metrics" → schema="onvo_dpa_data", prefix="okr_metrics"
+    const parts = STARROCKS_OKR_METRICS_TABLE_PREFIX.split('.');
+    let schema = 'default';
+    let tablePrefix = STARROCKS_OKR_METRICS_TABLE_PREFIX;
+    
+    if (parts.length === 2) {
+      schema = parts[0];
+      tablePrefix = parts[1];
+    }
+
+    console.log(`[OKR] Looking for latest table matching '${tablePrefix}_%' in schema '${schema}'`);
+    
+    // Query for tables matching the pattern
+    const query = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = ? AND table_name LIKE ?
+      ORDER BY table_name DESC 
+      LIMIT 1
+    `;
+    
+    const rows = await queryStarrocks<any>(query, [schema, `${tablePrefix}_%`]);
+    
+    if (rows && rows.length > 0) {
+      const tableName = rows[0].table_name || rows[0].TABLE_NAME;
+      const fullTableName = `${schema}.${tableName}`;
+      console.log(`[OKR] Found latest StarRocks table: ${fullTableName}`);
+      return fullTableName;
+    } else {
+      console.warn(`[OKR] No timestamped okr_metrics tables found in StarRocks`);
+      return null;
+    }
+  } catch (error: any) {
+    console.error(`[OKR] Error querying StarRocks for latest table: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Analyzes has_metric_percentage for managers by city company using StarRocks
  * 
  * @param period - Period to analyze (e.g., '10 月', '11 月')
@@ -56,7 +102,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
         console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts, returning empty result`);
         return {
           period,
-          table_used: STARROCKS_OKR_METRICS_TABLE,
+          table_used: STARROCKS_OKR_METRICS_TABLE_PREFIX,
           summary: [],
           total_companies: 0,
           overall_average: 0,
@@ -68,7 +114,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
       console.error(`❌ [OKR] Error getting user data scope:`, error);
       return {
         period,
-        table_used: STARROCKS_OKR_METRICS_TABLE,
+        table_used: STARROCKS_OKR_METRICS_TABLE_PREFIX,
         summary: [],
         total_companies: 0,
         overall_average: 0,
@@ -80,6 +126,13 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
   }
 
   try {
+    // Find the latest timestamped table in StarRocks
+    const latestTable = await getLatestMetricsTableStarrocks();
+    if (!latestTable) {
+      console.warn(`⚠️ [OKR] No timestamped okr_metrics tables found in StarRocks, cannot proceed`);
+      throw new Error(`No okr_metrics tables found in StarRocks matching pattern "${STARROCKS_OKR_METRICS_TABLE_PREFIX}_%"`);
+    }
+
     // Build query with optional user filtering
     let accountFilter = '';
     const queryParams: any[] = [period];
@@ -97,7 +150,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
         SELECT COALESCE(e.fellow_city_company_name, 'Unknown') AS company_name,
                m.metric_type,
                m.value
-        FROM ${STARROCKS_OKR_METRICS_TABLE} m
+        FROM ${latestTable} m
         LEFT JOIN ${STARROCKS_EMPLOYEE_FELLOW_TABLE} e
           ON m.owner = e.fellow_ad_account
         WHERE m.period = ?
@@ -113,7 +166,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
       GROUP BY company_name, metric_type
     `;
 
-    console.log(`[OKR] Querying StarRocks for period: "${period}"`);
+    console.log(`[OKR] Querying StarRocks for period: "${period}" using table: ${latestTable}`);
     const rows = await queryStarrocks<any>(query, queryParams);
     
     console.log(`[OKR] StarRocks query returned ${rows.length} rows for period "${period}"`);
@@ -157,7 +210,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
 
     return {
       period,
-      table_used: STARROCKS_OKR_METRICS_TABLE,
+      table_used: latestTable,
       summary,
       total_companies: summary.length,
       overall_average: summary.length > 0
