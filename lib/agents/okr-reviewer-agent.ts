@@ -178,21 +178,10 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
 }
 
 /**
- * Analyzes has_metric_percentage for managers by city company
- * 
- * Exported for use in visualization tool
- * Uses StarRocks if configured, otherwise falls back to DuckDB
- * 
- * @param period - Period to analyze (e.g., '10 月', '11 月')
- * @param userId - Optional Feishu user ID for data filtering (RLS)
+ * DuckDB implementation for analyzing OKR metrics
+ * Used as fallback when StarRocks is unavailable
  */
-export function analyzeHasMetricPercentage(period: string, userId?: string): Promise<any> {
-  // Use StarRocks if configured, otherwise fall back to DuckDB
-  if (hasStarrocksConfig()) {
-    return analyzeHasMetricPercentageStarrocks(period, userId);
-  }
-  
-  // Fallback to DuckDB implementation
+async function analyzeHasMetricPercentageDuckDB(period: string, userId?: string): Promise<any> {
   return new Promise(async (resolve, reject) => {
     // Get user's data scope if userId is provided
     let userDataScope: { allowedAccounts: string[] } | null = null;
@@ -360,6 +349,30 @@ const mgrOkrReviewTool = createOkrReviewTool(
   true,  // enableDevtoolsTracking
   60 * 60 * 1000  // cacheTTL: 1 hour (OKR data doesn't change frequently)
 );
+
+/**
+ * Main entry point for analyzing OKR metrics
+ * 
+ * Tries StarRocks first (if configured), falls back to DuckDB on error
+ * Ensures graceful degradation when backend is unavailable
+ * 
+ * @param period - Period to analyze (e.g., '10 月', '11 月')
+ * @param userId - Optional Feishu user ID for data filtering (RLS)
+ */
+export function analyzeHasMetricPercentage(period: string, userId?: string): Promise<any> {
+  // Use StarRocks if configured, otherwise fall back to DuckDB
+  if (hasStarrocksConfig()) {
+    // Try StarRocks first, but fall back to DuckDB on error
+    return analyzeHasMetricPercentageStarrocks(period, userId).catch((error: any) => {
+      console.warn(`⚠️ [OKR] StarRocks query failed, falling back to DuckDB: ${error.message}`);
+      // Fall through to DuckDB implementation
+      return analyzeHasMetricPercentageDuckDB(period, userId);
+    });
+  }
+  
+  // Use DuckDB directly if StarRocks not configured
+  return analyzeHasMetricPercentageDuckDB(period, userId);
+}
 
 // Lazy initialization
 let _okrReviewerAgent: Agent | null = null;
