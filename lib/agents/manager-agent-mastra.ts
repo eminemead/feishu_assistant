@@ -22,6 +22,11 @@ import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
 import {
+  initializeAgentMemoryContext,
+  loadConversationHistory,
+  saveMessageToMemory,
+} from "./memory-integration";
+import {
   getPrimaryModel,
   getFallbackModel,
   isRateLimitError,
@@ -158,6 +163,24 @@ export async function managerAgent(
   const startTime = Date.now();
   console.log(`[Manager] Received query: "${query}"`);
 
+  // Initialize memory context and load conversation history
+  let memoryContext: any = null;
+  try {
+    memoryContext = await initializeAgentMemoryContext(chatId, rootId, userId);
+    const historyMessages = await loadConversationHistory(memoryContext, 5);
+    if (historyMessages.length > 0) {
+      console.log(`[Manager] Loaded ${historyMessages.length} previous messages for context`);
+      // Prepend history to messages for context awareness
+      // But keep the current message last so the agent sees the latest query
+      const enrichedMessages = [...historyMessages.slice(0, -1), ...messages];
+      messages = enrichedMessages;
+    }
+    // Save user message to memory for future reference
+    await saveMessageToMemory(memoryContext, query, "user");
+  } catch (error) {
+    console.warn(`[Manager] Memory context initialization failed, continuing without memory:`, error);
+  }
+
   // Manual routing: Check if query matches specialist agent patterns
   const lowerQuery = query.toLowerCase();
   const shouldRouteToOkr = /okr|objective|key result|manager review|has_metric|覆盖率|指标覆盖率|经理评审|目标|关键结果|okr指标|指标|okr分析|分析|图表|可视化|visualization|chart|analysis/.test(
@@ -219,6 +242,15 @@ export async function managerAgent(
       });
       healthMonitor.trackAgentCall("okr_reviewer", duration, true);
 
+      // Save routed response to memory
+      if (memoryContext) {
+        try {
+          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+        } catch (error) {
+          console.warn("[OKR Routing] Failed to save response to memory:", error);
+        }
+      }
+
       console.log(`[OKR] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
     } catch (error) {
@@ -278,6 +310,15 @@ export async function managerAgent(
       );
       healthMonitor.trackAgentCall("alignment_agent", duration, true);
 
+      // Save routed response to memory
+      if (memoryContext) {
+        try {
+          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+        } catch (error) {
+          console.warn("[Alignment Routing] Failed to save response to memory:", error);
+        }
+      }
+
       console.log(
         `[Alignment] Response complete (length=${accumulatedText.length})`
       );
@@ -332,6 +373,15 @@ export async function managerAgent(
         manualRoute: true,
       });
       healthMonitor.trackAgentCall("pnl_agent", duration, true);
+
+      // Save routed response to memory
+      if (memoryContext) {
+        try {
+          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+        } catch (error) {
+          console.warn("[PnL Routing] Failed to save response to memory:", error);
+        }
+      }
 
       console.log(`[P&L] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
@@ -390,6 +440,15 @@ export async function managerAgent(
         manualRoute: true,
       });
       healthMonitor.trackAgentCall("dpa_pm", duration, true);
+
+      // Save routed response to memory
+      if (memoryContext) {
+        try {
+          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+        } catch (error) {
+          console.warn("[DPA PM Routing] Failed to save response to memory:", error);
+        }
+      }
 
       console.log(`[DPA PM] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
@@ -468,6 +527,15 @@ export async function managerAgent(
     const duration = Date.now() - startTime;
     devtoolsTracker.trackResponse("manager", text, duration);
     healthMonitor.trackAgentCall("manager", duration, true);
+
+    // Save response to memory for context in future conversations
+    if (memoryContext) {
+      try {
+        await saveMessageToMemory(memoryContext, text, "assistant");
+      } catch (error) {
+        console.warn("[Manager] Failed to save response to memory:", error);
+      }
+    }
 
     console.log(
       `[Manager] Response complete (length=${text.length}, duration=${duration}ms)`
