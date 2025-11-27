@@ -133,8 +133,11 @@ export async function dpaPmAgent(
   };
 
   try {
-    // MASTRA STREAMING: Call DPA PM agent with streaming
-    const stream = await dpaPmAgentInstance!.stream(messages);
+     // Track agent call for devtools monitoring
+     devtoolsTracker.trackAgentCall("dpa_pm", query);
+
+     // MASTRA STREAMING: Call DPA PM agent with streaming
+     const stream = await dpaPmAgentInstance!.stream(messages);
 
     let text = "";
     for await (const chunk of stream.textStream) {

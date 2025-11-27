@@ -133,8 +133,11 @@ export async function pnlAgent(
   };
 
   try {
-    // MASTRA STREAMING: Call P&L agent with streaming
-    const stream = await pnlAgentInstance!.stream(messages);
+     // Track agent call for devtools monitoring
+     devtoolsTracker.trackAgentCall("pnl", query);
+
+     // MASTRA STREAMING: Call P&L agent with streaming
+     const stream = await pnlAgentInstance!.stream(messages);
 
     let text = "";
     for await (const chunk of stream.textStream) {

@@ -360,8 +360,11 @@ export async function okrReviewerAgent(
   };
 
   try {
-    // MASTRA STREAMING: Call OKR reviewer agent with streaming
-    const stream = await okrReviewerAgentInstance!.stream(messages);
+     // Track agent call for devtools monitoring
+     devtoolsTracker.trackAgentCall("okr_reviewer", query);
+
+     // MASTRA STREAMING: Call OKR reviewer agent with streaming
+     const stream = await okrReviewerAgentInstance!.stream(messages);
 
     let text = "";
     for await (const chunk of stream.textStream) {

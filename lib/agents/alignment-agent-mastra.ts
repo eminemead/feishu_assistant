@@ -133,8 +133,11 @@ export async function alignmentAgent(
   };
 
   try {
-    // MASTRA STREAMING: Call alignment agent with streaming
-    const stream = await alignmentAgentInstance!.stream(messages);
+     // Track agent call for devtools monitoring
+     devtoolsTracker.trackAgentCall("alignment", query);
+
+     // MASTRA STREAMING: Call alignment agent with streaming
+     const stream = await alignmentAgentInstance!.stream(messages);
 
     let text = "";
     for await (const chunk of stream.textStream) {
