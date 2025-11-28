@@ -1,133 +1,180 @@
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                                                                              ║
-║                  BUTTON UI FEATURE - READY FOR TESTING                      ║
-║                                                                              ║
-║  Implementation of Hypothesis 1: Buttons in Separate Message                ║
-║  Status: Build successful, code integrated, ready for real-world test       ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+═══════════════════════════════════════════════════════════════════════════════
+  PHASE 5C-2: QUICK START TESTING REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
 
-QUICK TEST (5 minutes)
-═══════════════════════
+TEST GROUP: oc_cd4b98905e12ec0cb68adc529440e623
 
-1. Start server:
-   NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1: SETUP (2 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-2. In Feishu chat:
-   - Mention the bot OR send regular message
-   - Wait for response to complete
+Clear devtools:
+  curl -X POST http://localhost:3000/devtools/api/clear
 
-3. Verify results:
-   - Response should show with streaming text + text suggestions
-   - BELOW response should see separate message with interactive buttons
-   - Click a button → conversation continues
+Verify clean:
+  curl -s http://localhost:3000/devtools/api/stats | jq .totalEvents
 
-4. Check logs:
-   tail -100f server.log | grep -i "button\|separate"
+Open devtools UI:
+  http://localhost:3000/devtools
 
-Expected success logs:
-   ✅ [CardSuggestions] Buttons sent in separate message
-   ✅ [FollowupButtons] Successfully sent buttons message
+(Optional) Start monitoring:
+  ./scripts/monitor-phase5c.sh
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2: SEND Q1 (2 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-EXPECTED BEHAVIOR
-═════════════════
+In Feishu, send to test group:
 
-In Feishu chat, you should see:
+  @bot What are the key principles of OKR setting?
 
-┌─────────────────────────────────────┐
-│ Bot Response (with streaming effect)│
-│                                     │
-│ Suggestions:                        │
-│ 1. Suggestion text                  │  ← Text fallback
-│ 2. Suggestion text                  │
-│ 3. Suggestion text                  │
-└─────────────────────────────────────┘
+EXPECTED:
+  ✓ Agent responds with detailed explanation
+  ✓ Mentions objectives, key results, measurable goals
+  ✓ Devtools shows agent_call event with tokens
+  ✓ No memory context on first message (expected)
 
-┌────────────────────────────────────┐
-│  [  Suggestion 1 ] [Suggestion 2 ] │  ← Interactive buttons!
-│  [  Suggestion 3 ]                 │     (in separate message)
-└────────────────────────────────────┘
+CHECK:
+  curl -s 'http://localhost:3000/devtools/api/events?limit=1' | \
+    jq '.[] | {tokens_in: .metadata.tokens.input, tokens_out: .metadata.tokens.output}'
 
+EXPECTED OUTPUT:
+  {
+    "tokens_in": 150-250,
+    "tokens_out": 500-1000
+  }
 
-VERIFY SUCCESS
-══════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3: SEND Q2 (3 min) - KEY TEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ Response streams normally (typewriter effect)
-✅ Text suggestions appear in response
-✅ SEPARATE message with buttons appears below
-✅ Buttons are clickable (text changes to link on hover)
-✅ Clicking button sends it as new query
-✅ Conversation continues normally
-✅ No errors in logs, no 99992402 errors
+In Feishu, send to test group:
 
+  @bot How can I apply those principles to my engineering team?
 
-IF BUTTONS DON'T APPEAR
-═════════════════════════
+EXPECTED:
+  ✓ Response references Q1 ("As discussed", "Based on principles we talked about")
+  ✓ Applies OKR principles to engineering context
+  ✓ Shows understanding of Q1 content
+  ✓ Devtools shows HIGHER input token count (memory context added)
 
-1. Check logs:
-   grep -i "error\|failed" server.log | tail -20
+CHECK:
+  curl -s 'http://localhost:3000/devtools/api/events?limit=2' | \
+    jq -r '.[] | .metadata.tokens.input'
 
-2. Verify config passed:
-   grep -i "conversationId\|rootId" server.log
+EXPECTED OUTPUT:
+  Q2 tokens: 350-450  (increase of ~200 from Q1)
+  Q1 tokens: 150-250
 
-3. Check if button message sent:
-   grep -i "FollowupButtons" server.log
+VERIFY RESPONSE REFERENCES Q1:
+  Look for keywords: "principles", "objectives", "key results", "discussed", etc.
 
-4. Check Feishu for ANY new messages below response
-   (even if not styled as buttons)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4: VERIFY MEMORY (3 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+Check what's in Supabase:
+  bun run scripts/check-phase5c-memory.ts
 
-IMPORTANT FILES
-════════════════
+EXPECTED OUTPUT:
+  ✓ Total messages: 4 (Q1, A1, Q2, A2)
+  ✓ All with same conversation_id: feishu:oc_cd4b98905e12ec0cb68adc529440e623:root_xxx
+  ✓ All with same user_id: ou_xxx (mentioned user, not sender)
+  ✓ Proper role alternation: user → assistant → user → assistant
 
-Implementation:
-  lib/finalize-card-with-buttons.ts      ← Main logic
-  lib/send-follow-up-buttons-message.ts  ← Button sending
-  lib/handle-app-mention.ts              ← @mention integration
-  lib/handle-messages.ts                 ← Message integration
-
-Documentation:
-  IMPLEMENTATION_COMPLETE.md             ← How it works
-  SESSION_SUMMARY_FINAL.md               ← Complete overview
-  NEXT_SESSION_PROMPT.md                 ← Next steps
-
-
-KEY INSIGHT
-═══════════
-
-The problem: Feishu blocks action elements (buttons) in streaming cards
-The solution: Send buttons in a SEPARATE non-streaming message!
-Why it works: Non-streaming messages CAN have action elements
-
-This completely bypasses the 99992402 error by using a different message.
-
-
-ROLLBACK (If Needed)
-════════════════════
-
-If buttons cause issues:
-  git revert 83846d6  # Revert implementation commit
+EXAMPLE OUTPUT:
+  ✅ Found 4 messages
   
-This removes buttons but keeps text suggestions as fallback.
+  📌 Conversation: feishu:oc_cd4b98905e12ec0cb68adc529440e623:root_xxx
+     Messages: 4
+     Span: 17:30:45 → 17:30:52
+     Users in conversation: 1
+       • ou_xyz: 4 messages
+  
+     Message sequence:
+     1. [user] 17:30:45
+        What are the key principles of OKR setting?
+     2. [assistant] 17:30:46
+        Here are the key principles: [detailed explanation]
+     3. [user] 17:30:50
+        How can I apply those principles to my engineering team?
+     4. [assistant] 17:30:52
+        As we discussed before, here's how to apply them to engineering...
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5: (OPTIONAL) SEND Q3 FOR DEEPER VALIDATION (2 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+In Feishu, send:
+
+  @bot What metrics should I track to measure success?
+
+EXPECTED:
+  ✓ Response references both Q1 and Q2
+  ✓ Understands full context of conversation
+  ✓ Input tokens EVEN HIGHER (600-700)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUCCESS CRITERIA
-═════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Testing is successful when:
-  ✅ Buttons appear in separate message
-  ✅ Buttons are functional and clickable
-  ✅ Clicking button continues conversation
-  ✅ No 99992402 or other errors
-  ✅ Feature works in both @mention and regular messages
+MINIMUM (for pass):
+  ✓ Q1 receives response
+  ✓ Q2 receives response that references Q1
+  ✓ Both responses appear in devtools
 
+STANDARD (expected):
+  ✓ All of minimum
+  ✓ Q2 token count > Q1 token count
+  ✓ Messages saved to Supabase with correct format
+  ✓ All messages have same conversation_id
 
-NEXT: Start server and test in Feishu!
-═════════════════════════════════════════
+FULL (comprehensive):
+  ✓ All of standard
+  ✓ Q3 sent and response shows multi-turn understanding
+  ✓ Token progression: Q1 < Q2 < Q3
+  ✓ User ID extracted from mentions (check server logs)
+  ✓ All messages have same user_id in database
+  ✓ Proper role alternation in memory
 
-$ NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Then mention the bot in Feishu and verify buttons appear.
+No response?
+  • Check server is running: curl http://localhost:3000/health
+  • Check bot mention format: @bot or @_user_2
+  • Check LLM API keys are set
+  • Check server logs for errors
 
-Questions? Check IMPLEMENTATION_COMPLETE.md for detailed testing guide.
+Tokens not increasing on Q2?
+  • Verify messages are in Supabase: bun run scripts/check-phase5c-memory.ts
+  • Check logs for: "Loaded N messages for conversation"
+  • Verify Supabase is connected (not using InMemory fallback)
+
+Response doesn't reference Q1?
+  • Check message count in Supabase
+  • Verify same conversation_id for all messages
+  • Check memory load limit in code
+
+User ID wrong in database?
+  • Check server logs: "Extracted mentioned user ID: ou_xxx"
+  • Verify message format: must be @bot (not @user_2 text)
+  • Check mentions array in webhook
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AFTER TESTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If PASSED:
+  bd close feishu_assistant-lra --reason "Phase 5c-2 passed - multi-turn memory working"
+  bd update feishu_assistant-sbi --status in_progress  (move to Phase 5d)
+
+If ISSUES:
+  bd create "Issue: ..." --deps discovered-from:feishu_assistant-lra
+  Document findings and blockers
+
+═══════════════════════════════════════════════════════════════════════════════
+For detailed guide: see PHASE_5C_EXECUTION_GUIDE.md
+For full plan: see PHASE_5C_MEMORY_VALIDATION.md
+═══════════════════════════════════════════════════════════════════════════════
