@@ -217,13 +217,20 @@ eventDispatcher.register({
         }
         
         // Check mentions array for bot
-        // In Subscription Mode, if mentions array exists and has entries in a group chat,
-        // it means the bot was mentioned
-        if (mentions.length > 0 && message.chat_type === "group") {
-          console.log(`🔍 [WebSocket] Found ${mentions.length} mention(s) in group message`);
-          // In group chats, if there are mentions, the bot was mentioned
-          isMention = true;
-          console.log(`✅ [WebSocket] Bot mention detected via mentions array`);
+        // In Subscription Mode, check if BOT is in mentions array
+        if (message.chat_type === "group") {
+          // Look for bot in mentions array (by open_id or user_id)
+          const botMentioned = mentions.some(mention => {
+            const mentionId = mention.id?.open_id || mention.id?.user_id;
+            return mentionId === botUserId;
+          });
+          
+          if (botMentioned) {
+            console.log(`✅ [WebSocket] Bot mention detected in mentions array`);
+            isMention = true;
+          } else if (mentions.length > 0) {
+            console.log(`🔍 [WebSocket] Found ${mentions.length} user mention(s) in group (not bot mention)`);
+          }
         }
 
         // Fallback: Check text for @mentions (webhook mode format)
