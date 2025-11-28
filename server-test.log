@@ -1,0 +1,33 @@
+$ bun server.ts
+[info]: [ "client ready" ]
+✅ [Memory] Connected to Supabase database
+[info]: [ "event-dispatch is ready" ]
+📋 [Startup] Starting server initialization...
+📋 [Startup] Step 0: Initializing Mastra Memory (3-layer architecture)...
+✅ [Memory] Connected to PostgreSQL storage (Mastra)
+✅ [Memory] Mastra memory system initialized
+✅ [Startup] Step 0: Mastra Memory initialized
+📋 [Startup] Mode: Subscription (WebSocket)
+📋 [Startup] Step 1: Initializing WebSocket connection...
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+✅ [Startup] Step 1: WebSocket connection established
+📋 [Startup] Ready to receive Feishu events
+📋 [Startup] Step 2: Starting HTTP server...
+✅ [Startup] Step 2: HTTP server started on port 3000
+✨ [Startup] Server is ready to accept requests
+📊 [Startup] Health check: curl http://localhost:3000/health
+❌ [FATAL] Uncaught exception: error: Failed to start server. Is port 3000 in use?
+ syscall: "listen",
+   errno: 0,
+    code: "EADDRINUSE"
+
+      at serve (node:_http_server:554:41)
+
+Stack: Error
+    at serve (unknown)
+    at [kRealListen] (node:_http_server:554:41)
+    at listen (node:_http_server:531:35)
+    at serve (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/@hono/node-server/dist/index.mjs:572:10)
+    at startServer (/Users/xiaofei.yin/work_repo/feishu_assistant/server.ts:633:3)
+    at processTicksAndRejections (unknown:7:39)
+[info]: [ "[ws]", "ws client ready" ]
