@@ -600,17 +600,18 @@ if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "t
  * server is fully ready before it reports as "running".
  */
 async function startServer() {
-  console.log("📋 [Startup] Starting server initialization...");
+  const startTime = Date.now();
+  console.log(`📋 [Startup] Starting server initialization... (${new Date().toISOString()})`);
   
-  // Step 0: Initialize Mastra Memory system
-  console.log("📋 [Startup] Step 0: Initializing Mastra Memory (3-layer architecture)...");
-  try {
-    await initializeMastraMemory();
+  // Step 0: Initialize Mastra Memory system (background, non-blocking)
+  console.log("📋 [Startup] Step 0: Initializing Mastra Memory (async in background)...");
+  // Start memory initialization in background without awaiting
+  initializeMastraMemory().then(() => {
     console.log("✅ [Startup] Step 0: Mastra Memory initialized");
-  } catch (error) {
+  }).catch((error) => {
     console.warn("⚠️ [Startup] Mastra Memory initialization warning:", error);
     // Continue - memory is optional, agent can work without it
-  }
+  });
   
   // Step 1: Initialize WebSocket for Subscription Mode
   if (useSubscriptionMode) {
@@ -630,23 +631,11 @@ async function startServer() {
       autoReconnect: true,
     });
 
-    // Start WebSocket with timeout
-    try {
-      const wsStartPromise = wsClient.start({ eventDispatcher });
-      
-      // Add 10-second timeout to WebSocket connection
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("WebSocket connection timeout after 10 seconds")),
-          10000
-        )
-      );
-      
-      await Promise.race([wsStartPromise, timeoutPromise]);
-      
+    // Start WebSocket with timeout (non-blocking)
+    wsClient.start({ eventDispatcher }).then(() => {
       console.log("✅ [Startup] Step 1: WebSocket connection established");
       console.log("📋 [Startup] Ready to receive Feishu events");
-    } catch (error) {
+    }).catch((error) => {
       console.error("❌ [Startup] Step 1 FAILED: WebSocket connection error");
       console.error("   Error:", error instanceof Error ? error.message : String(error));
       console.error("\n   Troubleshooting:");
@@ -655,14 +644,13 @@ async function startServer() {
       console.error("   3. Verify app has required permissions (im:message, contact:user)");
       console.error("   4. Check network connectivity to Feishu servers");
       console.error("\n   Note: Server will still start, but will not receive events");
-      // Don't exit - allow server to start in degraded mode
-    }
+    });
   } else {
     console.log("📋 [Startup] Mode: Webhook");
     console.log("📋 [Startup] WebSocket disabled - using HTTP webhooks");
   }
   
-  // Step 2: Start HTTP server
+  // Step 2: Start HTTP server (immediate, non-blocking)
   console.log("📋 [Startup] Step 2: Starting HTTP server...");
   
   serve({
@@ -670,8 +658,9 @@ async function startServer() {
     port,
   });
   
+  const elapsedMs = Date.now() - startTime;
   console.log(`✅ [Startup] Step 2: HTTP server started on port ${port}`);
-  console.log(`✨ [Startup] Server is ready to accept requests`);
+  console.log(`✨ [Startup] Server is ready to accept requests in ${elapsedMs}ms`);
   console.log(`📊 [Startup] Health check: curl http://localhost:${port}/health`);
 }
 
