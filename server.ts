@@ -11,6 +11,7 @@ import {
   handleButtonFollowup,
   extractButtonFollowupContext,
 } from "./lib/handle-button-followup";
+import { initializeMastraMemory } from "./lib/memory-mastra";
 
 const app = new Hono();
 
@@ -565,6 +566,16 @@ if (process.env.NODE_ENV === "development" || process.env.ENABLE_DEVTOOLS === "t
  */
 async function startServer() {
   console.log("📋 [Startup] Starting server initialization...");
+  
+  // Step 0: Initialize Mastra Memory system
+  console.log("📋 [Startup] Step 0: Initializing Mastra Memory (3-layer architecture)...");
+  try {
+    await initializeMastraMemory();
+    console.log("✅ [Startup] Step 0: Mastra Memory initialized");
+  } catch (error) {
+    console.warn("⚠️ [Startup] Mastra Memory initialization warning:", error);
+    // Continue - memory is optional, agent can work without it
+  }
   
   // Step 1: Initialize WebSocket for Subscription Mode
   if (useSubscriptionMode) {

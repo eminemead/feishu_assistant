@@ -19,7 +19,7 @@ import { getAlignmentAgent } from "./alignment-agent";
 import { getPnlAgent } from "./pnl-agent";
 import { getDpaPmAgent } from "./dpa-pm-agent";
 import { devtoolsTracker } from "../devtools-integration";
-import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
+import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
 import {
   initializeAgentMemoryContext,
@@ -56,6 +56,9 @@ let isInitializing = false;
  * 
  * Mastra simplifies model fallback by accepting an array of models
  * with built-in retry logic, so we don't need dual agent instances.
+ * 
+ * Memory is configured per-request with user and thread context
+ * via the callAgent function (see below).
  */
 function initializeAgent() {
   if (isInitializing) return;
@@ -86,9 +89,8 @@ function initializeAgent() {
       searchWeb: searchWebTool,
     },
 
-    // Memory configuration (can be kept or migrated to Mastra's memory)
-    // For now, keeping our existing Supabase integration
-    // TODO: Evaluate Mastra's memory system as alternative
+    // Memory configuration moved to callAgent for per-request setup
+    // Each call gets a Mastra Memory instance with 3-layer architecture
   });
 
   isInitializing = false;
@@ -163,7 +165,30 @@ export async function managerAgent(
   const startTime = Date.now();
   console.log(`[Manager] Received query: "${query}"`);
 
-  // Initialize memory context and load conversation history
+  // Initialize Mastra Memory for this agent call
+  let mastraMemory = null;
+  let memoryThread: string | undefined;
+  let memoryResource: string | undefined;
+
+  try {
+    if (userId) {
+      mastraMemory = await createMastraMemory(userId);
+      memoryResource = getMemoryResource(userId);
+      if (chatId && rootId) {
+        memoryThread = getMemoryThread(chatId, rootId);
+      }
+      
+      if (mastraMemory) {
+        console.log(`✅ [Manager] Mastra Memory initialized with 3-layer architecture`);
+        console.log(`   Resource (user): ${memoryResource}, Thread: ${memoryThread || 'not set'}`);
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️ [Manager] Mastra Memory initialization failed:`, error);
+    // Continue without memory - fallback to non-persistent context
+  }
+
+  // Legacy memory context (keep for backward compatibility)
   let memoryContext: any = null;
   try {
     memoryContext = await initializeAgentMemoryContext(chatId, rootId, userId);
@@ -178,7 +203,7 @@ export async function managerAgent(
     // Save user message to memory for future reference
     await saveMessageToMemory(memoryContext, query, "user");
   } catch (error) {
-    console.warn(`[Manager] Memory context initialization failed, continuing without memory:`, error);
+    console.warn(`[Manager] Legacy memory context initialization failed, continuing without legacy memory:`, error);
   }
 
   // Manual routing: Check if query matches specialist agent patterns
@@ -514,8 +539,19 @@ export async function managerAgent(
   })();
 
   try {
-    // MASTRA STREAMING: Call manager agent with streaming
-    const stream = await managerAgentInstance!.stream(messages);
+    // MASTRA STREAMING: Call manager agent with streaming and memory context
+    const streamOptions: any = {};
+    
+    // Add Mastra Memory if available
+    if (mastraMemory && memoryResource) {
+      streamOptions.memory = {
+        resource: memoryResource,
+        thread: memoryThread,
+      };
+      console.log(`[Manager] Passing Mastra Memory to agent for context retention`);
+    }
+    
+    const stream = await managerAgentInstance!.stream(messages, streamOptions);
 
     let text = "";
     for await (const chunk of stream.textStream) {

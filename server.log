@@ -13,3 +13,4 @@ $ bun server.ts
 ✨ [Startup] Server is ready to accept requests
 📊 [Startup] Health check: curl http://localhost:3000/health
 [info]: [ "[ws]", "ws client ready" ]
+error: script "dev" was terminated by signal SIGKILL (Forced quit)
