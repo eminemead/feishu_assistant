@@ -3,6 +3,10 @@ $ bun server.ts
 ✅ [Memory] Connected to Supabase database
 [info]: [ "event-dispatch is ready" ]
 📋 [Startup] Starting server initialization...
+📋 [Startup] Step 0: Initializing Mastra Memory (3-layer architecture)...
+✅ [Memory] Connected to PostgreSQL storage (Mastra)
+✅ [Memory] Mastra memory system initialized
+✅ [Startup] Step 0: Mastra Memory initialized
 📋 [Startup] Mode: Subscription (WebSocket)
 📋 [Startup] Step 1: Initializing WebSocket connection...
 [info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
@@ -13,4 +17,3 @@ $ bun server.ts
 ✨ [Startup] Server is ready to accept requests
 📊 [Startup] Health check: curl http://localhost:3000/health
 [info]: [ "[ws]", "ws client ready" ]
-error: script "dev" was terminated by signal SIGKILL (Forced quit)

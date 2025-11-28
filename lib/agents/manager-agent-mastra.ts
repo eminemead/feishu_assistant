@@ -21,6 +21,7 @@ import { getDpaPmAgent } from "./dpa-pm-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { getConversationId, getUserScopeId } from "../memory";
 import {
   initializeAgentMemoryContext,
   loadConversationHistory,
