@@ -129,8 +129,13 @@ export async function generateFollowupQuestions(
       throw new Error("Model not available");
     }
 
+    // Create a timeout promise for safety (30 seconds max)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("generateText timeout after 30 seconds")), 30000);
+    });
+
     // Use generateText with JSON parsing instead of generateObject
-    const result = await generateText({
+    const resultPromise = generateText({
       model,
       prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
 
@@ -151,6 +156,8 @@ Return ONLY a JSON array with this exact structure. No markdown, no code blocks,
 
 Types must be: "question", "recommendation", or "action"`,
     });
+
+    const result = await Promise.race([resultPromise, timeoutPromise]);
 
     // Extract text from result - handle multiple response formats
     if (!result) {

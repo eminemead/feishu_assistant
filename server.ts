@@ -13,6 +13,17 @@ import {
 } from "./lib/handle-button-followup";
 import { initializeMastraMemory } from "./lib/memory-mastra";
 
+// Global error handlers to prevent process crash
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ [Process] Unhandled Promise Rejection:', reason);
+  console.error('   Promise:', promise);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ [Process] Uncaught Exception:', error);
+  // Don't exit immediately - log and continue
+});
+
 const app = new Hono();
 
 // Track processed events to prevent duplicates

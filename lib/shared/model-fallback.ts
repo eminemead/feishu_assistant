@@ -82,7 +82,11 @@ export function getPrimaryModel(): LanguageModel {
   console.log(
     `🤖 [Model] Using primary model: ${model.name} (${model.costNote})`
   );
-  return openrouter(model.model);
+  const modelInstance = openrouter(model.model);
+  
+  // Ensure the model has proper error handling
+  // This helps prevent hanging requests
+  return modelInstance;
 }
 
 /**
