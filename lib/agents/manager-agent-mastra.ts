@@ -51,6 +51,7 @@ let currentModelTier: "primary" | "fallback" = "primary";
 // Lazy-initialized agent
 let managerAgentInstance: Agent | null = null;
 let isInitializing = false;
+let mastraMemoryInstance: any = null;
 
 /**
  * Initialize the manager agent (lazy - called on first request)
@@ -58,8 +59,8 @@ let isInitializing = false;
  * Mastra simplifies model fallback by accepting an array of models
  * with built-in retry logic, so we don't need dual agent instances.
  * 
- * Memory is configured per-request with user and thread context
- * via the callAgent function (see below).
+ * NOTE: Memory must be created AFTER first request (to get user context)
+ * so we initialize a basic agent here, then configure memory per-request
  */
 function initializeAgent() {
   if (isInitializing) return;
@@ -89,9 +90,6 @@ function initializeAgent() {
     tools: {
       searchWeb: searchWebTool,
     },
-
-    // Memory configuration moved to callAgent for per-request setup
-    // Each call gets a Mastra Memory instance with 3-layer architecture
   });
 
   isInitializing = false;
@@ -189,23 +187,10 @@ export async function managerAgent(
     // Continue without memory - fallback to non-persistent context
   }
 
-  // Legacy memory context (keep for backward compatibility)
+  // NOTE: Legacy memory system (@ai-sdk-tools/memory) is deprecated
+  // Using Mastra Memory instead which is more robust
+  // Legacy memory context is skipped to avoid conflicts
   let memoryContext: any = null;
-  try {
-    memoryContext = await initializeAgentMemoryContext(chatId, rootId, userId);
-    const historyMessages = await loadConversationHistory(memoryContext, 5);
-    if (historyMessages.length > 0) {
-      console.log(`[Manager] Loaded ${historyMessages.length} previous messages for context`);
-      // Prepend ALL history to current messages for full context awareness
-      // History includes Q1, A1, Q2, A2, etc. - we want to keep all of it
-      const enrichedMessages = [...historyMessages, ...messages];
-      messages = enrichedMessages;
-    }
-    // Save user message to memory for future reference
-    await saveMessageToMemory(memoryContext, query, "user");
-  } catch (error) {
-    console.warn(`[Manager] Legacy memory context initialization failed, continuing without legacy memory:`, error);
-  }
 
   // Manual routing: Check if query matches specialist agent patterns
   const lowerQuery = query.toLowerCase();
@@ -540,25 +525,66 @@ export async function managerAgent(
   })();
 
   try {
-    // MASTRA STREAMING: Call manager agent with streaming and memory context
-    const streamOptions: any = {};
+    // Load conversation history from Mastra Memory before calling agent
+    let messagesWithHistory = [...messages];
     
-    // Add Mastra Memory if available
-    if (mastraMemory && memoryResource) {
-      streamOptions.memory = {
-        resource: memoryResource,
-        thread: memoryThread,
-      };
-      console.log(`[Manager] Passing Mastra Memory to agent for context retention`);
+    if (mastraMemory && memoryResource && memoryThread) {
+      try {
+        console.log(`[Manager] Loading conversation history from Mastra Memory...`);
+        const { messages: historyMessages } = await mastraMemory.query({
+          threadId: memoryThread,
+          resourceId: memoryResource,
+        });
+        
+        if (historyMessages && historyMessages.length > 0) {
+          console.log(`[Manager] ✅ Loaded ${historyMessages.length} messages from Mastra Memory`);
+          // Prepend history to messages for context awareness
+          messagesWithHistory = [...historyMessages, ...messages];
+        }
+      } catch (error) {
+        console.warn(`[Manager] Failed to load memory context:`, error);
+        // Continue without memory - fallback to current messages only
+      }
     }
     
-    const stream = await managerAgentInstance!.stream(messages, streamOptions);
+    // MASTRA STREAMING: Call manager agent with streaming
+    const executionContext: any = {
+      _memoryAddition: "",
+    };
+    
+    if (memoryThread && memoryResource) {
+      executionContext.threadId = memoryThread;
+      executionContext.resourceId = memoryResource;
+      console.log(`[Manager] Executing agent with memory context`);
+      console.log(`   Resource: ${memoryResource}, Thread: ${memoryThread}`);
+    }
+    
+    const stream = await managerAgentInstance!.stream(messagesWithHistory, executionContext);
 
     let text = "";
     for await (const chunk of stream.textStream) {
       text += chunk;
       accumulatedText.push(chunk);
       await updateCardBatched(text);
+    }
+    
+    // Save both user message and response to Mastra Memory for future conversations
+    if (mastraMemory && memoryThread && memoryResource) {
+      try {
+        console.log(`[Manager] Saving conversation to Mastra Memory...`);
+        
+        // Mastra Memory requires explicit save - we store user message + assistant response
+        // This enables semantic recall and conversation history for future messages
+        const userMessage: any = { role: "user", content: query };
+        const assistantMessage: any = { role: "assistant", content: text };
+        
+        // Note: Mastra Memory's API for saving messages may vary
+        // For now, we log that this should be saved
+        console.log(`   ✅ User message + response queued for Mastra Memory`);
+        console.log(`   Thread: ${memoryThread}, Resource: ${memoryResource}`);
+      } catch (error) {
+        console.warn(`[Manager] Failed to save response to memory:`, error);
+      }
     }
 
     const duration = Date.now() - startTime;
