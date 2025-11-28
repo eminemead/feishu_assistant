@@ -175,6 +175,29 @@ export async function managerAgent(
       memoryResource = getMemoryResource(userId);
       if (chatId && rootId) {
         memoryThread = getMemoryThread(chatId, rootId);
+        
+        // Ensure thread exists before saving messages
+        if (mastraMemory && memoryThread && memoryResource) {
+          try {
+            const existingThread = await mastraMemory.getThreadById({ threadId: memoryThread });
+            if (!existingThread) {
+              // Thread doesn't exist - create it
+              await mastraMemory.saveThread({
+                thread: {
+                  id: memoryThread,
+                  resourceId: memoryResource,
+                  title: `Feishu Chat ${chatId}`,
+                  metadata: { chatId, rootId },
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              });
+              console.log(`[Manager] Created memory thread: ${memoryThread}`);
+            }
+          } catch (error) {
+            console.warn(`[Manager] Failed to ensure thread exists:`, error);
+          }
+        }
       }
       
       if (mastraMemory) {
@@ -254,9 +277,37 @@ export async function managerAgent(
       healthMonitor.trackAgentCall("okr_reviewer", duration, true);
 
       // Save routed response to memory
-      if (memoryContext) {
+      if (mastraMemory && memoryThread && memoryResource) {
         try {
-          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+          const timestamp = new Date();
+          const userMessageId = `msg-${memoryThread}-okr-user-${timestamp.getTime()}`;
+          const assistantMessageId = `msg-${memoryThread}-okr-assistant-${timestamp.getTime()}`;
+          
+          const routedMessages = [
+            {
+              id: userMessageId,
+              threadId: memoryThread,
+              resourceId: memoryResource,
+              role: "user" as const,
+              content: { content: query },
+              createdAt: timestamp,
+            },
+            {
+              id: assistantMessageId,
+              threadId: memoryThread,
+              resourceId: memoryResource,
+              role: "assistant" as const,
+              content: { content: accumulatedText },
+              createdAt: timestamp,
+            },
+          ];
+          
+          await mastraMemory.saveMessages({
+            messages: routedMessages,
+            format: 'v2',
+          });
+          
+          console.log(`[OKR] Saved response to memory`);
         } catch (error) {
           console.warn("[OKR Routing] Failed to save response to memory:", error);
         }
@@ -322,9 +373,37 @@ export async function managerAgent(
       healthMonitor.trackAgentCall("alignment_agent", duration, true);
 
       // Save routed response to memory
-      if (memoryContext) {
+      if (mastraMemory && memoryThread && memoryResource) {
         try {
-          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+          const timestamp = new Date();
+          const userMessageId = `msg-${memoryThread}-alignment-user-${timestamp.getTime()}`;
+          const assistantMessageId = `msg-${memoryThread}-alignment-assistant-${timestamp.getTime()}`;
+          
+          const routedMessages = [
+            {
+              id: userMessageId,
+              threadId: memoryThread,
+              resourceId: memoryResource,
+              role: "user" as const,
+              content: { content: query },
+              createdAt: timestamp,
+            },
+            {
+              id: assistantMessageId,
+              threadId: memoryThread,
+              resourceId: memoryResource,
+              role: "assistant" as const,
+              content: { content: accumulatedText },
+              createdAt: timestamp,
+            },
+          ];
+          
+          await mastraMemory.saveMessages({
+            messages: routedMessages,
+            format: 'v2',
+          });
+          
+          console.log(`[Alignment] Saved response to memory`);
         } catch (error) {
           console.warn("[Alignment Routing] Failed to save response to memory:", error);
         }
@@ -381,18 +460,46 @@ export async function managerAgent(
 
       const duration = Date.now() - startTime;
       devtoolsTracker.trackResponse("pnl_agent", accumulatedText, duration, {
-        manualRoute: true,
+       manualRoute: true,
       });
       healthMonitor.trackAgentCall("pnl_agent", duration, true);
 
       // Save routed response to memory
-      if (memoryContext) {
-        try {
-          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+      if (mastraMemory && memoryThread && memoryResource) {
+       try {
+         const timestamp = new Date();
+         const userMessageId = `msg-${memoryThread}-pnl-user-${timestamp.getTime()}`;
+         const assistantMessageId = `msg-${memoryThread}-pnl-assistant-${timestamp.getTime()}`;
+         
+         const routedMessages = [
+           {
+             id: userMessageId,
+             threadId: memoryThread,
+             resourceId: memoryResource,
+             role: "user" as const,
+             content: { content: query },
+             createdAt: timestamp,
+           },
+           {
+             id: assistantMessageId,
+             threadId: memoryThread,
+             resourceId: memoryResource,
+             role: "assistant" as const,
+             content: { content: accumulatedText },
+             createdAt: timestamp,
+           },
+         ];
+         
+         await mastraMemory.saveMessages({
+           messages: routedMessages,
+           format: 'v2',
+         });
+         
+         console.log(`[P&L] Saved response to memory`);
         } catch (error) {
           console.warn("[PnL Routing] Failed to save response to memory:", error);
         }
-      }
+       }
 
       console.log(`[P&L] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
@@ -448,18 +555,46 @@ export async function managerAgent(
 
       const duration = Date.now() - startTime;
       devtoolsTracker.trackResponse("dpa_pm", accumulatedText, duration, {
-        manualRoute: true,
+       manualRoute: true,
       });
       healthMonitor.trackAgentCall("dpa_pm", duration, true);
 
       // Save routed response to memory
-      if (memoryContext) {
-        try {
-          await saveMessageToMemory(memoryContext, accumulatedText, "assistant");
+      if (mastraMemory && memoryThread && memoryResource) {
+       try {
+         const timestamp = new Date();
+         const userMessageId = `msg-${memoryThread}-dpa-user-${timestamp.getTime()}`;
+         const assistantMessageId = `msg-${memoryThread}-dpa-assistant-${timestamp.getTime()}`;
+         
+         const routedMessages = [
+           {
+             id: userMessageId,
+             threadId: memoryThread,
+             resourceId: memoryResource,
+             role: "user" as const,
+             content: { content: query },
+             createdAt: timestamp,
+           },
+           {
+             id: assistantMessageId,
+             threadId: memoryThread,
+             resourceId: memoryResource,
+             role: "assistant" as const,
+             content: { content: accumulatedText },
+             createdAt: timestamp,
+           },
+         ];
+         
+         await mastraMemory.saveMessages({
+           messages: routedMessages,
+           format: 'v2',
+         });
+         
+         console.log(`[DPA PM] Saved response to memory`);
         } catch (error) {
           console.warn("[DPA PM Routing] Failed to save response to memory:", error);
         }
-      }
+       }
 
       console.log(`[DPA PM] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
@@ -573,32 +708,47 @@ export async function managerAgent(
       try {
         console.log(`[Manager] Saving conversation to Mastra Memory...`);
         
-        // Mastra Memory requires explicit save - we store user message + assistant response
-        // This enables semantic recall and conversation history for future messages
-        const userMessage: any = { role: "user", content: query };
-        const assistantMessage: any = { role: "assistant", content: text };
+        // Mastra Memory requires explicit message storage via saveMessages()
+        // We save both the user query and assistant response for semantic recall
+        const timestamp = new Date();
+        const userMessageId = `msg-${memoryThread}-user-${timestamp.getTime()}`;
+        const assistantMessageId = `msg-${memoryThread}-assistant-${timestamp.getTime()}`;
         
-        // Note: Mastra Memory's API for saving messages may vary
-        // For now, we log that this should be saved
-        console.log(`   ✅ User message + response queued for Mastra Memory`);
+        const messagesToSave = [
+          {
+            id: userMessageId,
+            threadId: memoryThread,
+            resourceId: memoryResource,
+            role: "user" as const,
+            content: { content: query },
+            createdAt: timestamp,
+          },
+          {
+            id: assistantMessageId,
+            threadId: memoryThread,
+            resourceId: memoryResource,
+            role: "assistant" as const,
+            content: { content: text },
+            createdAt: timestamp,
+          },
+        ];
+        
+        const savedMessages = await mastraMemory.saveMessages({
+          messages: messagesToSave,
+          format: 'v2', // Use v2 format for structured message storage
+        });
+        
+        console.log(`   ✅ Saved ${savedMessages.length} messages to Mastra Memory`);
         console.log(`   Thread: ${memoryThread}, Resource: ${memoryResource}`);
       } catch (error) {
-        console.warn(`[Manager] Failed to save response to memory:`, error);
+        console.warn(`[Manager] Failed to save to memory:`, error);
+        // Continue - memory persistence failure shouldn't break the response
       }
     }
 
     const duration = Date.now() - startTime;
     devtoolsTracker.trackResponse("manager", text, duration);
     healthMonitor.trackAgentCall("manager", duration, true);
-
-    // Save response to memory for context in future conversations
-    if (memoryContext) {
-      try {
-        await saveMessageToMemory(memoryContext, text, "assistant");
-      } catch (error) {
-        console.warn("[Manager] Failed to save response to memory:", error);
-      }
-    }
 
     console.log(
       `[Manager] Response complete (length=${text.length}, duration=${duration}ms)`
