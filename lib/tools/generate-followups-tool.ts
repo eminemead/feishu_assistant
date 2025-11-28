@@ -152,8 +152,18 @@ Return ONLY a JSON array with this exact structure. No markdown, no code blocks,
 Types must be: "question", "recommendation", or "action"`,
     });
 
-    // Extract text from result (may be string or object with .text property)
-    const text = typeof result === 'string' ? result : (result?.text || String(result));
+    // Extract text from result - handle multiple response formats
+    if (!result) {
+      console.error(`❌ [Followups] generateText returned null/undefined`);
+      throw new Error("generateText returned no result");
+    }
+
+    const text = typeof result === 'string' ? result : (result?.text || '');
+    
+    if (!text || text.length === 0) {
+      console.error(`❌ [Followups] generateText returned empty result`);
+      throw new Error("generateText returned empty text");
+    }
     
     // Parse the JSON response
     console.log(`🔄 [Followups] LLM raw response (first 300 chars): "${text.substring(0, 300)}..."`);
