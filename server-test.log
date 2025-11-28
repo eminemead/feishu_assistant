@@ -127,3 +127,164 @@ Handling new message: oc_cd4b98905e12ec0cb68adc529440e623 om_x100b5db4fd4a6c80c4
 📨 [Card] Sending card message with cardId: 7577664723823594721
 📨 [Card] Sending as thread reply to message: om_x100b5db4fd4a6c80c4427c8274336f7
 ✅ [Card] Card sent successfully: messageId=om_x100b5da0107720a4c2964d4dabc08b7, cardId=7577664723823594721
+❌ Failed to fetch thread after 1 attempt: Thread fetch timeout after 5000ms
+⚠️ Proceeding with empty thread context (falling back to current message only)
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
+[Manager] Received query: "[non-text message]"
+[Devtools] agent_call: {
+  agent: "Manager",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+[Manager] Starting stream for query: "[non-text message]" with primary model
+[Manager] Memory context: conversationId=feishu:oc_cd4b98905e12ec0cb68adc529440e623:om_x100b5db4fd4a6c80c4427c8274336f7, userId=user:ou_db4d1d08c4fcd3f1f4c253eab32ff580, feishuUserId=fe8c0c28-642e-531f-9964-fea2edd66a8f, externalFeishuId=ou_db4d1d08c4fcd3f1f4c253eab32ff580
+[Manager] Stream created, starting to read textStream...
+[Manager] fullStream part 1: {
+  "type": "start"
+}
+14 |   constructor({
+15 |     name: name14,
+16 |     message,
+17 |     cause
+18 |   }) {
+19 |     super(message);
+         ^
+AI_InvalidPromptError: Invalid prompt: messages must not be empty
+      cause: undefined,
+     prompt: {
+  system: "<system_context>\nYou are part of a multi-agent system called AI SDK Agents, designed to make agent coordination and execution easy. This system uses two primary abstractions: **Agents** and **Handoffs**. An agent encompasses instructions and tools and can hand off a conversation to another agent when appropriate. Handoffs are achieved by calling a handoff function, generally named `handoff_to_agent`. Transfers between agents are handled seamlessly in the background; do not mention or draw attention to these transfers in your conversation with the user.\n</system_context>\n\n<tool_calling_guidelines>\nWhen you need to call multiple tools, call them ALL at once using parallel tool calling.\n</tool_calling_guidelines>\n\nYou are a Feishu/Lark AI assistant that routes queries to specialist agents. Most user queries will be in Chinese (中文).\n\n路由规则（按以下顺序应用）：\n1. OKR Reviewer: 路由关于OKR、目标、关键结果、经理评审、指标覆盖率(has_metric percentage)、覆盖率(覆盖率)的查询\n2. Alignment Agent: 路由关于对齐(alignment)、对齐、目标对齐的查询\n3. P&L Agent: 路由关于损益(profit & loss)、P&L、损益、利润、亏损、EBIT的查询\n4. DPA PM Agent: 路由关于DPA、数据团队(data team)、AE、DA的查询\n5. Fallback: 如果没有匹配的专家，使用网络搜索(searchWeb工具)或提供有用的指导\n\nROUTING RULES (apply in this order):\n1. OKR Reviewer: Route queries about OKR, objectives, key results, manager reviews, has_metric percentage, or 覆盖率\n2. Alignment Agent: Route queries about alignment, 对齐, or 目标对齐\n3. P&L Agent: Route queries about profit & loss, P&L, 损益, 利润, 亏损, or EBIT\n4. DPA PM Agent: Route queries about DPA, data team, AE, or DA\n5. Fallback: If no specialist matches, use web search (searchWeb tool) or provide helpful guidance\n\nGENERAL GUIDELINES:\n- Do not tag users. 不要@用户。\n- Current date is: 2025-11-28\n- Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.\n- Always route to the most appropriate specialist agent when their domain is mentioned.\n- Use web search for general queries that don't match any specialist.\n- Most queries will be in Chinese - understand Chinese query semantics for better routing.\n\nAVAILABLE SPECIALISTS:\n- OKR Reviewer (okr_reviewer): For OKR metrics, manager reviews, has_metric percentage analysis / 用于OKR指标、经理评审、指标覆盖率分析\n- Alignment Agent (alignment_agent): For alignment tracking (under development) / 用于对齐跟踪（开发中）\n- P&L Agent (pnl_agent): For profit & loss analysis (under development) / 用于损益分析（开发中）\n- DPA PM Agent (dpa_pm): For product management tasks (under development) / 用于产品管理任务（开发中）\n\n## Working Memory\n\nYou have access to persistent working memory that stores user preferences, context, and important facts across conversations.\n\n**ALWAYS call updateWorkingMemory when:**\n- User shares OR corrects their name, role, company, or preferences\n- User provides OR updates important facts you should remember\n- User corrects previous information about themselves\n- Any new or changed context that should persist for future conversations\n\n**Template structure to follow:**\n```\n# Working Memory\n\n## Key Facts\n- [Important information goes here]\n\n## Current Focus\n- [What the user is working on]\n\n## Preferences\n- [User preferences and settings]\n\n```\n\n**Critical:** After calling updateWorkingMemory, respond to the user confirming the update.",
+  prompt: undefined,
+  messages: [],
+},
+ vercel.ai.error: true,
+ vercel.ai.error.AI_InvalidPromptError: true,
+
+      at new _AISDKError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/node_modules/@ai-sdk/provider/dist/index.mjs:19:5)
+
+[Manager] fullStream part 2: {
+  "type": "error",
+  "error": {
+    "name": "AI_InvalidPromptError",
+    "prompt": {
+      "system": "<system_context>\nYou are part of a multi-agent system called AI SDK Agents, designed to make ag
+[Manager] fullStream completed with 2 parts
+[Manager] Finished reading textStream. Total chunks: 0, Final text length: 0
+[Manager] Final result received: {
+  text: "N/A",
+  textLength: 0,
+  accumulatedLength: 0,
+  usage: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Query handled directly (no handoff): "[non-text message]"
+[Devtools] response: {
+  agent: "Manager",
+  tool: undefined,
+  duration: 15,
+  error: undefined,
+  tokens: {
+    input: undefined,
+    output: undefined,
+    total: undefined,
+  },
+}
+[Manager] Returning final text (length=0)
+🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=7577664723823594721, contentLength=0
+🎯 [CardSuggestions] Generating follow-up suggestions...
+🔄 [Followups] Generating 3 follow-up questions for response: "..."
+🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
+❌ [WARN] Unhandled rejection at: Promise { <rejected> } reason: 14 |   constructor({
+15 |     name: name14,
+16 |     message,
+17 |     cause
+18 |   }) {
+19 |     super(message);
+         ^
+AI_NoOutputGeneratedError: No output generated. Check the stream for errors.
+      cause: undefined,
+ vercel.ai.error: true,
+ vercel.ai.error.AI_NoOutputGeneratedError: true,
+
+      at new _AISDKError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/node_modules/@ai-sdk/provider/dist/index.mjs:19:5)
+      at new NoOutputGeneratedError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:249:5)
+      at flush (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:4772:27)
+      at flush (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:4769:19)
+
+❌ [WARN] Unhandled rejection at: Promise { <rejected> } reason: 14 |   constructor({
+15 |     name: name14,
+16 |     message,
+17 |     cause
+18 |   }) {
+19 |     super(message);
+         ^
+AI_NoOutputGeneratedError: No output generated. Check the stream for errors.
+      cause: undefined,
+ vercel.ai.error: true,
+ vercel.ai.error.AI_NoOutputGeneratedError: true,
+
+      at new _AISDKError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/node_modules/@ai-sdk/provider/dist/index.mjs:19:5)
+      at new NoOutputGeneratedError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:249:5)
+      at flush (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:4772:27)
+      at flush (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:4769:19)
+
+❌ [WARN] Unhandled rejection at: Promise { <rejected> } reason: 14 |   constructor({
+15 |     name: name14,
+16 |     message,
+17 |     cause
+18 |   }) {
+19 |     super(message);
+         ^
+AI_NoOutputGeneratedError: No output generated. Check the stream for errors.
+      cause: undefined,
+ vercel.ai.error: true,
+ vercel.ai.error.AI_NoOutputGeneratedError: true,
+
+      at new _AISDKError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/node_modules/@ai-sdk/provider/dist/index.mjs:19:5)
+      at new NoOutputGeneratedError (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:249:5)
+      at flush (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:4772:27)
+      at flush (/Users/xiaofei.yin/work_repo/feishu_assistant/node_modules/ai/dist/index.mjs:4769:19)
+
+🔄 [Followups] LLM raw response (first 300 chars): "[
+  {"text": "能否分享DPA团队当前的OKR目标？", "type": "question"},
+  {"text": "建议查看最近的dbt模型文档更新", "type": "recommendation"},
+  {"text": "安排与analytics engineer同步数据栈进展", "type": "action"}
+]..."
+🔄 [Followups] Extracted JSON (first 200 chars): "[
+  {"text": "能否分享DPA团队当前的OKR目标？", "type": "question"},
+  {"text": "建议查看最近的dbt模型文档更新", "type": "recommendation"},
+  {"text": "安排与analytics engineer同步数据栈进展", "type": "action"}
+]..."
+✅ [Followups] Generated 3 follow-up options with metadata
+🎯 [CardSuggestions] generateFollowupQuestions returned 3 followups
+🎯 [CardSuggestions] Generated 3 follow-up suggestions (will show as buttons)
+🎯 [CardSuggestions] Disabling streaming mode...
+✅ [CardSuggestions] Streaming mode disabled (card content: response only, no duplicate suggestions)
+🔘 [CardSuggestions] Sending buttons in separate message (Hypothesis 1)...
+🔘 [FollowupButtons] Sending 3 buttons in separate message...
+🔘 [FollowupButtons] Creating card via CardKit...
+🔘 [FollowupButtons] Card created: 7577664760431807674
+🔘 [FollowupButtons] Sending as thread reply to rootId=om_x100b5db4fd4a6c80c4427c8274336f7...
+🔘 [FollowupButtons] API response: {
+  "code": 0,
+  "data": {
+    "body": {
+      "content": "{\"title\":\"Suggestions\",\"elements\":[[{\"tag\":\"img\",\"image_key\":\"img_v3_02ad_e19fca1f-912a-450e-95de-3c229091b53g\"},{\"tag\":\"text\",\"text\":\"请升级至最新版本客户端，以查看内容\"},{\"tag\":\"text\",\"text\":\"\"}]]}"
+    },
+    "chat_id": "oc_cd4b98905e12ec0cb68adc529440e623",
+    "create_time": "1764312564482",
+    "deleted": false,
+    "message_id": "om_x100b5da01189d4a4c26353a9ed375b2",
+    "msg_type": "interactive",
+    "parent_id": "om...
+🔘 [FollowupButtons] isSuccess=true, code=0, has message_id=true
+✅ [FollowupButtons] Successfully sent buttons message: om_x100b5da01189d4a4c26353a9ed375b2
+✅ [CardSuggestions] Buttons sent in separate message: om_x100b5da01189d4a4c26353a9ed375b2
