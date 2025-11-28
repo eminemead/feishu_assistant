@@ -240,10 +240,14 @@ eventDispatcher.register({
         // Check mentions array for bot
         // In Subscription Mode, check if BOT is in mentions array
         if (message.chat_type === "group") {
-          // Look for bot in mentions array (by open_id or user_id)
+          // Look for bot in mentions array (by open_id, user_id, or app_id)
           const botMentioned = mentions.some(mention => {
-            const mentionId = mention.id?.open_id || mention.id?.user_id;
-            return mentionId === botUserId;
+            const mentionId = mention.id?.open_id || mention.id?.user_id || mention.id?.app_id;
+            const isBotMention = mentionId === botUserId;
+            if (isBotMention) {
+              console.log(`✅ [WebSocket] Bot mention found in mentions array: ${JSON.stringify(mention)}`);
+            }
+            return isBotMention;
           });
           
           if (botMentioned) {
@@ -255,9 +259,12 @@ eventDispatcher.register({
         }
 
         // Fallback: Check text for @mentions (webhook mode format)
+        // Bot mentions appear as <at app_id="cli_xxx"> in subscription mode
         if (!isMention && (messageText.includes(`<at user_id="${botUserId}">`) || 
-            messageText.includes(`<at open_id="${botUserId}">`))) {
+            messageText.includes(`<at open_id="${botUserId}">`) ||
+            messageText.includes(`<at app_id="${botUserId}">`))) {
           isMention = true;
+          console.log(`✅ [WebSocket] Bot mention detected in message text`);
         }
       } catch (e) {
         console.error("Failed to parse message content:", e);
