@@ -170,9 +170,9 @@ export async function managerAgent(
     const historyMessages = await loadConversationHistory(memoryContext, 5);
     if (historyMessages.length > 0) {
       console.log(`[Manager] Loaded ${historyMessages.length} previous messages for context`);
-      // Prepend history to messages for context awareness
-      // But keep the current message last so the agent sees the latest query
-      const enrichedMessages = [...historyMessages.slice(0, -1), ...messages];
+      // Prepend ALL history to current messages for full context awareness
+      // History includes Q1, A1, Q2, A2, etc. - we want to keep all of it
+      const enrichedMessages = [...historyMessages, ...messages];
       messages = enrichedMessages;
     }
     // Save user message to memory for future reference
