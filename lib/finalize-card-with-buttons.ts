@@ -82,28 +82,22 @@ export async function finalizeCardWithFollowups(
     let contentWithSuggestions = finalContent || '';
     
     // Step 2: If suggestions were generated, format and append them as text
+    // NOTE: Don't append suggestions to card content!
+    // Follow-ups are displayed as interactive buttons in a separate message
+    // This avoids duplicate information (text + buttons)
     if (followups && followups.length > 0) {
-      console.log(`🎯 [CardSuggestions] Formatting ${followups.length} suggestions as markdown...`);
-      const suggestionsMarkdown = formatSuggestionsAsMarkdown(followups, {
-        style: 'numbered',
-        separator: true,
-        emoji: true,
-        category: false,
-      });
-      contentWithSuggestions = finalContent + suggestionsMarkdown;
-      
-      // Step 3: Update card element with suggestions (BEFORE disabling streaming)
-      console.log(`🎯 [CardSuggestions] Updating card element with suggestions...`);
-      await updateCardElement(cardId, elementId, contentWithSuggestions);
-      console.log(`✅ [CardSuggestions] Card updated with ${followups.length} text-based suggestions`);
+      console.log(`🎯 [CardSuggestions] Generated ${followups.length} follow-up suggestions (will show as buttons)`);
     } else {
       console.log(`⚠️ [CardSuggestions] No follow-ups generated`);
     }
 
-    // Step 4: Finally, disable streaming mode
+    // Step 3: Keep card content clean (response only, no suggestion text)
+    contentWithSuggestions = finalContent;
+
+    // Step 4: Disable streaming mode
     console.log(`🎯 [CardSuggestions] Disabling streaming mode...`);
     await finalizeCardSettings(cardId, contentWithSuggestions, feishuClient);
-    console.log(`✅ [CardSuggestions] Streaming mode disabled`);
+    console.log(`✅ [CardSuggestions] Streaming mode disabled (card content: response only, no duplicate suggestions)`);
 
     // Step 5: Send buttons in SEPARATE message (Hypothesis 1)
     // This works because non-streaming messages CAN have action elements!
