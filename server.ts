@@ -203,16 +203,26 @@ eventDispatcher.register({
         console.log(`🔍 [WebSocket] Mentions array:`, JSON.stringify(mentions, null, 2));
         
         // Extract mentioned user ID from mentions array
-        // In group chats with mentions, the first mention is the user being addressed
+        // Skip bot mention and find actual user mention
         if (mentions.length > 0 && message.chat_type === "group") {
-          const firstMention = mentions[0];
-          mentionedUserId = firstMention.id?.open_id || 
-                           firstMention.id?.user_id || 
-                           firstMention.id?.union_id ||
-                           null;
-          
-          if (mentionedUserId) {
-            console.log(`📌 [WebSocket] Extracted mentioned user ID: ${mentionedUserId} (${firstMention.name || 'unknown'})`);
+          // Find first user mention (skip bot mention)
+          const userMention = mentions.find(mention => {
+            const mentionId = mention.id?.open_id || mention.id?.user_id;
+            // Skip if it's the bot itself
+            return mentionId && mentionId !== botUserId;
+          });
+
+          if (userMention) {
+            mentionedUserId = userMention.id?.open_id ||
+                             userMention.id?.user_id ||
+                             userMention.id?.union_id ||
+                             null;
+
+            if (mentionedUserId) {
+              console.log(`📌 [WebSocket] Extracted mentioned user ID: ${mentionedUserId} (${userMention.name || 'unknown'})`);
+            }
+          } else {
+            console.log(`🔍 [WebSocket] No user mention found (only bot mention)`);
           }
         }
         

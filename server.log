@@ -348,3 +348,13 @@ Handling app mention
 ✅ [FollowupButtons] Successfully sent buttons message: om_x100b5da0136d08a4c3270849907596e
 ✅ [CardSuggestions] Buttons sent in separate message: om_x100b5da0136d08a4c3270849907596e
 [FeishuMention] Card finalized with suggestions (buttons: om_x100b5da0136d08a4c3270849907596e)
+[error]: [
+  [
+    {
+      message: "The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()",
+      config: [Object ...],
+      request: [Object ...],
+      response: [Object ...],
+    }
+  ]
+]
