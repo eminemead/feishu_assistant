@@ -1,152 +1,190 @@
 # Documentation Organization
 
-All documentation is organized in the `/docs` folder by category.
+This document describes the structure and purpose of the documentation in this project.
 
 ## Directory Structure
 
 ```
 docs/
-├── architecture/        # System design, architecture decisions
-├── implementation/      # Feature implementations, technical details
-├── setup/              # Setup instructions, environment configuration
-├── testing/            # Testing guides, test strategies, test procedures
-├── verification/       # Verification checklists, deployment verification
-├── ORGANIZATION.md     # This file
-└── README.md           # Documentation index
+├── architecture/          # System design, architecture decisions
+├── implementation/        # Feature implementations, technical details
+├── setup/                # Setup instructions, environment config
+├── testing/              # Testing guides, test strategies
+├── verification/         # Verification procedures, checklists
+├── BUILD_AND_TEST.md     # Build, test, and quality gate commands
+├── CODE_STYLE.md         # TypeScript conventions and code patterns
+├── CRITICAL_WORKFLOWS.md # Essential workflows (memory, beads, devtools)
+├── ORGANIZATION.md       # This file - documentation structure
+└── README.md            # Documentation index
 ```
 
-## Filing Guidelines
+## Core Documentation
 
-### Architecture (`docs/architecture/`)
-System design documents, architecture decisions, component relationships.
+### AGENTS.md (Root Level)
+
+**Purpose**: Onboarding document for AI agents and developers.
+
+**Contains**:
+- Project WHY, WHAT, TECH (philosophy and scope)
+- Essential commands (dev, build, test)
+- Key workflows with links to detailed docs
+- Critical reminders and pro tips
+- Beads issue tracking quick reference
+
+**Approach**: Progressive disclosure - points to detailed docs in `/docs/` rather than duplicating information.
+
+### Build and Test (BUILD_AND_TEST.md)
+
+**Purpose**: All build, test, and quality gate commands with explanations.
+
+**Contains**:
+- Essential build commands
+- Quality gates (typecheck, test, lint)
+- Testing strategy
+- Development tips
+
+### Code Style (CODE_STYLE.md)
+
+**Purpose**: TypeScript conventions, file organization, naming patterns.
+
+**Contains**:
+- File organization and structure
+- Naming conventions
+- Comment guidelines
+- Integration patterns (Vercel AI, Feishu, Supabase)
+- Testing approach
+
+### Critical Workflows (CRITICAL_WORKFLOWS.md)
+
+**Purpose**: Essential workflows unique to this project.
+
+**Contains**:
+- Memory persistence (Supabase with RLS)
+- Beads issue tracking workflow
+- Local development debugging (devtools)
+- Architecture overview
+- Development workflow
+- Environment setup
+
+## Subdirectories
+
+### architecture/
+
+System design and architectural decisions.
 
 **Examples**:
-- `agent-system-design.md` - Manager agent architecture
-- `memory-system.md` - Conversation memory implementation
-- `threading-architecture.md` - Thread feature design
+- Component relationships
+- Data flow diagrams
+- Technology choices and rationale
+- Integration architecture
 
-### Implementation (`docs/implementation/`)
-Feature implementations, how-to guides, technical details.
+### implementation/
 
-**Naming**: kebab-case with feature name  
-**Examples**:
-- `fallback-logic-fixes.md` - Fallback mechanism improvements
-- `threading-fixes.md` - Threading feature fixes
-- `threading-debugging.md` - Debugging threading issues
-- `production-readiness.md` - Production error recovery
-- `model-fallback-guide.md` - Model fallback strategy
-
-### Setup (`docs/setup/`)
-Installation, configuration, environment setup, quick start guides.
+Feature implementations and technical details.
 
 **Examples**:
-- `production-deployment.md` - Production deployment guide
-- `production-quick-start.md` - Production quick reference
-- `model-usage-reference.md` - Model configuration guide
-- `environment-variables.md` - Environment setup
+- Feature implementation guides
+- API integration details
+- Database schema and migrations
+- Code change walkthroughs
 
-### Testing (`docs/testing/`)
-Testing guides, test strategies, test procedures, monitoring guides.
+### setup/
 
-**Examples**:
-- `threading-test-guide.md` - Testing threading feature
-- `agent-testing-strategy.md` - How to test agents
-- `integration-tests.md` - Integration test procedures
-
-### Verification (`docs/verification/`)
-Checklists for deployment, releases, testing verification.
+Environment configuration and setup instructions.
 
 **Examples**:
-- `pre-deployment-checklist.md` - Pre-prod checks
-- `release-checklist.md` - Release process verification
-- `health-check-procedures.md` - Health check verification
+- Feishu bot setup
+- Supabase configuration
+- Environment variables
+- Database initialization
 
-## Root-Level Docs
+### testing/
 
-Only keep at root (`/`):
-- `README.md` - Project overview (NOT in docs/)
-- `AGENTS.md` - Code conventions and structure (NOT in docs/)
-- `.md` files in `.gitignore` - Temporary working notes
+Testing guides and test strategies.
 
-## Document Format
+**Examples**:
+- Unit test approach
+- Integration test guides
+- Test data setup
+- CI/CD testing strategy
 
-Each implementation/testing doc should include:
+### verification/
 
-```markdown
-# Feature Name
+Verification procedures and checklists.
 
-**Date**: Nov 18, 2025  
-**Status**: ✅ Complete | ⚠️ In Progress | ❌ Not Started
+**Examples**:
+- Feature verification checklists
+- Testing procedures
+- Deployment verification
+- Performance verification
 
-## Problem/Motivation
-What issue does this solve? Why is it important?
+## Documentation Convention
 
-## Solution Overview
-High-level approach to solving the problem.
+### Implementation Docs (in `implementation/`)
 
-## Code Changes
-- File path 1: Description
-- File path 2: Description
+If creating new feature documentation:
 
-## API References
-Links to external documentation used.
+- Use kebab-case filenames (e.g., `thread-reply-implementation.md`)
+- Include:
+  - Problem/motivation at top
+  - Solution overview
+  - Code changes with file paths
+  - Official API references (with URLs)
+  - Testing checklist
+  - Backward compatibility notes
 
-## Testing Checklist
-- [ ] Item 1
-- [ ] Item 2
+### Root-Level Docs
 
-## Backward Compatibility
-Is this backwards compatible? Any breaking changes?
+Only the following documents belong at root level:
 
-## Next Steps (if applicable)
-What should be done next?
-```
+- `AGENTS.md` - Agent onboarding (lean, progressive disclosure)
+- `README.md` - Project overview
+- Any essential getting-started docs
 
-## Accessing Documentation
+### Temporary Planning Docs
 
-1. **Quick reference**: `docs/setup/` for quick start guides
-2. **How-to**: `docs/implementation/` for implementation details
-3. **System overview**: `docs/architecture/` for design docs
-4. **Testing**: `docs/testing/` for test procedures
-5. **Checklists**: `docs/verification/` for verification checklists
+AI-generated planning and design documents should be stored in `/history/` directory:
 
-## Index by Feature
+- Not checked into git (optional `.gitignore` entry)
+- Keeps repository root clean
+- Preserves planning history for reference
+- Examples: PLAN.md, DESIGN.md, IMPLEMENTATION_PLAN.md
 
-- **Threading Feature**
-  - Architecture: `docs/architecture/threading-architecture.md` (if exists)
-  - Implementation: `docs/implementation/threading-fixes.md`
-  - Debugging: `docs/implementation/threading-debugging.md`
-  - Testing: `docs/testing/threading-test-guide.md`
+## How to Use This Structure
 
-- **Production Deployment**
-  - Setup: `docs/setup/production-deployment.md`
-  - Quick Start: `docs/setup/production-quick-start.md`
-  - Implementation: `docs/implementation/production-readiness.md`
+**For Developers**:
+1. Start with `AGENTS.md` for project overview
+2. Use `BUILD_AND_TEST.md` for build commands
+3. Reference `CODE_STYLE.md` for coding conventions
+4. See `CRITICAL_WORKFLOWS.md` for essential procedures
 
-- **Model Configuration**
-  - Implementation: `docs/implementation/model-fallback-guide.md`
-  - Reference: `docs/setup/model-usage-reference.md`
+**For Deep Dives**:
+1. `docs/architecture/` - Understand system design
+2. `docs/implementation/` - Learn feature details
+3. `docs/setup/` - Configure environments
+4. `docs/testing/` - Write and run tests
 
-- **Fallback Logic**
-  - Implementation: `docs/implementation/fallback-logic-fixes.md`
+**For Questions**:
+1. Check relevant subdirectory first
+2. Search AGENTS.md for quick pointers
+3. Look at `docs/README.md` for index
 
-## Maintenance
+## Principles
 
-When adding new docs:
-1. Identify category (architecture/implementation/setup/testing/verification)
-2. Use kebab-case filename
-3. Include date and status
-4. Update this file if new category needed
-5. Update `docs/README.md` with reference
+1. **Progressive Disclosure** - Essential info in AGENTS.md, detailed docs in `/docs/`
+2. **Single Source of Truth** - Don't duplicate information between files
+3. **Discoverable** - Clear file names and structure
+4. **Scannable** - Use headers, lists, and code blocks for quick reference
+5. **Actionable** - Include concrete commands and examples
 
-## Cross-References
+## Updating Documentation
 
-Link between docs using:
-```markdown
-See: [`docs/setup/production-deployment.md`](./setup/production-deployment.md)
-See: [`docs/implementation/fallback-logic-fixes.md`](./implementation/fallback-logic-fixes.md)
-```
+When adding new features:
 
----
+1. Create implementation doc in `docs/implementation/`
+2. Add testing guide in `docs/testing/`
+3. Update relevant sections in `docs/architecture/` if design changes
+4. Update `AGENTS.md` only if it affects critical workflows
+5. Add planning docs to `history/` during development
 
-**Last Updated**: Nov 18, 2025
+This keeps the docs organized and AGENTS.md lean.
