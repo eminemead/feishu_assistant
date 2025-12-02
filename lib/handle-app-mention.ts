@@ -7,6 +7,7 @@ import {
 } from "./feishu-utils";
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { devtoolsTracker } from "./devtools-integration";
+import { handleDocumentCommand } from "./handle-doc-commands";
 
 export interface FeishuMentionData {
     chatId: string;
@@ -82,6 +83,38 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         }
 
         console.log(`[Thread] Processing with ${messages.length} message(s)`);
+
+        // Check if this is a document tracking command (early exit before agent)
+        const isDocCommand = /^@?bot\s+(watch|check|unwatch|watched|tracking:\w+)\s*/i.test(cleanText);
+        if (isDocCommand) {
+            console.log(`[DocCommand] Intercepted document command: "${cleanText.substring(0, 50)}..."`);
+            devtoolsTracker.trackAgentCall("DocumentTracking", cleanText, {
+                messageId,
+                rootId,
+                commandIntercepted: true
+            });
+
+            // Handle document command directly (bypasses agent)
+            const handled = await handleDocumentCommand({
+                message: cleanText,
+                chatId,
+                userId,
+                botUserId
+            });
+
+            if (handled) {
+                console.log(`[DocCommand] Command handled successfully`);
+                await updateCardElement(card.cardId, card.elementId, "✅ Command executed");
+                const duration = Date.now() - startTime;
+                devtoolsTracker.trackResponse("DocumentTracking", "Command executed", duration, {
+                    threadId: rootId,
+                    messageId,
+                    commandHandled: true
+                });
+                return; // Early exit - don't call generateResponse
+            }
+            console.log(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
+        }
 
         // Generate response with streaming and memory context
         console.log(`[FeishuMention] Generating response...`);
