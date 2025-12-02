@@ -4,6 +4,7 @@ import { getOkrReviewerAgent } from "./okr-reviewer-agent";
 import { getAlignmentAgent } from "./alignment-agent";
 import { getPnlAgent } from "./pnl-agent";
 import { getDpaPmAgent } from "./dpa-pm-agent";
+import { getDocumentTrackingAgent } from "./document-tracking-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -149,7 +150,7 @@ function initializeAgents() {
     name: "Manager",
     model: getPrimaryModel(),
     instructions: getManagerInstructions(),
-    handoffs: [getOkrReviewerAgent(), getAlignmentAgent(), getPnlAgent(), getDpaPmAgent()],
+    handoffs: [getOkrReviewerAgent(), getAlignmentAgent(), getPnlAgent(), getDpaPmAgent(), getDocumentTrackingAgent()],
     tools: {
       searchWeb: searchWebTool,
     },
@@ -174,7 +175,7 @@ function initializeAgents() {
     name: "Manager",
     model: getFallbackModel(),
     instructions: getManagerInstructions(),
-    handoffs: [getOkrReviewerAgent(), getAlignmentAgent(), getPnlAgent(), getDpaPmAgent()],
+    handoffs: [getOkrReviewerAgent(), getAlignmentAgent(), getPnlAgent(), getDpaPmAgent(), getDocumentTrackingAgent()],
     tools: {
       searchWeb: searchWebTool,
     },
@@ -203,18 +204,20 @@ function getManagerInstructions(): string {
   return `You are a Feishu/Lark AI assistant that routes queries to specialist agents. Most user queries will be in Chinese (中文).
 
 路由规则（按以下顺序应用）：
-1. OKR Reviewer: 路由关于OKR、目标、关键结果、经理评审、指标覆盖率(has_metric percentage)、覆盖率(覆盖率)的查询
-2. Alignment Agent: 路由关于对齐(alignment)、对齐、目标对齐的查询
-3. P&L Agent: 路由关于损益(profit & loss)、P&L、损益、利润、亏损、EBIT的查询
-4. DPA PM Agent: 路由关于DPA、数据团队(data team)、AE、DA的查询
-5. Fallback: 如果没有匹配的专家，使用网络搜索(searchWeb工具)或提供有用的指导
+1. DocumentTracking Agent: 路由关于文档追踪、监控文档变更、watch、check、unwatch、tracking status、tracking history的查询
+2. OKR Reviewer: 路由关于OKR、目标、关键结果、经理评审、指标覆盖率(has_metric percentage)、覆盖率(覆盖率)的查询
+3. Alignment Agent: 路由关于对齐(alignment)、对齐、目标对齐的查询
+4. P&L Agent: 路由关于损益(profit & loss)、P&L、损益、利润、亏损、EBIT的查询
+5. DPA PM Agent: 路由关于DPA、数据团队(data team)、AE、DA的查询
+6. Fallback: 如果没有匹配的专家，使用网络搜索(searchWeb工具)或提供有用的指导
 
 ROUTING RULES (apply in this order):
-1. OKR Reviewer: Route queries about OKR, objectives, key results, manager reviews, has_metric percentage, or 覆盖率
-2. Alignment Agent: Route queries about alignment, 对齐, or 目标对齐
-3. P&L Agent: Route queries about profit & loss, P&L, 损益, 利润, 亏损, or EBIT
-4. DPA PM Agent: Route queries about DPA, data team, AE, or DA
-5. Fallback: If no specialist matches, use web search (searchWeb tool) or provide helpful guidance
+1. DocumentTracking: Route queries about document tracking, monitor changes, watch, check, unwatch, @bot watch <doc>, @bot check <doc>, @bot unwatch <doc>, @bot watched, @bot tracking:status, @bot tracking:history
+2. OKR Reviewer: Route queries about OKR, objectives, key results, manager reviews, has_metric percentage, or 覆盖率
+3. Alignment Agent: Route queries about alignment, 对齐, or 目标对齐
+4. P&L Agent: Route queries about profit & loss, P&L, 损益, 利润, 亏损, or EBIT
+5. DPA PM Agent: Route queries about DPA, data team, AE, or DA
+6. Fallback: If no specialist matches, use web search (searchWeb tool) or provide helpful guidance
 
 GENERAL GUIDELINES:
 - Do not tag users. 不要@用户。
@@ -225,6 +228,7 @@ GENERAL GUIDELINES:
 - Most queries will be in Chinese - understand Chinese query semantics for better routing.
 
 AVAILABLE SPECIALISTS:
+- DocumentTracking (document_tracking): For document monitoring, change tracking, @bot watch/check/unwatch/watched commands / 用于文档监控、变更追踪、文档命令
 - OKR Reviewer (okr_reviewer): For OKR metrics, manager reviews, has_metric percentage analysis / 用于OKR指标、经理评审、指标覆盖率分析
 - Alignment Agent (alignment_agent): For alignment tracking (under development) / 用于对齐跟踪（开发中）
 - P&L Agent (pnl_agent): For profit & loss analysis (under development) / 用于损益分析（开发中）
@@ -289,12 +293,67 @@ export async function managerAgent(
   
   // Manual routing: Check if query matches specialist agent patterns
   const lowerQuery = query.toLowerCase();
+  const shouldRouteToDocTracking = /watch|check|unwatch|watched|tracking:status|tracking:history|monitor|文档追踪|监控文档|文档变更|track document/.test(lowerQuery) && 
+    (/watch|check|unwatch|@bot|tracking|文档|doc|document/.test(lowerQuery));
   const shouldRouteToOkr = /okr|objective|key result|manager review|has_metric|覆盖率|指标覆盖率|经理评审|目标|关键结果|okr指标|指标|okr分析|分析|图表|可视化|visualization|chart|analysis/.test(lowerQuery);
   const shouldRouteToAlignment = /alignment|对齐|目标对齐/.test(lowerQuery);
   const shouldRouteToPnl = /pnl|profit|loss|损益|利润|亏损|EBIT/.test(lowerQuery);
   const shouldRouteToDpaPm = /dpa|data team|AE|DA/.test(lowerQuery);
   
   // If a specialist matches, route directly to them instead of manager
+  if (shouldRouteToDocTracking) {
+    console.log(`[Manager] Manual routing detected: DocumentTracking matches query`);
+    devtoolsTracker.trackAgentCall("Manager", query, { manualRoute: "document_tracking" });
+    try {
+      const docTrackingAgent = getDocumentTrackingAgent();
+      
+      // Create execution context with memory support
+      const executionContext: any = {
+        _memoryAddition: "",
+      };
+      
+      if (chatId && rootId) {
+        const conversationId = getConversationId(chatId!, rootId!);
+        const userScopeId = userId ? getUserScopeId(userId) : getUserScopeId(chatId!);
+        executionContext.chatId = conversationId;
+        executionContext.userId = userScopeId;
+        if (userId) {
+          executionContext.feishuUserId = userId;
+        }
+        console.log(`[DocumentTracking] Memory context: conversationId=${conversationId}, userId=${userScopeId}`);
+      }
+      
+      const result = await docTrackingAgent.stream({ messages, executionContext });
+      
+      let accumulatedText = "";
+      for await (const textDelta of result.textStream) {
+        accumulatedText += textDelta;
+        // Stream updates in batches
+        if (updateStatus && accumulatedText.length % 50 === 0) {
+          updateStatus(accumulatedText);
+        }
+      }
+      
+      // Final update
+      if (updateStatus) {
+        updateStatus(accumulatedText);
+      }
+      
+      // Track response
+      const duration = Date.now() - startTime;
+      devtoolsTracker.trackResponse("document_tracking", accumulatedText, duration, { manualRoute: true });
+      healthMonitor.trackAgentCall("document_tracking", duration, true);
+      
+      console.log(`[DocumentTracking] Response complete (length=${accumulatedText.length})`);
+      return accumulatedText;
+    } catch (error) {
+      console.error(`[Manager] Error routing to DocumentTracking:`, error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      devtoolsTracker.trackError("document_tracking", error instanceof Error ? error : new Error(errorMsg), { manualRoute: true });
+      // Fall through to manager if specialist fails
+    }
+  }
+  
   if (shouldRouteToOkr) {
     console.log(`[Manager] Manual routing detected: OKR Reviewer matches query`);
     devtoolsTracker.trackAgentCall("Manager", query, { manualRoute: "okr_reviewer" });
