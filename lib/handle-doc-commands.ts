@@ -16,6 +16,10 @@ import {
   createAndSendStreamingCard,
   parseMessageContent,
 } from "./feishu-utils";
+import {
+  isEnhancedCommand,
+  handleEnhancedCommand,
+} from "./doc-commands-enhanced";
 
 /**
  * Parse Feishu URLs and extract document tokens
@@ -110,6 +114,11 @@ export async function handleDocumentCommand(args: {
   }
 
   text = text.replace(new RegExp(`<at user_id="${botUserId}">.*?</at>`, "g"), "").trim();
+
+  // Check for Phase 2 enhanced commands first
+  if (isEnhancedCommand(text)) {
+    return await handleEnhancedCommand({ message: text, chatId, userId, botUserId });
+  }
 
   // Command: @bot watch <doc>
   if (/^@?bot\s+watch\s+/i.test(text)) {
@@ -495,6 +504,13 @@ Show all documents being tracked in this group.
 \`@bot tracking:status\`
 Show poller health and metrics.
 
+**Advanced Features (Phase 2)**
+\`@bot history <doc>\` - View change history with diffs
+\`@bot snapshots <doc>\` - Show snapshot statistics
+\`@bot rules <doc>\` - List rules for document
+\`@bot rule:add <doc> <action> [target]\` - Create rule
+\`@bot tracking:advanced\` - Advanced features help
+
 **Help**
 \`@bot tracking:help\`
 Show this help message.
@@ -504,7 +520,15 @@ Show this help message.
 2. The bot polls the document every 30 seconds
 3. When changes are detected, you get notified in this group
 4. Use \`@bot check\` to manually check current status
-5. Use \`@bot unwatch\` to stop monitoring`;
+5. Use \`@bot unwatch\` to stop monitoring
+
+🚀 **Phase 2 Features**
+- **Snapshots**: Automatic document versioning with compression
+- **Diffs**: See exactly what changed between versions
+- **Rules**: Automate actions on detected changes
+- **History**: Query change history with semantic diffs
+
+Use \`@bot tracking:advanced\` for more information.`;
 
   try {
     await createAndSendStreamingCard(chatId, "chat_id", {
