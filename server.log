@@ -691,3 +691,37 @@ AI_NoOutputGeneratedError: No output generated. Check the stream for errors.
 [info]: [ "[ws]", "reconnect" ]
 [warn]: [ "no im.message.reaction.created_v1 handle" ]
 [warn]: [ "no im.message.reaction.created_v1 handle" ]
+📨 [WebSocket] Event received: im.message.receive_v1
+📨 [WebSocket] Event data: {
+  "schema": "2.0",
+  "event_id": "2e5ca35661c4794883807f0ec3aaa0b8",
+  "token": "",
+  "create_time": "1764661543074",
+  "event_type": "im.message.receive_v1",
+  "tenant_key": "2de1f662118f575d",
+  "app_id": "cli_a6af6b76c6f0d013",
+  "message": {
+    "chat_id": "oc_c6c0874d4020e0d3b48d1fce2b62656b",
+    "chat_type": "group",
+    "content": "{\"text\":\"@_all 我们的订单表alps_dwm.onvo_new_car_order_wide_1h_f要和nio的合并，肯定会涉及到表迁移的巨大工作量，大家有没有一些重要的需求期望之类的\"}",
+    "create_time": "1764661542649",
+    "message_id": "om_x100b5ddddcaa58b0b36f800525bdd1d",
+    "message_type": "text",
+    "update_time": "1764661542649"
+  },
+  "sender": {
+    "sender_id": {
+      "open_id": "ou_91dfc9902c715b29bd491c9be06f1e35",
+      "union_id": "on_7367b05dd2ab71aa6dd4fe684349ec0b",
+      "user_id": "jayden.liu"
+    },
+    "sender_type": "user",
+    "tenant_key": "2de1f662118f575d"
+  }
+}
+🤖 [WebSocket] Bot User ID: cli_a6af6b76c6f0d013
+👤 [Auth] Extracted user ID: ou_91dfc9902c715b29bd491c9be06f1e35
+📩 [WebSocket] Message details: chatId=oc_c6c0874d4020e0d3b48d1fce2b62656b, messageId=om_x100b5ddddcaa58b0b36f800525bdd1d, chatType=group
+🔍 [WebSocket] Mentions array: []
+⚠️ [WebSocket] Message ignored (not p2p, not mention, not thread reply)
+[warn]: [ "no im.message.reaction.created_v1 handle" ]
