@@ -1,5 +1,8 @@
 import { Agent } from "@ai-sdk-tools/agents";
 import { getPrimaryModel } from "../shared/model-fallback";
+import { handleDocumentCommand } from "../handle-doc-commands";
+import { tool } from "ai";
+import { z } from "zod";
 
 /**
  * DocumentTracking Agent Skeleton
@@ -68,13 +71,61 @@ export interface ChangeDetectionResult {
 }
 
 /**
+ * Create tool for executing document tracking commands
+ */
+function createDocumentCommandTool() {
+  return tool({
+    description: "Execute document tracking commands like watch, check, unwatch, etc.",
+    parameters: z.object({
+      command: z.enum(["watch", "check", "unwatch", "watched", "tracking:status", "tracking:help"]),
+      documentInput: z.string().optional().describe("Document URL, token, or search term"),
+      groupId: z.string().optional().describe("Optional group/chat ID to notify"),
+    }),
+    execute: async (params) => {
+      // Parse command and execute
+      const { command, documentInput = "", groupId } = params;
+      
+      // Reconstruct message format for handler
+      let message = `@bot ${command}`;
+      if (documentInput) {
+        message += ` ${documentInput}`;
+      }
+      if (groupId) {
+        message += ` in:${groupId}`;
+      }
+      
+      // Note: In real usage, chatId and userId would come from context
+      // For now, we return a message for the agent to handle
+      try {
+        const handled = await handleDocumentCommand({
+          message,
+          chatId: "unknown", // Would be set from context
+          userId: "unknown", // Would be set from context
+          botUserId: "bot", // Would be set from context
+        });
+        
+        return {
+          success: handled,
+          message: `Command executed: ${command}${documentInput ? ` with "${documentInput}"` : ""}`,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  });
+}
+
+/**
  * Initialize document tracking agent
  * 
- * The agent uses Anthropic Claude to:
+ * The agent uses the primary model to:
  * 1. Understand user intent (watch, check, unwatch, etc.)
  * 2. Extract document tokens from URLs or user input
- * 3. Format responses for Feishu cards
- * 4. Handle edge cases and error messages
+ * 3. Execute document tracking commands
+ * 4. Provide helpful responses for Feishu cards
  */
 export function getDocumentTrackingAgent(): Agent {
   return new Agent({
@@ -82,12 +133,7 @@ export function getDocumentTrackingAgent(): Agent {
     model: getPrimaryModel(),
     instructions: getDocumentTrackingInstructions(),
     tools: {
-      // TODO: Implement document tracking tools
-      // watchDocument: createWatchDocumentTool(),
-      // checkDocumentStatus: createCheckStatusTool(),
-      // unwatchDocument: createUnwatchTool(),
-      // listTrackedDocuments: createListTrackedTool(),
-      // getChangeHistory: createChangeHistoryTool(),
+      executeDocCommand: createDocumentCommandTool(),
     },
   });
 }
