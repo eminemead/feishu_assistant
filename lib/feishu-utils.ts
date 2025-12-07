@@ -15,6 +15,11 @@ export const client = new lark.Client({
   domain: lark.Domain.Feishu,
 });
 
+// Helper to get a typed Feishu client instance
+export function getFeishuClient() {
+  return client;
+}
+
 /**
  * Parse text from Feishu message content
  * Handles both simple text format and post format (with nested elements/content arrays)
@@ -115,6 +120,92 @@ export const getBotId = async (): Promise<string> => {
   // For now, return app_id as the bot identifier
   return appId;
 };
+
+/**
+ * Check if a thread is bot-relevant before processing thread replies
+ * A thread is bot-relevant if:
+ * 1. The root message is from the bot itself (sender.sender_type === 'app'), OR
+ * 2. The root message mentions the bot
+ * 
+ * @param chatId - Chat ID where the thread exists
+ * @param rootId - Root message ID of the thread
+ * @param botUserId - Bot identifier (app_id)
+ * @returns true if thread is bot-relevant, false otherwise
+ */
+export async function isThreadBotRelevant(
+  chatId: string,
+  rootId: string,
+  botUserId: string
+): Promise<boolean> {
+  try {
+    // Fetch root message details from Feishu API
+    const resp = await client.im.message.get({
+      path: {
+        message_id: rootId,
+      },
+    });
+
+    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    if (!isSuccess || !resp.data?.item) {
+      console.warn(`⚠️ [ThreadValidation] Failed to fetch root message ${rootId}, assuming not bot-relevant`);
+      return false;
+    }
+
+    const rootMessage = resp.data.item;
+    
+    // Check if root is from bot (sender.sender_type === 'app')
+    const isBotMessage = rootMessage.sender?.sender_type === "app";
+    if (isBotMessage) {
+      console.log(`✅ [ThreadValidation] Thread ${rootId} is bot-relevant: root message is from bot`);
+      return true;
+    }
+
+    // Check if root message mentions the bot via mentions array (structured format)
+    // @ts-ignore - mentions array exists in message response
+    const mentions = (rootMessage as any).mentions || [];
+    if (mentions.length > 0) {
+      const botMentioned = mentions.some((mention: any) => {
+        const mentionId = mention.id?.open_id || mention.id?.user_id || mention.id?.app_id;
+        const isBotMention = mentionId === botUserId;
+        if (isBotMention) {
+          console.log(`✅ [ThreadValidation] Bot mention found in mentions array: ${JSON.stringify(mention)}`);
+        }
+        return isBotMention;
+      });
+      
+      if (botMentioned) {
+        console.log(`✅ [ThreadValidation] Thread ${rootId} is bot-relevant: root message mentions bot (via mentions array)`);
+        return true;
+      }
+    }
+
+    // Check if root message mentions the bot via text content (fallback for webhook mode)
+    const rootContent = rootMessage.body?.content;
+    if (rootContent) {
+      try {
+        const rootText = parseMessageContent(rootContent);
+        const mentionsBot = rootText.includes(`<at user_id="${botUserId}">`) ||
+                           rootText.includes(`<at open_id="${botUserId}">`) ||
+                           rootText.includes(`<at app_id="${botUserId}">`);
+        
+        if (mentionsBot) {
+          console.log(`✅ [ThreadValidation] Thread ${rootId} is bot-relevant: root message mentions bot (via text content)`);
+          return true;
+        }
+      } catch (e) {
+        console.warn(`⚠️ [ThreadValidation] Failed to parse root message content:`, e);
+      }
+    }
+
+    console.log(`❌ [ThreadValidation] Thread ${rootId} is NOT bot-relevant: root is from user and doesn't mention bot`);
+    return false;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [ThreadValidation] Error checking thread relevance: ${errorMsg}`);
+    // On error, assume not bot-relevant to avoid processing unrelated threads
+    return false;
+  }
+}
 
 // Get message thread history
 export async function getThread(

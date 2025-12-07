@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
-import { getBotId, client, parseMessageContent } from "./lib/feishu-utils";
+import { getBotId, client, parseMessageContent, isThreadBotRelevant } from "./lib/feishu-utils";
 import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
 import { healthMonitor } from "./lib/health-monitor";
 import { handleCardAction, parseCardActionCallback } from "./lib/handle-card-action";
@@ -34,10 +34,74 @@ const processedEvents = new Set<string>();
 const useSubscriptionMode = process.env.FEISHU_SUBSCRIPTION_MODE === "true" || 
                              (!process.env.FEISHU_ENCRYPT_KEY && !process.env.FEISHU_VERIFICATION_TOKEN);
 
+// WebSocket watchdog configuration
+const WS_WATCHDOG_INTERVAL_MS = 30_000;
+const WS_STALE_THRESHOLD_MS = 3 * 60 * 1000; // restart if no events for 3 minutes
+const WS_MAX_CONSECUTIVE_FAILURES = 3;
+
 const encryptKey = process.env.FEISHU_ENCRYPT_KEY;
 const verificationToken = process.env.FEISHU_VERIFICATION_TOKEN;
 const appId = process.env.FEISHU_APP_ID!;
 const appSecret = process.env.FEISHU_APP_SECRET!;
+
+// Track WebSocket health
+let wsClient: lark.WSClient | null = null;
+let lastWsEventAt = Date.now();
+let wsConsecutiveFailures = 0;
+
+const recordWsEvent = () => {
+  lastWsEventAt = Date.now();
+  healthMonitor.setWebSocketEventTimestamp(new Date(lastWsEventAt));
+};
+
+const formatError = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+const createWsClient = () =>
+  new lark.WSClient({
+    appId,
+    appSecret,
+    domain: lark.Domain.Feishu,
+    autoReconnect: true,
+  });
+
+const startWebSocket = async (reason: string): Promise<boolean> => {
+  healthMonitor.setWebSocketStatus('connecting', reason);
+  wsClient = createWsClient();
+  try {
+    await wsClient.start({ eventDispatcher });
+    wsConsecutiveFailures = 0;
+    lastWsEventAt = Date.now();
+    healthMonitor.setWebSocketStatus('connected', reason);
+    healthMonitor.setWebSocketEventTimestamp(new Date(lastWsEventAt));
+    return true;
+  } catch (error) {
+    wsConsecutiveFailures++;
+    healthMonitor.setWebSocketError(`start failed: ${formatError(error)}`);
+    return false;
+  }
+};
+
+const restartWebSocket = async (reason: string): Promise<boolean> => {
+  if (!useSubscriptionMode) return;
+  healthMonitor.markWebSocketRestart(reason);
+  healthMonitor.incrementWebSocketReconnectAttempt();
+  try {
+    await wsClient?.stop?.();
+  } catch (error) {
+    healthMonitor.setWebSocketError(`stop failed: ${formatError(error)}`);
+  }
+
+  try {
+    const started = await startWebSocket(reason);
+    if (started) {
+      return true;
+    }
+  } catch (error) {
+    healthMonitor.setWebSocketError(`restart failed: ${formatError(error)}`);
+  }
+  return false;
+};
 
 // Initialize Feishu EventDispatcher
 // For Subscription Mode, encryptKey and verificationToken are optional
@@ -103,6 +167,7 @@ const eventDispatcher = new lark.EventDispatcher({
 // Add a catch-all handler to see what events we're receiving
 eventDispatcher.register({
   "*": async (data: any, eventType: string) => {
+    recordWsEvent();
     console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
     console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
 
@@ -310,6 +375,13 @@ eventDispatcher.register({
 
       // Handle thread reply (if root_id exists and is different from message_id)
       if (message.root_id && message.root_id !== messageId) {
+        // Validate thread relevance before processing
+        const isRelevant = await isThreadBotRelevant(chatId, message.root_id, botUserId);
+        if (!isRelevant) {
+          console.log(`⚠️ [WebSocket] Thread reply ignored: thread ${message.root_id} is not bot-relevant`);
+          return;
+        }
+        
         console.log(`🧵 [WebSocket] Processing thread reply: "${messageText.substring(0, 50)}..."`);
         await handleNewMessage({
           chatId,
@@ -623,19 +695,16 @@ async function startServer() {
       process.exit(1);
     }
 
-    // Create WSClient for Subscription Mode
-    const wsClient = new lark.WSClient({
-      appId,
-      appSecret,
-      domain: lark.Domain.Feishu,
-      autoReconnect: true,
-    });
-
-    // Start WebSocket with timeout (non-blocking)
-    wsClient.start({ eventDispatcher }).then(() => {
+    startWebSocket("startup")
+      .then((started) => {
+        if (started) {
       console.log("✅ [Startup] Step 1: WebSocket connection established");
       console.log("📋 [Startup] Ready to receive Feishu events");
-    }).catch((error) => {
+        } else {
+          console.error("❌ [Startup] Step 1 FAILED: WebSocket connection error");
+        }
+      })
+      .catch((error) => {
       console.error("❌ [Startup] Step 1 FAILED: WebSocket connection error");
       console.error("   Error:", error instanceof Error ? error.message : String(error));
       console.error("\n   Troubleshooting:");
@@ -645,6 +714,28 @@ async function startServer() {
       console.error("   4. Check network connectivity to Feishu servers");
       console.error("\n   Note: Server will still start, but will not receive events");
     });
+
+    // Watchdog to restart WS if stale or repeatedly failing
+    setInterval(async () => {
+      const ageMs = Date.now() - lastWsEventAt;
+      const isStale = ageMs > WS_STALE_THRESHOLD_MS;
+      const hasFailures = wsConsecutiveFailures >= WS_MAX_CONSECUTIVE_FAILURES;
+
+      if (isStale || hasFailures) {
+        const reason = isStale
+          ? `stale (${Math.round(ageMs / 1000)}s since last event)`
+          : `consecutive failures (${wsConsecutiveFailures})`;
+        console.warn(`⚠️ [WS Watchdog] Restarting WebSocket due to ${reason}`);
+        try {
+          const restarted = await restartWebSocket(reason);
+          if (restarted) {
+            wsConsecutiveFailures = 0; // reset only on success
+          }
+        } catch (error) {
+          console.error(`❌ [WS Watchdog] Restart failed: ${formatError(error)}`);
+        }
+      }
+    }, WS_WATCHDOG_INTERVAL_MS);
   } else {
     console.log("📋 [Startup] Mode: Webhook");
     console.log("📋 [Startup] WebSocket disabled - using HTTP webhooks");
