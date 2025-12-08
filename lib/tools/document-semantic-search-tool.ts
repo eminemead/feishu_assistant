@@ -24,6 +24,7 @@ export const documentSemanticSearchTool = tool({
         success: true,
         hits,
         formatted: formatDocumentRagHits(hits),
+        mode: process.env.DOC_RAG_USE_VECTOR === "true" ? "vector" : "keyword-fallback",
       };
     } catch (error) {
       return {
