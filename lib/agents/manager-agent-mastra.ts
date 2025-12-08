@@ -41,6 +41,7 @@ import {
 } from "../shared/model-fallback";
 import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
+import { getRoutingDecision } from "../workflows/manager-routing-workflow";
 
 // Create web search tool for fallback
 const searchWebTool = createSearchWebTool(true, true);
@@ -215,24 +216,29 @@ export async function managerAgent(
   // Legacy memory context is skipped to avoid conflicts
   let memoryContext: any = null;
 
-  // Manual routing: Check if query matches specialist agent patterns
-  const lowerQuery = query.toLowerCase();
-  const shouldRouteToOkr = /okr|objective|key result|manager review|has_metric|覆盖率|指标覆盖率|经理评审|目标|关键结果|okr指标|指标|okr分析|分析|图表|可视化|visualization|chart|analysis/.test(
-    lowerQuery
-  );
-  const shouldRouteToAlignment = /alignment|对齐|目标对齐/.test(lowerQuery);
-  const shouldRouteToPnl = /pnl|profit|loss|损益|利润|亏损|EBIT/.test(
-    lowerQuery
-  );
-  const shouldRouteToDpaPm = /dpa|data team|AE|DA/.test(lowerQuery);
+  // Use workflow-based routing for declarative classification
+  const routingDecision = await getRoutingDecision({
+    query,
+    messages,
+    executionContext: {
+      chatId,
+      rootId,
+      userId,
+    },
+  });
 
-  // If a specialist matches, route directly to them instead of manager
-  if (shouldRouteToOkr) {
+  console.log(
+    `[Manager] Workflow routing decision: ${routingDecision.category} (${routingDecision.agentName}, confidence: ${routingDecision.confidence.toFixed(2)})`
+  );
+
+  // Route to specialist based on workflow classification
+  if (routingDecision.category === "okr") {
     console.log(
-      `[Manager] Manual routing detected: OKR Reviewer matches query`
+      `[Manager] Workflow routing: OKR Reviewer (confidence: ${routingDecision.confidence.toFixed(2)})`
     );
     devtoolsTracker.trackAgentCall("Manager", query, {
-      manualRoute: "okr_reviewer",
+      workflowRoute: "okr_reviewer",
+      confidence: routingDecision.confidence,
     });
     try {
       const okrAgent = getOkrReviewerAgent();
@@ -327,13 +333,14 @@ export async function managerAgent(
     }
   }
 
-  // Similar routing for other specialists...
-  if (shouldRouteToAlignment) {
+  // Alignment Agent routing
+  if (routingDecision.category === "alignment") {
     console.log(
-      `[Manager] Manual routing detected: Alignment Agent matches query`
+      `[Manager] Workflow routing: Alignment Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
     );
     devtoolsTracker.trackAgentCall("Manager", query, {
-      manualRoute: "alignment_agent",
+      workflowRoute: "alignment_agent",
+      confidence: routingDecision.confidence,
     });
     try {
       const alignmentAgent = getAlignmentAgent();
@@ -425,10 +432,11 @@ export async function managerAgent(
   }
 
   // P&L Agent routing
-  if (shouldRouteToPnl) {
-    console.log(`[Manager] Manual routing detected: P&L Agent matches query`);
+  if (routingDecision.category === "pnl") {
+    console.log(`[Manager] Workflow routing: P&L Agent (confidence: ${routingDecision.confidence.toFixed(2)})`);
     devtoolsTracker.trackAgentCall("Manager", query, {
-      manualRoute: "pnl_agent",
+      workflowRoute: "pnl_agent",
+      confidence: routingDecision.confidence,
     });
     try {
       const pnlAgent = getPnlAgent();
@@ -515,12 +523,13 @@ export async function managerAgent(
   }
 
   // DPA PM Agent routing
-  if (shouldRouteToDpaPm) {
+  if (routingDecision.category === "dpa_pm") {
     console.log(
-      `[Manager] Manual routing detected: DPA PM Agent matches query`
+      `[Manager] Workflow routing: DPA PM Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
     );
     devtoolsTracker.trackAgentCall("Manager", query, {
-      manualRoute: "dpa_pm",
+      workflowRoute: "dpa_pm",
+      confidence: routingDecision.confidence,
     });
     try {
       const dpaPmAgent = getDpaPmAgent();
