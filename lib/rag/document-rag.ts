@@ -1,12 +1,20 @@
 /**
  * Document RAG scaffolding
  *
- * Provides a safe semantic-ish search over tracked documents with a graceful
- * fallback:
- * - If DOC_RAG_USE_VECTOR=true and PgVector is available, we will attempt to
- *   use a vector store (future-ready hook).
- * - Otherwise, we fall back to lightweight keyword scoring so the tool works
- *   today without extra infra.
+ * Provides semantic search over tracked documents using Supabase PostgreSQL
+ * with pgvector extension for vector similarity search.
+ *
+ * Architecture:
+ * - Uses Supabase's PostgreSQL database (via SUPABASE_DATABASE_URL)
+ * - pgvector extension enabled via migration (005_enable_pgvector_and_document_embeddings.sql)
+ * - Vector embeddings stored in document_embeddings table with RLS
+ * - Falls back to keyword search if vector store unavailable
+ *
+ * Configuration:
+ * - DOC_RAG_USE_VECTOR=true: Enable vector search (requires pgvector migration)
+ * - DOC_RAG_VECTOR_TABLE: Table name (default: "document_embeddings")
+ * - DOC_RAG_EMBEDDER: Embedding model (default: "openai/text-embedding-3-small")
+ * - SUPABASE_DATABASE_URL: PostgreSQL connection string from Supabase
  *
  * This file is structured so we can swap the vector implementation later
  * without changing callers.
@@ -58,28 +66,36 @@ async function ensureVectorStore(): Promise<VectorStore | null> {
   if (!VECTOR_ENABLED) return null;
   if (!SUPABASE_DATABASE_URL) {
     console.warn("[DocRAG] SUPABASE_DATABASE_URL not set; skipping vector store.");
+    console.warn("[DocRAG] Set SUPABASE_DATABASE_URL to use Supabase PostgreSQL for vector search.");
     return null;
   }
   if (vectorStore) return vectorStore;
 
   try {
     // Lazy import to avoid build-time dependency if env not set.
+    // Uses Supabase's PostgreSQL connection (SUPABASE_DATABASE_URL)
+    // Requires pgvector extension enabled via migration 005_enable_pgvector_and_document_embeddings.sql
     const modPg = await import("@mastra/pg").catch(() => null);
     const modRag = await import("@mastra/rag").catch(() => null);
 
     if (!modPg || !("PgVector" in modPg) || !modRag) {
       console.warn("[DocRAG] PgVector or @mastra/rag unavailable; falling back to keyword search.");
+      console.warn("[DocRAG] Ensure @mastra/pg and @mastra/rag are installed and pgvector migration is run.");
       return null;
     }
 
     const PgVector: any = (modPg as any).PgVector;
+    // Connect to Supabase PostgreSQL using the same connection string as memory-mastra.ts
+    // This uses Supabase's PostgreSQL database with pgvector extension
     vectorStore = new PgVector({
-      connectionString: SUPABASE_DATABASE_URL,
-      tableName: VECTOR_TABLE,
+      connectionString: SUPABASE_DATABASE_URL, // Supabase PostgreSQL connection
+      tableName: VECTOR_TABLE, // document_embeddings table (created by migration)
     });
+    console.log(`✅ [DocRAG] Vector store initialized using Supabase PostgreSQL (table: ${VECTOR_TABLE})`);
     return vectorStore;
   } catch (error) {
     console.warn("[DocRAG] Failed to init vector store, fallback will be used:", error);
+    console.warn("[DocRAG] Verify: 1) pgvector migration applied, 2) SUPABASE_DATABASE_URL correct, 3) table exists");
     return null;
   }
 }
