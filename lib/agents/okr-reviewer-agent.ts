@@ -1,18 +1,36 @@
-import { Agent } from "@ai-sdk-tools/agents";
+/**
+ * OKR Reviewer Agent - Mastra Implementation
+ * 
+ * Replaces the AI SDK Tools implementation with Mastra framework.
+ * Specialized in OKR (Objectives and Key Results) analysis.
+ * 
+ * KEY CHANGES FROM AI SDK TOOLS:
+ * 1. Uses Mastra's Agent instead of @ai-sdk-tools/agents
+ * 2. Native model fallback array instead of dual agents
+ * 3. Tool definitions use Mastra's format
+ * 4. Streaming API identical (textStream)
+ * 5. Custom execution context via options (threadId, resourceId)
+ */
+
+import { Agent } from "@mastra/core/agent";
+import { CoreMessage } from "ai";
 import * as duckdb from "duckdb";
 import { okrVisualizationTool } from "./okr-visualization-tool";
-import { getPrimaryModel } from "../shared/model-fallback";
+import { getPrimaryModel, getFallbackModel } from "../shared/model-fallback";
 import { createOkrReviewTool } from "../tools";
 import { chartGenerationTool } from "../tools/chart-generation-tool";
+import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
 import { getUserDataScope } from "../auth/user-data-scope";
 import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
+import { devtoolsTracker } from "../devtools-integration";
+import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
+import { getSupabaseUserId } from "../auth/feishu-supabase-id";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
 // StarRocks table configuration (can be overridden via env vars)
-// Note: Table names should include schema if needed, e.g., "onvo_dpa_data.okr_metrics"
-const STARROCKS_OKR_METRICS_TABLE_PREFIX = process.env.STARROCKS_OKR_METRICS_TABLE || "onvo_dpa_data.okr_metrics";
-const STARROCKS_EMPLOYEE_FELLOW_TABLE = process.env.STARROCKS_EMPLOYEE_FELLOW_TABLE || "onvo_dpa_data.employee_fellow";
+const STARROCKS_OKR_METRICS_TABLE = process.env.STARROCKS_OKR_METRICS_TABLE || "okr_metrics";
+const STARROCKS_EMPLOYEE_FELLOW_TABLE = process.env.STARROCKS_EMPLOYEE_FELLOW_TABLE || "employee_fellow";
 
 /**
  * Queries DuckDB to get the latest timestamped okr_metrics table
@@ -39,51 +57,6 @@ async function getLatestMetricsTable(con: duckdb.Connection): Promise<string | n
 }
 
 /**
- * Queries StarRocks to get the latest timestamped okr_metrics table
- * Handles schema-qualified table names (e.g., "onvo_dpa_data.okr_metrics_20251127")
- */
-async function getLatestMetricsTableStarrocks(): Promise<string | null> {
-  try {
-    // Extract schema and table prefix from the configured prefix
-    // E.g., "onvo_dpa_data.okr_metrics" → schema="onvo_dpa_data", prefix="okr_metrics"
-    const parts = STARROCKS_OKR_METRICS_TABLE_PREFIX.split('.');
-    let schema = 'default';
-    let tablePrefix = STARROCKS_OKR_METRICS_TABLE_PREFIX;
-    
-    if (parts.length === 2) {
-      schema = parts[0];
-      tablePrefix = parts[1];
-    }
-
-    console.log(`[OKR] Looking for latest table matching '${tablePrefix}_%' in schema '${schema}'`);
-    
-    // Query for tables matching the pattern
-    const query = `
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = ? AND table_name LIKE ?
-      ORDER BY table_name DESC 
-      LIMIT 1
-    `;
-    
-    const rows = await queryStarrocks<any>(query, [schema, `${tablePrefix}_%`]);
-    
-    if (rows && rows.length > 0) {
-      const tableName = rows[0].table_name || rows[0].TABLE_NAME;
-      const fullTableName = `${schema}.${tableName}`;
-      console.log(`[OKR] Found latest StarRocks table: ${fullTableName}`);
-      return fullTableName;
-    } else {
-      console.warn(`[OKR] No timestamped okr_metrics tables found in StarRocks`);
-      return null;
-    }
-  } catch (error: any) {
-    console.error(`[OKR] Error querying StarRocks for latest table: ${error.message}`);
-    throw error;
-  }
-}
-
-/**
  * Analyzes has_metric_percentage for managers by city company using StarRocks
  * 
  * @param period - Period to analyze (e.g., '10 月', '11 月')
@@ -102,7 +75,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
         console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts, returning empty result`);
         return {
           period,
-          table_used: STARROCKS_OKR_METRICS_TABLE_PREFIX,
+          table_used: STARROCKS_OKR_METRICS_TABLE,
           summary: [],
           total_companies: 0,
           overall_average: 0,
@@ -114,7 +87,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
       console.error(`❌ [OKR] Error getting user data scope:`, error);
       return {
         period,
-        table_used: STARROCKS_OKR_METRICS_TABLE_PREFIX,
+        table_used: STARROCKS_OKR_METRICS_TABLE,
         summary: [],
         total_companies: 0,
         overall_average: 0,
@@ -126,36 +99,17 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
   }
 
   try {
-    // Find the latest timestamped table in StarRocks
-    const latestTable = await getLatestMetricsTableStarrocks();
-    if (!latestTable) {
-      console.warn(`⚠️ [OKR] No timestamped okr_metrics tables found in StarRocks, cannot proceed`);
-      throw new Error(`No okr_metrics tables found in StarRocks matching pattern "${STARROCKS_OKR_METRICS_TABLE_PREFIX}_%"`);
-    }
-
-    // Build query with optional user filtering
-    let accountFilter = '';
-    const queryParams: any[] = [period];
-    
-    if (userDataScope && userDataScope.allowedAccounts.length > 0) {
-      // Filter by allowed accounts (project_code from RLS)
-      // StarRocks uses ? for parameters
-      const accountPlaceholders = userDataScope.allowedAccounts.map(() => '?').join(', ');
-      accountFilter = `AND e.fellow_ad_account IN (${accountPlaceholders})`;
-      queryParams.push(...userDataScope.allowedAccounts);
-    }
-
-    const query = `
+    const result = await queryStarrocks(`
       WITH base AS (
         SELECT COALESCE(e.fellow_city_company_name, 'Unknown') AS company_name,
                m.metric_type,
                m.value
-        FROM ${latestTable} m
+        FROM ${STARROCKS_OKR_METRICS_TABLE} m
         LEFT JOIN ${STARROCKS_EMPLOYEE_FELLOW_TABLE} e
           ON m.owner = e.fellow_ad_account
-        WHERE m.period = ?
+        WHERE m.period = '${period}'
           AND e.fellow_workday_cn_title IN ('乐道代理战队长', '乐道区域副总经理', '乐道区域总经理', '乐道区域行销负责人', '乐道战队长', '乐道战队长（兼个人销售）', '乐道片区总', '乐道行销大区负责人', '乐道销售部负责人')
-          ${accountFilter}
+          ${userDataScope ? `AND e.fellow_ad_account IN (${userDataScope.allowedAccounts.map(a => `'${a}'`).join(',')})` : ''}
       )
       SELECT company_name, metric_type,
              COUNT(*) AS total,
@@ -164,278 +118,131 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
       FROM base
       WHERE company_name != 'Unknown'
       GROUP BY company_name, metric_type
-    `;
-
-    console.log(`[OKR] Querying StarRocks for period: "${period}" using table: ${latestTable}`);
-    const rows = await queryStarrocks<any>(query, queryParams);
-    
-    console.log(`[OKR] StarRocks query returned ${rows.length} rows for period "${period}"`);
-
-    // Process results (same logic as DuckDB version)
-    const processed = rows.map((row: any) => ({
-      company_name: row.company_name,
-      metric_type: row.metric_type,
-      total: Number(row.total) || 0,
-      nulls: Number(row.nulls) || 0,
-      null_pct: parseFloat(row.null_pct) || 0,
-      has_metric_pct: 100.0 - (parseFloat(row.null_pct) || 0),
-    }));
-
-    // Group by company and calculate summary
-    const byCompany: Record<string, any[]> = {};
-    processed.forEach((row) => {
-      if (!byCompany[row.company_name]) {
-        byCompany[row.company_name] = [];
-      }
-      byCompany[row.company_name].push(row);
-    });
-
-    // Generate summary
-    const summary = Object.entries(byCompany).map(([company, metrics]) => {
-      const avgHasMetric = metrics.reduce((sum, m) => sum + m.has_metric_pct, 0) / metrics.length;
-      return {
-        company,
-        average_has_metric_percentage: Math.round(avgHasMetric * 100) / 100,
-        metrics: metrics.map((m) => ({
-          metric_type: m.metric_type,
-          has_metric_percentage: Math.round(m.has_metric_pct * 100) / 100,
-          total: m.total,
-          nulls: m.nulls,
-        })),
-      };
-    });
-
-    // Sort by average has_metric_percentage descending
-    summary.sort((a, b) => b.average_has_metric_percentage - a.average_has_metric_percentage);
+    `);
 
     return {
       period,
-      table_used: latestTable,
-      summary,
-      total_companies: summary.length,
-      overall_average: summary.length > 0
-        ? Math.round(
-            (summary.reduce((sum, s) => sum + s.average_has_metric_percentage, 0) /
-              summary.length) *
-            100
-          ) / 100
+      table_used: STARROCKS_OKR_METRICS_TABLE,
+      summary: result,
+      total_companies: result.length,
+      overall_average: result.length > 0 
+        ? (result.reduce((sum: number, r: any) => sum + r.null_pct, 0) / result.length).toFixed(2)
         : 0,
-      filtered_by_user: userId ? true : false,
-      user_allowed_accounts_count: userDataScope?.allowedAccounts.length || 0,
+      filtered_by_user: !!userDataScope,
       data_source: 'starrocks'
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error(`❌ [OKR] StarRocks query error for period "${period}":`, error);
-    throw error;
+    return {
+      period,
+      table_used: STARROCKS_OKR_METRICS_TABLE,
+      summary: [],
+      total_companies: 0,
+      overall_average: 0,
+      filtered_by_user: !!userDataScope,
+      error: error instanceof Error ? error.message : String(error),
+      data_source: 'starrocks'
+    };
   }
 }
 
 /**
- * DuckDB implementation for analyzing OKR metrics
- * Used as fallback when StarRocks is unavailable
+ * Analyzes has_metric_percentage for managers by city company using DuckDB
+ * Fallback when StarRocks is unavailable
+ * 
+ * @param period - Period to analyze (e.g., '10 月', '11 月')
  */
-async function analyzeHasMetricPercentageDuckDB(period: string, userId?: string): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    // Get user's data scope if userId is provided
-    let userDataScope: { allowedAccounts: string[] } | null = null;
-    if (userId) {
-      try {
-        const scope = await getUserDataScope(userId);
-        userDataScope = { allowedAccounts: scope.allowedAccounts };
-        
-        // If user has no allowed accounts, return empty result (fail-secure)
-        if (scope.allowedAccounts.length === 0) {
-          console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts, returning empty result`);
-          resolve({
-            period,
-            table_used: null,
-            summary: [],
-            total_companies: 0,
-            overall_average: 0,
-            filtered_by_user: true
+async function analyzeHasMetricPercentageDuckdb(period: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const con = new duckdb.Database(OKR_DB_PATH).connect();
+
+    // First get latest table name
+    (con as any).all(
+      `SELECT table_name FROM information_schema.tables 
+       WHERE table_schema='main' AND table_name LIKE 'okr_metrics_%'
+       ORDER BY table_name DESC LIMIT 1`,
+      (err: Error | null, result: any[]) => {
+        if (err) {
+          con.close((err: any) => {
+            console.error(`❌ [OKR] DuckDB error:`, err);
+            reject(err);
           });
           return;
         }
-      } catch (error) {
-        console.error(`❌ [OKR] Error getting user data scope:`, error);
-        // Fail-secure: return empty result on error
-        resolve({
-          period,
-          table_used: null,
-          summary: [],
-          total_companies: 0,
-          overall_average: 0,
-          filtered_by_user: true,
-          error: 'Failed to get user permissions'
-        });
-        return;
-      }
-    }
 
-    const db = new duckdb.Database(OKR_DB_PATH, { access_mode: "READ_ONLY" });
-    const con = db.connect();
-
-    getLatestMetricsTable(con)
-      .then((tableName) => {
-        if (!tableName) {
-          con.close();
-          db.close();
-          reject(new Error("No timestamped okr_metrics table found"));
-          return;
-        }
-
-        console.log(`[OKR] Analyzing period: "${period}" from table: ${tableName}`);
-
-        // Build query with optional user filtering
-        let accountFilter = '';
-        const queryParams: any[] = [period];
-        
-        if (userDataScope && userDataScope.allowedAccounts.length > 0) {
-          // Filter by allowed accounts
-          // DuckDB uses ? for parameters, so we need to build the IN clause with placeholders
-          const accountPlaceholders = userDataScope.allowedAccounts.map(() => '?').join(', ');
-          accountFilter = `AND e.fellow_ad_account IN (${accountPlaceholders})`;
-          queryParams.push(...userDataScope.allowedAccounts);
-        }
-
-        // Use parameterized query with proper escaping
-        // DuckDB uses ? for positional parameters
+        const tableName = result?.[0]?.table_name || "okr_metrics";
         const query = `
-          WITH base AS (
-            SELECT COALESCE(e.fellow_city_company_name, 'Unknown') AS company_name,
-                   m.metric_type,
-                   m.value
-            FROM ${tableName} m
-            LEFT JOIN employee_fellow e
-              ON m.owner = e.fellow_ad_account
-            WHERE m.period = ?
-              AND e.fellow_workday_cn_title IN ('乐道代理战队长', '乐道区域副总经理', '乐道区域总经理', '乐道区域行销负责人', '乐道战队长', '乐道战队长（兼个人销售）', '乐道片区总', '乐道行销大区负责人', '乐道销售部负责人')
-              ${accountFilter}
-          )
           SELECT company_name, metric_type,
                  COUNT(*) AS total,
                  SUM(CASE WHEN value IS NULL THEN 1 ELSE 0 END) AS nulls,
-                 100.0 * SUM(CASE WHEN value IS NULL THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0) AS null_pct
-          FROM base
-          WHERE company_name != 'Unknown'
+                 100.0 * SUM(CASE WHEN value IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS null_pct
+          FROM ${tableName}
+          WHERE period = '${period}'
           GROUP BY company_name, metric_type
+          ORDER BY company_name, metric_type
         `;
 
-        con.all(query, queryParams, (err: Error | null, result: any[]) => {
-          con.close();
-          db.close();
-
-          if (err) {
-            console.error(`[OKR] Query error for period "${period}":`, err);
-            reject(err);
-            return;
-          }
-          
-          console.log(`[OKR] Query returned ${result.length} rows for period "${period}"`);
-
-          // Calculate has_metric percentage
-          const processed = result.map((row: any) => ({
-            company_name: row.company_name,
-            metric_type: row.metric_type,
-            total: row.total,
-            nulls: row.nulls,
-            null_pct: parseFloat(row.null_pct) || 0,
-            has_metric_pct: 100.0 - (parseFloat(row.null_pct) || 0),
-          }));
-          // Group by company and calculate summary
-          const byCompany: Record<string, any[]> = {};
-          processed.forEach((row) => {
-            if (!byCompany[row.company_name]) {
-              byCompany[row.company_name] = [];
+        (con as any).all(query, (err: Error | null, result: any[]) => {
+          con.close((err: any) => {
+            if (err) {
+              console.error(`❌ [OKR] DuckDB query error:`, err);
+              reject(err);
+              return;
             }
-            byCompany[row.company_name].push(row);
-          });
 
-          // Generate summary
-          const summary = Object.entries(byCompany).map(([company, metrics]) => {
-            const avgHasMetric = metrics.reduce((sum, m) => sum + m.has_metric_pct, 0) / metrics.length;
-            return {
-              company,
-              average_has_metric_percentage: Math.round(avgHasMetric * 100) / 100,
-              metrics: metrics.map((m) => ({
-                metric_type: m.metric_type,
-                has_metric_percentage: Math.round(m.has_metric_pct * 100) / 100,
-                total: m.total,
-                nulls: m.nulls,
-              })),
-            };
-          });
-
-          // Sort by average has_metric_percentage descending
-          summary.sort((a, b) => b.average_has_metric_percentage - a.average_has_metric_percentage);
-
-          resolve({
-            period,
-            table_used: tableName,
-            summary,
-            total_companies: summary.length,
-            overall_average: summary.length > 0
-              ? Math.round(
-                  (summary.reduce((sum, s) => sum + s.average_has_metric_percentage, 0) /
-                    summary.length) *
-                  100
-                ) / 100
-              : 0,
-            filtered_by_user: userId ? true : false,
-            user_allowed_accounts_count: userDataScope?.allowedAccounts.length || 0
+            resolve({
+              period,
+              table_used: tableName,
+              summary: result || [],
+              total_companies: (result || []).length,
+              overall_average: result && result.length > 0
+                ? (result.reduce((sum, r) => sum + r.null_pct, 0) / result.length).toFixed(2)
+                : 0,
+              data_source: 'duckdb'
+            });
           });
         });
-      })
-      .catch((err) => {
-        con.close();
-        db.close();
-        reject(err);
-      });
+      }
+    );
   });
 }
 
-// Create OKR review tool with caching (1 hour TTL) and devtools tracking
-// DuckDB queries can be slow, so caching is important
-// Same period = instant response from cache
+/**
+ * Get query text from messages
+ */
+function getQueryText(messages: CoreMessage[]): string {
+  const lastMessage = messages[messages.length - 1];
+  if (lastMessage && lastMessage.role === "user" && typeof lastMessage.content === "string") {
+    return lastMessage.content;
+  }
+  return "";
+}
+
+// Create tools
 const mgrOkrReviewTool = createOkrReviewTool(
   true,  // enableCaching
   true,  // enableDevtoolsTracking
   60 * 60 * 1000  // cacheTTL: 1 hour (OKR data doesn't change frequently)
 );
 
+// Lazy-initialized agent
+let okrReviewerAgentInstance: Agent | null = null;
+let isInitializing = false;
+
 /**
- * Main entry point for analyzing OKR metrics
- * 
- * Tries StarRocks first (if configured), falls back to DuckDB on error
- * Ensures graceful degradation when backend is unavailable
- * 
- * @param period - Period to analyze (e.g., '10 月', '11 月')
- * @param userId - Optional Feishu user ID for data filtering (RLS)
+ * Initialize the OKR reviewer agent (lazy - called on first request)
  */
-export function analyzeHasMetricPercentage(period: string, userId?: string): Promise<any> {
-  // Use StarRocks if configured, otherwise fall back to DuckDB
-  if (hasStarrocksConfig()) {
-    // Try StarRocks first, but fall back to DuckDB on error
-    return analyzeHasMetricPercentageStarrocks(period, userId).catch((error: any) => {
-      console.warn(`⚠️ [OKR] StarRocks query failed, falling back to DuckDB: ${error.message}`);
-      // Fall through to DuckDB implementation
-      return analyzeHasMetricPercentageDuckDB(period, userId);
-    });
+function initializeAgent(): void {
+  if (okrReviewerAgentInstance || isInitializing) {
+    return;
   }
-  
-  // Use DuckDB directly if StarRocks not configured
-  return analyzeHasMetricPercentageDuckDB(period, userId);
-}
 
-// Lazy initialization
-let _okrReviewerAgent: Agent | null = null;
+  isInitializing = true;
 
-export function getOkrReviewerAgent(): Agent {
-  if (!_okrReviewerAgent) {
-    _okrReviewerAgent = new Agent({
-  name: "okr_reviewer",
-  model: getPrimaryModel(),
-  instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
+  // Create agent with Mastra framework
+  okrReviewerAgentInstance = new Agent({
+    name: "okr_reviewer",
+    instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责OKR（目标和关键结果）评审和分析的Feishu/Lark AI助手。大多数用户查询将是中文。
 
@@ -462,6 +269,7 @@ TOOLS:
 - mgr_okr_review: Fetches has_metric_percentage per city company. ALWAYS use for OKR analysis to get raw data.
 - chart_generation: Creates Mermaid/Vega-Lite charts. USE THIS TO VISUALIZE DATA (bar charts, pie charts, heatmaps).
 - okr_visualization: Generates heatmap visualizations when needed.
+- okr_chart_streaming: Generates comprehensive OKR analysis with embedded charts. USE THIS when users ask for "OKR分析", "图表", "可视化", or "Show OKR charts". This tool automatically queries data, generates charts, and provides insights.
 
 IMPORTANT: Every OKR analysis response should include:
 1. Text analysis with insights
@@ -471,37 +279,136 @@ IMPORTANT: Every OKR analysis response should include:
 提醒：
 - 使用mgr_okr_review工具获取OKR指标数据。
 - 使用chart_generation工具生成可视化（条形图、饼图）展示数据。
-- 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。`,
-      tools: {
-        mgr_okr_review: mgrOkrReviewTool,
-        okr_visualization: okrVisualizationTool as any, // Type assertion to avoid type issues
-        chart_generation: chartGenerationTool,
+- 使用okr_chart_streaming工具生成完整的OKR分析报告（包含图表和洞察）。
+- 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。
+- 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用okr_chart_streaming工具。`,
+    model: [
+      {
+        model: getPrimaryModel(),
+        maxRetries: 3,
       },
-      matchOn: [
-        "okr",
-        "objective",
-        "key result",
-        "manager review",
-        "has_metric",
-        "覆盖率",
-        "指标覆盖率",
-        "经理评审",
-        "目标",
-        "关键结果",
-        "okr指标",
-        "指标",
-        "okr分析",
-        "分析",
-        "图表",
-        "可视化",
-        "visualization",
-        "chart",
-        "analysis",
-      ],
-    });
-  }
-  return _okrReviewerAgent;
+      {
+        model: getFallbackModel(),
+        maxRetries: 3,
+      },
+    ],
+    tools: {
+      mgr_okr_review: mgrOkrReviewTool,
+      okr_visualization: okrVisualizationTool as any,
+      chart_generation: chartGenerationTool,
+      okr_chart_streaming: okrChartStreamingTool,
+    },
+  });
+
+  isInitializing = false;
 }
 
-// Placeholder export for imports
-export const okrReviewerAgent = null as any;
+/**
+ * Main OKR Reviewer Agent function - Mastra implementation
+ * 
+ * @param messages - Conversation history
+ * @param updateStatus - Optional callback for streaming updates
+ * @param chatId - Feishu chat ID
+ * @param rootId - Feishu thread root ID
+ * @param userId - Feishu user ID
+ * @returns Promise<string> - Agent response text
+ */
+export async function okrReviewerAgent(
+  messages: CoreMessage[],
+  updateStatus?: (status: string) => void,
+  chatId?: string,
+  rootId?: string,
+  userId?: string,
+): Promise<string> {
+  // Lazy initialize agent
+  initializeAgent();
+
+  const query = getQueryText(messages);
+  const startTime = Date.now();
+  console.log(`[OKR] Received query: "${query}"`);
+
+  // Set up memory scoping
+  const conversationId = getConversationId(chatId, rootId);
+  const userScopeId = getUserScopeId(userId);
+
+  console.log(
+    `[OKR] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+  );
+
+  // Batch updates to avoid spamming Feishu
+  const BATCH_DELAY_MS = 1000; // Batch every 1 second for better performance
+  const MIN_CHARS_PER_UPDATE = 50; // Minimum characters to trigger update
+
+  const accumulatedText: string[] = [];
+  let pendingTimeout: NodeJS.Timeout | null = null;
+  let lastUpdateLength = 0;
+
+  const updateCardBatched = async (text: string): Promise<void> => {
+    if (!updateStatus) {
+      return;
+    }
+
+    // Clear pending update
+    if (pendingTimeout) {
+      clearTimeout(pendingTimeout);
+      pendingTimeout = null;
+    }
+
+    const newChars = text.length - lastUpdateLength;
+
+    // If we have enough new text, update immediately
+    if (newChars >= MIN_CHARS_PER_UPDATE) {
+      updateStatus(text);
+      lastUpdateLength = text.length;
+    } else {
+      // Otherwise, batch the update
+      pendingTimeout = setTimeout(() => {
+        if (updateStatus) {
+          updateStatus(text);
+        }
+        lastUpdateLength = text.length;
+        pendingTimeout = null;
+      }, BATCH_DELAY_MS);
+    }
+  };
+
+  try {
+     // Track agent call for devtools monitoring
+     devtoolsTracker.trackAgentCall("okr_reviewer", query);
+
+     // MASTRA STREAMING: Call OKR reviewer agent with streaming
+     const stream = await okrReviewerAgentInstance!.stream(messages);
+
+    let text = "";
+    for await (const chunk of stream.textStream) {
+      text += chunk;
+      accumulatedText.push(chunk);
+      await updateCardBatched(text);
+    }
+
+    const duration = Date.now() - startTime;
+    devtoolsTracker.trackResponse("okr_reviewer", text, duration);
+
+    console.log(
+      `[OKR] Response complete (length=${text.length}, duration=${duration}ms)`
+    );
+    return text;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[OKR] Error during streaming:`, errorMsg);
+
+    devtoolsTracker.trackError(
+      "OKR Reviewer",
+      error instanceof Error ? error : new Error(errorMsg)
+    );
+    throw error;
+  }
+}
+
+/**
+ * Export helper to get OKR reviewer agent (for internal use)
+ */
+export function getOkrReviewerAgent(): Agent {
+  initializeAgent();
+  return okrReviewerAgentInstance!;
+}

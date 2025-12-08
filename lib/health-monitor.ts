@@ -3,6 +3,8 @@
  * Provides application health status and operational metrics
  */
 
+export type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'restarting';
+
 export interface HealthMetrics {
   uptime: number;
   timestamp: string;
@@ -17,6 +19,17 @@ export interface HealthMetrics {
     type: string;
     timestamp: string;
     message: string;
+  };
+  websocket?: {
+    status: WebSocketStatus;
+    lastEventTime?: string;
+    lastError?: string;
+    lastErrorTime?: string;
+    lastConnectTime?: string;
+    reconnectAttempts: number;
+    restarts: number;
+    lastRestartReason?: string;
+    lastRestartTime?: string;
   };
   agents: {
     manager: AgentMetrics;
@@ -48,6 +61,17 @@ class HealthMonitor {
       avgLatency: 0,
       lastCall: undefined as string | undefined,
     },
+  };
+  private wsMetrics = {
+    status: 'disconnected' as WebSocketStatus,
+    lastEventTime: undefined as string | undefined,
+    lastError: undefined as string | undefined,
+    lastErrorTime: undefined as string | undefined,
+    lastConnectTime: undefined as string | undefined,
+    reconnectAttempts: 0,
+    restarts: 0,
+    lastRestartReason: undefined as string | undefined,
+    lastRestartTime: undefined as string | undefined,
   };
 
   /**
@@ -104,8 +128,40 @@ class HealthMonitor {
       status,
       errors: this.errorCounts,
       lastError: this.lastError,
+      websocket: this.wsMetrics,
       agents: this.agentMetrics,
     };
+  }
+
+  setWebSocketStatus(status: WebSocketStatus, reason?: string) {
+    this.wsMetrics.status = status;
+    if (status === 'connected') {
+      this.wsMetrics.lastConnectTime = new Date().toISOString();
+    }
+    if (reason) {
+      this.wsMetrics.lastRestartReason = reason;
+    }
+  }
+
+  setWebSocketEventTimestamp(date: Date = new Date()) {
+    this.wsMetrics.lastEventTime = date.toISOString();
+  }
+
+  setWebSocketError(message: string) {
+    this.wsMetrics.status = 'error';
+    this.wsMetrics.lastError = message.substring(0, 200);
+    this.wsMetrics.lastErrorTime = new Date().toISOString();
+  }
+
+  incrementWebSocketReconnectAttempt() {
+    this.wsMetrics.reconnectAttempts += 1;
+  }
+
+  markWebSocketRestart(reason: string) {
+    this.wsMetrics.restarts += 1;
+    this.wsMetrics.lastRestartReason = reason;
+    this.wsMetrics.lastRestartTime = new Date().toISOString();
+    this.wsMetrics.status = 'restarting';
   }
 
   /**
@@ -121,6 +177,17 @@ class HealthMonitor {
       errorCount: 0,
       avgLatency: 0,
       lastCall: undefined,
+    };
+    this.wsMetrics = {
+      status: 'disconnected',
+      lastEventTime: undefined,
+      lastError: undefined,
+      lastErrorTime: undefined,
+      lastConnectTime: undefined,
+      reconnectAttempts: 0,
+      restarts: 0,
+      lastRestartReason: undefined,
+      lastRestartTime: undefined,
     };
   }
 }

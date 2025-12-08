@@ -6,7 +6,7 @@
 
 **WHAT**: TypeScript bot with Manager Agent routing to specialists (OKR Reviewer, Meeting Alignment, P&L Analysis, Doc Tracking, etc), using Vercel AI SDK v5, Supabase memory, and Feishu SDK.
 
-**TECH**: TypeScript, Hono, Vercel AI SDK v5, Supabase (memory/auth), StarRocks/DuckDB (metrics), Feishu SDK
+**TECH**: TypeScript, Hono, Vercel AI SDK v5, Mastra, Supabase (memory/auth), StarRocks/DuckDB (metrics), Feishu SDK
 
 ## Getting Started
 
