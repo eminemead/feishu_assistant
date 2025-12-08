@@ -3,6 +3,7 @@ import { getPrimaryModel } from "../shared/model-fallback";
 import { handleDocumentCommand } from "../handle-doc-commands";
 import { tool } from "ai";
 import { z } from "zod";
+import { documentSemanticSearchTool } from "../tools/document-semantic-search-tool";
 
 /**
  * DocumentTracking Agent Skeleton
@@ -134,6 +135,7 @@ export function getDocumentTrackingAgent(): Agent {
     instructions: getDocumentTrackingInstructions(),
     tools: {
       executeDocCommand: createDocumentCommandTool(),
+      semanticDocSearch: documentSemanticSearchTool,
     },
   });
 }
@@ -172,6 +174,10 @@ COMMANDS YOU SUPPORT:
 6. @bot tracking:status
    → Show poller statistics
    → Display: docs tracked, last poll time, error rate
+
+7. Semantic search (tool)
+   → Use semanticDocSearch tool when user asks to find/locate a tracked doc by keywords
+   → Return top matches with doc token and title
 
 IMPORTANT RULES:
 - Extract document tokens from Feishu URLs: https://feishu.cn/docs/{doc_token}

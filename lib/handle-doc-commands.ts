@@ -20,6 +20,7 @@ import {
   isEnhancedCommand,
   handleEnhancedCommand,
 } from "./doc-commands-enhanced";
+import { runDocumentTrackingWorkflow } from "./workflows/document-tracking-workflow";
 
 /**
  * Parse Feishu URLs and extract document tokens
@@ -282,6 +283,20 @@ async function handleCheckCommand(
       return;
     }
 
+    // Run workflow once to detect/persist/notify via Mastra workflow path
+    let workflowLine = "";
+    try {
+      const workflowResult = await runDocumentTrackingWorkflow({
+        docToken: parsed.docToken,
+        docType: parsed.docType || "doc",
+        chatId,
+        userId,
+      });
+      workflowLine = `\n\n**Workflow**: changeDetected=${workflowResult.changeDetected} debounced=${workflowResult.debounced} notified=${workflowResult.notified}`;
+    } catch (err) {
+      workflowLine = `\n\n**Workflow**: failed (${err instanceof Error ? err.message : String(err)})`;
+    }
+
     // Get tracking state if being tracked
     const persistence = getPersistence();
     const tracked = await persistence.getTrackedDoc(parsed.docToken);
@@ -311,7 +326,7 @@ async function handleCheckCommand(
 **Last Modified**: ${modTime}
 **Last Modified By**: ${metadata.lastModifiedUser}
 **Type**: ${metadata.docType}
-**Tracking**: ${tracked ? "✅ YES" : "⊘ NO"}${historyContent}`,
+**Tracking**: ${tracked ? "✅ YES" : "⊘ NO"}${workflowLine}${historyContent}`,
     });
 
     console.log(
