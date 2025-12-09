@@ -12,6 +12,9 @@ import {
   extractButtonFollowupContext,
 } from "./lib/handle-button-followup";
 import { initializeMastraMemory } from "./lib/memory-mastra";
+import { getObservabilityStatus } from "./lib/observability-config";
+// Import mastra instance to ensure observability is initialized
+import "./lib/observability-config";
 
 // Global error handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
@@ -675,11 +678,23 @@ async function startServer() {
   const startTime = Date.now();
   console.log(`📋 [Startup] Starting server initialization... (${new Date().toISOString()})`);
   
-  // Step 0: Initialize Mastra Memory system (background, non-blocking)
-  console.log("📋 [Startup] Step 0: Initializing Mastra Memory (async in background)...");
+  // Step 0: Initialize Mastra Observability and Memory (background, non-blocking)
+  console.log("📋 [Startup] Step 0: Initializing Mastra Observability and Memory...");
+  
+  // Initialize observability (synchronous, already configured)
+  const obsStatus = getObservabilityStatus();
+  if (obsStatus.enabled) {
+    console.log(`✅ [Startup] Step 0a: Mastra Observability enabled`);
+    console.log(`   Phoenix endpoint: ${obsStatus.phoenixEndpoint}`);
+    console.log(`   Project: ${obsStatus.projectName}`);
+    console.log(`   Log level: ${obsStatus.logLevel}`);
+  } else {
+    console.warn("⚠️ [Startup] Step 0a: Mastra Observability disabled (PHOENIX_ENDPOINT not set)");
+  }
+  
   // Start memory initialization in background without awaiting
   initializeMastraMemory().then(() => {
-    console.log("✅ [Startup] Step 0: Mastra Memory initialized");
+    console.log("✅ [Startup] Step 0b: Mastra Memory initialized");
   }).catch((error) => {
     console.warn("⚠️ [Startup] Mastra Memory initialization warning:", error);
     // Continue - memory is optional, agent can work without it

@@ -22,7 +22,7 @@ Migrate the Feishu Assistant from `@ai-sdk-tools/agents` to Mastra framework (`@
 - **Files**: `lib/agents/*-mastra.ts` (validated but not production)
 - **Pattern**: Single agent with model array fallback
 - **Memory**: `lib/memory-mastra.ts` (@mastra/memory + @mastra/pg + PostgreSQL)
-- **Observability**: Native AI Tracing (Langfuse, Braintrust, OTEL)
+- **Observability**: Native AI Tracing (Arize Phoenix OSS, Braintrust, OTEL)
 - **Tests**: Mastra validation tests exist but not run in CI
 
 ## Detailed Migration Breakdown
@@ -30,7 +30,7 @@ Migrate the Feishu Assistant from `@ai-sdk-tools/agents` to Mastra framework (`@
 ### PHASE 1: Setup & Infrastructure (foundation for everything else)
 1. **Add Mastra observability config**
    - PinoLogger for structured logging
-   - AI Tracing with configurable exporters (Langfuse/Braintrust/OTEL)
+   - AI Tracing with Arize Phoenix exporter (OSS, single-container deployment)
    - Update server.ts to initialize Mastra observability
 
 2. **Verify Mastra memory system**
@@ -67,7 +67,8 @@ Migrate the Feishu Assistant from `@ai-sdk-tools/agents` to Mastra framework (`@
 
 ### PHASE 4: Observability Upgrade
 1. **Replace custom devtools with Mastra AI Tracing**
-   - Configure Langfuse exporter (recommended for LLM-specific analytics)
+   - Configure Arize Phoenix exporter (OSS, simple single-container deployment)
+   - Deploy Phoenix container (much simpler than Langfuse - no ClickHouse/Redis/S3 needed)
    - Set up real-time tracing in development
    - Retire custom devtools-integration.ts (after validation)
 
@@ -119,8 +120,8 @@ Migrate the Feishu Assistant from `@ai-sdk-tools/agents` to Mastra framework (`@
 - Retire `lib/agents/*-mastra.test.ts` (merge into main tests)
 
 ### Configuration & Docs
-- `.env.example` - Add Mastra config (LANGFUSE_* keys, etc.)
-- `docs/setup/mastra-observability.md` - New guide
+- `.env.example` - Add Mastra config (PHOENIX_ENDPOINT, PHOENIX_API_KEY, etc.)
+- `docs/setup/arize-phoenix-observability.md` - New guide
 - `docs/architecture/agent-framework.md` - Update architecture
 - `AGENTS.md` - Update code conventions (if needed)
 
@@ -159,7 +160,7 @@ PHASE 3 (Memory) - START AFTER PHASE 2
 └── RLS verification
 
 PHASE 4 (Observability) - PARALLEL WITH PHASE 3
-├── Langfuse integration
+├── Arize Phoenix integration
 └── Devtools retirement
 
 PHASE 5 (Testing) - START AFTER PHASE 2, 3, 4

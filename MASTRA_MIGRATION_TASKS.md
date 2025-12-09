@@ -41,7 +41,7 @@ Before migrating agents, we need observability and a working memory backend. The
 1. Import Mastra observability modules
 2. Create observability config object with environment detection
 3. Initialize PinoLogger (structured logging)
-4. Set up AI Tracing exporter (Langfuse)
+4. Set up AI Tracing exporter (Arize Phoenix)
 5. Attach to Mastra instance
 
 **Files Affected**:
@@ -93,31 +93,35 @@ Before migrating agents, we need observability and a working memory backend. The
 
 ---
 
-### 1.3 Configure Langfuse AI Tracing exporter
+### 1.3 Configure Arize Phoenix AI Tracing exporter
 **Priority**: P1
 **Estimated Time**: 1-2 days
 **Depends On**: Add Mastra observability config
 **Blocks**: Agent migration
 
-**Why Langfuse**:
+**Why Arize Phoenix (OSS)**:
+- ✅ **Simple Deployment**: Single Docker container (vs Langfuse requiring ClickHouse + Redis + S3)
+- ✅ **Open Source**: ELv2 license, free for self-hosting
+- ✅ **OpenTelemetry-based**: Vendor-neutral, easy to migrate later
+- ✅ **Mastra Integration**: `@mastra/arize` package available
+- ✅ **Production-Ready**: Full tracing, evaluation, and debugging capabilities
 - Purpose-built for LLM observability (not generic like OTEL)
 - Shows token counts, latency, model info - exactly what we need
 - Dashboard makes debugging agent behavior intuitive
 - Better analytics than custom devtools HTML
 
 **Implementation Steps**:
-1. Get Langfuse account + API keys
-2. Create `lib/observability-config.ts` with Langfuse exporter setup
-3. Configure real-time mode for development (instant feedback)
-4. Configure batch mode for production (efficiency)
-5. Set up sampling (100% in dev, 1% in prod to reduce costs)
-6. Test in Langfuse dashboard
+1. Install `@mastra/arize` package: `bun add @mastra/arize`
+2. Deploy Phoenix container: `docker run -p 6006:6006 arizephoenix/phoenix`
+3. Create `lib/observability-config.ts` with Arize exporter setup
+4. Configure endpoint (default: `http://localhost:6006/v1/traces`)
+5. Test in Phoenix dashboard (accessible at `http://localhost:6006`)
 
 **Environment Variables Needed**:
 ```env
-LANGFUSE_PUBLIC_KEY=your-key-here
-LANGFUSE_SECRET_KEY=your-secret
-LANGFUSE_BASE_URL=https://cloud.langfuse.com  # optional
+PHOENIX_ENDPOINT=http://localhost:6006/v1/traces
+PHOENIX_API_KEY=your-api-key  # Optional for local instances
+PHOENIX_PROJECT_NAME=feishu-assistant
 NODE_ENV=development  # for real-time mode
 ```
 
@@ -129,9 +133,10 @@ NODE_ENV=development  # for real-time mode
 - Error events with full context
 
 **Files Affected**:
-- `lib/observability-config.ts` (new, 150-200 lines)
+- `lib/observability-config.ts` (new, 100-150 lines)
 - `server.ts` (import and use config)
-- `.env.example` (add Langfuse keys)
+- `.env.example` (add Phoenix config)
+- `docker-compose.yml` (optional, for Phoenix container)
 
 ---
 
@@ -408,7 +413,7 @@ const results = await Promise.all(promises);
 1. Run agent with each tool
 2. Verify tool executes correctly
 3. Verify output format matches expectations
-4. Check no errors in Langfuse traces
+4. Check no errors in Phoenix traces
 
 ---
 
@@ -540,7 +545,7 @@ During transition, agents read from both old and new memory systems. We need to 
 - Can now leverage AI Tracing features
 - Can retire custom devtools code
 
-### 4.1 Setup Langfuse tracing for all agents and tools
+### 4.1 Setup Arize Phoenix tracing for all agents and tools
 **Priority**: P1
 **Estimated Time**: 1 day
 **Depends On**: All agents migrated
@@ -571,15 +576,17 @@ During transition, agents read from both old and new memory systems. We need to 
    - Any errors
 
 **Benefits Over Custom Devtools**:
-| Feature | Custom Devtools | Langfuse AI Tracing |
-|---------|-----------------|-------------------|
+| Feature | Custom Devtools | Arize Phoenix AI Tracing |
+|---------|-----------------|-------------------------|
 | Tracing LLM calls | ❌ No | ✅ Yes, detailed |
 | Token counting | ⚠️ Manual | ✅ Automatic |
 | Model analysis | ❌ No | ✅ Cost tracking |
-| Real-time dashboard | ⚠️ HTML page | ✅ Cloud UI |
+| Real-time dashboard | ⚠️ HTML page | ✅ OSS UI (self-hosted) |
 | Production use | ❌ Dev only | ✅ Production ready |
 | Multiple users | ❌ No | ✅ Yes |
 | Alerts/monitoring | ❌ No | ✅ Yes |
+| Deployment complexity | ✅ Simple | ✅ Simple (single container) |
+| Open source | ✅ Yes | ✅ Yes (ELv2) |
 
 ---
 
@@ -590,7 +597,7 @@ During transition, agents read from both old and new memory systems. We need to 
 **Blocks**: None
 
 **Real-Time Mode** (Development):
-- Every trace is immediately flushed to Langfuse
+- Every trace is immediately flushed to Phoenix
 - See results in dashboard within 1-2 seconds
 - Useful for debugging (instant feedback)
 - Higher network overhead (~10KB per trace)
@@ -622,7 +629,7 @@ const config = {
 ### 4.3 Deprecate custom devtools-integration.ts
 **Priority**: P2
 **Estimated Time**: 1 day
-**Depends On**: Tasks 4.1 + 4.2 (Langfuse working)
+**Depends On**: Tasks 4.1 + 4.2 (Phoenix working)
 **Blocks**: Code cleanup (Phase 6)
 
 **What's Being Removed**:
@@ -648,7 +655,7 @@ const config = {
 **Impact**:
 - Code reduction: ~500 lines removed
 - Cleaner codebase
-- No loss of functionality (all features in Langfuse)
+- No loss of functionality (all features in Phoenix)
 
 ---
 
@@ -916,25 +923,25 @@ npm run test:perf
 2. **Setup docs** (`docs/setup/`):
    - Remove ai-sdk-tools references
    - Add Mastra installation
-   - Add Langfuse integration guide
+   - Add Arize Phoenix integration guide
    - Add PostgreSQL setup guide
 
 3. **Code comments**:
    - Manager agent: explain model array fallback
    - Specialist agents: explain tool definitions
    - Memory system: explain PostgreSQL backend
-   - Observability: explain Langfuse tracing
+   - Observability: explain Phoenix tracing
 
 4. **Troubleshooting**:
    - Common Mastra issues
-   - Langfuse debugging
+   - Phoenix debugging
    - PostgreSQL connection issues
    - Performance tuning
 
 **Files to Update**:
 - `docs/architecture/agent-framework.md` (update)
 - `docs/setup/mastra-setup.md` (new)
-- `docs/setup/langfuse-guide.md` (new)
+- `docs/setup/arize-phoenix-observability.md` (new)
 - `docs/setup/postgresql-setup.md` (new)
 - `README.md` (update references)
 - AGENTS.md (update if code conventions changed)
@@ -964,7 +971,7 @@ npm run test:perf
 1. Deploy to staging environment
 2. Run smoke tests (basic functionality)
 3. Monitor for 24 hours
-4. Verify Langfuse traces appear
+4. Verify Phoenix traces appear
 5. Verify memory persistence
 6. Verify performance
 7. Get sign-off from team
@@ -993,7 +1000,7 @@ npm run test:perf
 - Error rate (should be <0.1%)
 - Response latency (should be <5s)
 - Token usage (should match expectations)
-- Langfuse trace quality (should be complete)
+- Phoenix trace quality (should be complete)
 - Memory queries (should be <50ms)
 
 **Success Declaration**:
@@ -1026,7 +1033,7 @@ If critical issues discovered:
 6. Plan next attempt
 
 ### Monitoring During Transition
-- Langfuse traces should appear for all requests
+- Phoenix traces should appear for all requests
 - Error rates should remain low
 - Response times should be stable or improving
 - Memory operations should be fast
@@ -1042,7 +1049,7 @@ If critical issues discovered:
 
 ## Success Looks Like
 
-✅ **Day 1-2**: Observability working (traces in Langfuse)
+✅ **Day 1-2**: Observability working (traces in Phoenix)
 ✅ **Day 3-4**: Manager agent working with Mastra
 ✅ **Day 5-6**: All specialists migrated and tested
 ✅ **Day 7-8**: Memory transitioned, RLS verified
@@ -1071,7 +1078,7 @@ If critical issues discovered:
 | File | Purpose | Size |
 |------|---------|------|
 | `lib/logger-config.ts` | Structured logging | ~150 lines |
-| `lib/observability-config.ts` | Langfuse setup | ~200 lines |
+| `lib/observability-config.ts` | Phoenix setup | ~150 lines |
 | `scripts/migrate-memory.ts` | Migrate old memory | ~300 lines |
 | `scripts/performance-test.ts` | Perf baseline | ~200 lines |
 | `test/integration/memory-dual-read.test.ts` | Verify consistency | ~200 lines |
@@ -1082,8 +1089,8 @@ If critical issues discovered:
 ### Files to Delete
 | File | Reason |
 |------|--------|
-| `lib/devtools-integration.ts` | Replaced by Langfuse |
-| `lib/devtools-page.html` | Replaced by Langfuse cloud |
+| `lib/devtools-integration.ts` | Replaced by Phoenix |
+| `lib/devtools-page.html` | Replaced by Phoenix OSS UI |
 | `lib/agents/manager-agent-mastra.ts` | Merged into main |
 | `lib/agents/*-mastra.ts` | Merged into mains |
 

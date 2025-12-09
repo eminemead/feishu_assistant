@@ -1,0 +1,30 @@
+# Docker Compose configuration for Arize Phoenix (OSS)
+# 
+# Run with: docker compose -f docker-compose.phoenix.yml up -d
+# Or with OrbStack: orbstack compose -f docker-compose.phoenix.yml up -d
+#
+# Access Phoenix dashboard at: http://localhost:6006
+
+version: '3.8'
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: feishu-phoenix
+    ports:
+      - "6006:6006"
+    # Optional: Configure persistence (defaults to SQLite in container)
+    # For PostgreSQL persistence, uncomment and configure:
+    # environment:
+    #   PHOENIX_DATABASE_URL: postgresql://user:pass@host:5432/phoenix
+    # Optional: Persist data between container restarts
+    # Uncomment to mount a local directory:
+    # volumes:
+    #   - ./phoenix-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
