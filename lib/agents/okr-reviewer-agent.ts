@@ -208,6 +208,28 @@ async function analyzeHasMetricPercentageDuckdb(period: string): Promise<any> {
 }
 
 /**
+ * Analyzes has_metric_percentage for managers by city company
+ * Tries StarRocks first, falls back to DuckDB if unavailable
+ * 
+ * @param period - Period to analyze (e.g., '10 月', '11 月')
+ * @param userId - Optional Feishu user ID for data filtering (RLS)
+ */
+export async function analyzeHasMetricPercentage(period: string, userId?: string): Promise<any> {
+  // Try StarRocks first if available
+  if (hasStarrocksConfig()) {
+    try {
+      return await analyzeHasMetricPercentageStarrocks(period, userId);
+    } catch (error) {
+      console.warn(`[OKR] StarRocks query failed, falling back to DuckDB:`, error);
+      return await analyzeHasMetricPercentageDuckdb(period);
+    }
+  }
+  
+  // Fall back to DuckDB
+  return await analyzeHasMetricPercentageDuckdb(period);
+}
+
+/**
  * Get query text from messages
  */
 function getQueryText(messages: CoreMessage[]): string {

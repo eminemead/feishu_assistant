@@ -47,6 +47,7 @@ async function initializePostgresStore(): Promise<PostgresStore | null> {
 
   try {
     postgresStore = new PostgresStore({
+      id: "feishu-assistant-pg",
       connectionString: SUPABASE_DATABASE_URL,
     });
     console.log('✅ [Memory] Connected to PostgreSQL storage (Mastra)');

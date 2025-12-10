@@ -759,6 +759,14 @@ async function startServer() {
   // Step 2: Start HTTP server (immediate, non-blocking)
   console.log("📋 [Startup] Step 2: Starting HTTP server...");
   
+  // Prevent double-binding if startServer is invoked more than once (Bun/dev reloads)
+  const globalAny = globalThis as any;
+  if (globalAny.__feishu_server_started__) {
+    console.warn("⚠️ [Startup] HTTP server already started, skipping duplicate serve()");
+    return;
+  }
+  globalAny.__feishu_server_started__ = true;
+
   serve({
     fetch: app.fetch,
     port,

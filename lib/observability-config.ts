@@ -8,8 +8,8 @@
  */
 
 import { Mastra } from "@mastra/core";
-import { PinoLogger } from "@mastra/core/observability";
 import { ArizeExporter } from "@mastra/arize";
+import { Observability } from "@mastra/observability";
 import { getManagerAgent } from "./agents/manager-agent";
 import { getOkrReviewerAgent } from "./agents/okr-reviewer-agent";
 import { getAlignmentAgent } from "./agents/alignment-agent";
@@ -22,13 +22,6 @@ const PHOENIX_API_KEY = process.env.PHOENIX_API_KEY; // Optional for local insta
 const PHOENIX_PROJECT_NAME = process.env.PHOENIX_PROJECT_NAME || "feishu-assistant";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const LOG_LEVEL = process.env.LOG_LEVEL || (NODE_ENV === "production" ? "info" : "debug");
-
-/**
- * Initialize PinoLogger for structured logging
- */
-const logger = new PinoLogger({
-  level: LOG_LEVEL as "debug" | "info" | "warn" | "error",
-});
 
 /**
  * Initialize Arize Phoenix exporter for AI tracing
@@ -46,6 +39,17 @@ const phoenixExporter = new ArizeExporter({
   projectName: PHOENIX_PROJECT_NAME,
 });
 
+// Observability instance (new Mastra API)
+const observability = new Observability({
+  configs: {
+    arize: {
+      serviceName: PHOENIX_PROJECT_NAME,
+      exporters: [phoenixExporter],
+      logLevel: LOG_LEVEL as "debug" | "info" | "warn" | "error",
+    },
+  },
+});
+
 /**
  * Initialize Mastra instance with observability enabled and register all
  * production agents so Phoenix spans are emitted automatically.
@@ -61,21 +65,8 @@ const registeredAgents = {
 export const mastra = new Mastra({
   name: "feishu-assistant",
   agents: registeredAgents,
-  observability: {
-    logger,
-    configs: {
-      arize: {
-        serviceName: PHOENIX_PROJECT_NAME,
-        exporters: [phoenixExporter],
-      },
-    },
-  },
+  observability,
 });
-
-/**
- * Export logger for direct use if needed
- */
-export { logger };
 
 /**
  * Check if observability is properly configured
@@ -96,3 +87,6 @@ export function getObservabilityStatus() {
     logLevel: LOG_LEVEL,
   };
 }
+
+// Export observability instance if needed elsewhere
+export { observability };
