@@ -10,6 +10,11 @@
 import { Mastra } from "@mastra/core";
 import { PinoLogger } from "@mastra/core/observability";
 import { ArizeExporter } from "@mastra/arize";
+import { getManagerAgent } from "./agents/manager-agent";
+import { getOkrReviewerAgent } from "./agents/okr-reviewer-agent";
+import { getAlignmentAgent } from "./agents/alignment-agent";
+import { getPnlAgent } from "./agents/pnl-agent";
+import { getDpaPmAgent } from "./agents/dpa-pm-agent";
 
 // Environment configuration
 const PHOENIX_ENDPOINT = process.env.PHOENIX_ENDPOINT || "http://localhost:6006/v1/traces";
@@ -42,13 +47,20 @@ const phoenixExporter = new ArizeExporter({
 });
 
 /**
- * Initialize Mastra instance with observability enabled
- * 
- * This instance should be used by all agents and workflows to ensure
- * automatic tracing and logging.
+ * Initialize Mastra instance with observability enabled and register all
+ * production agents so Phoenix spans are emitted automatically.
  */
+const registeredAgents = {
+  manager: getManagerAgent(),
+  okrReviewer: getOkrReviewerAgent(),
+  alignment: getAlignmentAgent(),
+  pnl: getPnlAgent(),
+  dpaPm: getDpaPmAgent(),
+};
+
 export const mastra = new Mastra({
   name: "feishu-assistant",
+  agents: registeredAgents,
   observability: {
     logger,
     configs: {

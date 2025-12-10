@@ -1,5 +1,48 @@
 # Arize Phoenix Observability Setup
 
+This guide enables Mastra AI tracing to flow into Arize Phoenix (OSS) for the Feishu Assistant.
+
+## Prerequisites
+- Docker/OrbStack available and port `6006` free.
+- `bun install` completed (includes `@mastra/arize` + Mastra beta packages).
+- Env file based on `.env.example`.
+
+## Environment
+The defaults are already in `.env.example`:
+```
+PHOENIX_ENDPOINT=http://localhost:6006/v1/traces
+# PHOENIX_API_KEY=your-api-key  # optional for local
+PHOENIX_PROJECT_NAME=feishu-assistant
+LOG_LEVEL=debug                 # optional; production → info
+```
+
+## Start Phoenix locally
+```
+docker compose -f docker-compose.phoenix.yml up -d
+# or: orbstack compose -f docker-compose.phoenix.yml up -d
+```
+- Dashboard: http://localhost:6006
+- Health: `curl http://localhost:6006/health` (expects JSON)
+
+## App wiring (already in repo)
+- `lib/observability-config.ts` initializes `ArizeExporter` + `PinoLogger` and exports a Mastra instance configured with Phoenix.
+- `server.ts` imports `lib/observability-config` on startup so tracing/logging are active before agents run.
+- Env overrides: set `PHOENIX_ENDPOINT`, `PHOENIX_API_KEY` (if using cloud), `PHOENIX_PROJECT_NAME`, `LOG_LEVEL`.
+
+## Run the assistant with tracing
+```
+NODE_ENV=development bun dev   # or bun server.ts
+```
+Then exercise any agent path (e.g., send a Feishu mention to the bot). Traces and tool calls should stream to Phoenix.
+
+## Verification checklist
+- Phoenix container healthy and UI reachable at port 6006.
+- Traces appear for Manager/OKR/Alignment/P&L/DPA-PM agents with span names and token/latency metadata.
+- Logs show Pino-structured entries (level matches `LOG_LEVEL`).
+- If traces are missing, confirm env vars, restart the server to re-read config, and tail logs for Phoenix exporter errors.
+
+## Detailed reference
+
 ## Overview
 
 Arize Phoenix is an open-source observability platform for LLM applications. It provides:

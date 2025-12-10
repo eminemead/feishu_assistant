@@ -17,6 +17,7 @@
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
+    "test:phoenix-trace": "bun scripts/test-phoenix-trace.ts",
     "setup:supabase": "bun scripts/setup-supabase.ts",
     "migrate:supabase": "bun scripts/run-migrations.ts",
     "test:supabase": "bun scripts/test-supabase.ts",
