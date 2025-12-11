@@ -61,14 +61,28 @@ export interface RetryConfig {
 /**
  * Free models available for OpenRouter auto router
  * These models are used when openrouter/auto is configured with the models parameter
+ * 
+ * Note: For tool calling, we need models that support function calling.
+ * Some free models may not support tools, so we prioritize models that do.
  */
 export const FREE_MODELS = [
+  "qwen/qwen3-235b-a22b:free",        // Supports tool calling
+  "mistralai/devstral-small-2505:free", // Supports tool calling
+  "kwaipilot/kat-coder-pro:free",      // Supports tool calling
+  "z-ai/glm-4.5-air:free",             // May support tool calling
+  "qwen/qwen3-coder:free",             // Supports tool calling
+  "moonshotai/kimi-k2:free",          // May support tool calling
+] as const;
+
+/**
+ * Free models that support tool calling (subset of FREE_MODELS)
+ * Use this when tools are required
+ */
+export const FREE_MODELS_WITH_TOOLS = [
   "qwen/qwen3-235b-a22b:free",
   "mistralai/devstral-small-2505:free",
   "kwaipilot/kat-coder-pro:free",
-  "z-ai/glm-4.5-air:free",
   "qwen/qwen3-coder:free",
-  "moonshotai/kimi-k2:free",
 ] as const;
 
 /**
@@ -102,21 +116,36 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
  * we return the auto router model here. The actual models restriction may need to be
  * configured at the Mastra agent level or through environment variables.
  * 
+ * @param requireTools - If true, only use models that support tool calling (default: false)
  * @returns LanguageModel configured for openrouter/auto
  */
-export function getAutoRouterModel(): LanguageModel {
+export function getAutoRouterModel(requireTools: boolean = false): LanguageModel {
+  const models = requireTools ? FREE_MODELS_WITH_TOOLS : FREE_MODELS;
+  const modelList = requireTools ? "tool-calling free models" : "free models";
+  
   console.log(
-    `🤖 [Model] Using OpenRouter auto router with ${FREE_MODELS.length} free models`
+    `🤖 [Model] Using OpenRouter auto router with ${models.length} ${modelList}`
   );
   console.log(
-    `📋 [Model] Free models pool: ${FREE_MODELS.slice(0, 3).join(", ")}${FREE_MODELS.length > 3 ? "..." : ""}`
+    `📋 [Model] Models pool: ${models.slice(0, 3).join(", ")}${models.length > 3 ? "..." : ""}`
   );
   
   // Return openrouter/auto model
   // The models parameter needs to be passed at request time via providerOptions
   // Since Mastra abstracts the request layer, we may need to configure this differently
   // For now, return the auto router - OpenRouter will handle intelligent routing
-  // TODO: If Mastra supports providerOptions, pass models: FREE_MODELS there
+  // TODO: If Mastra supports providerOptions, pass models: models there
+  // 
+  // IMPORTANT: If tools are required, we should use a specific model that supports tools
+  // instead of auto router, since auto router may select models without tool support
+  if (requireTools) {
+    // Use a specific free model that supports tool calling instead of auto router
+    // This ensures tool calling works reliably
+    const toolModel = models[0]; // Use first model that supports tools
+    console.log(`🔧 [Model] Tool calling required, using specific model: ${toolModel}`);
+    return openrouter(toolModel);
+  }
+  
   return openrouter("openrouter/auto");
 }
 

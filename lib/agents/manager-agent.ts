@@ -73,10 +73,9 @@ function initializeAgent() {
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Use OpenRouter auto router with free models only
-    // The auto router selects the best model from the free models pool
-    // based on prompt complexity, task type, and model capabilities
-    model: getAutoRouterModel(),
+    // Use OpenRouter auto router with free models that support tool calling
+    // Since manager agent uses tools (searchWeb), we need models that support tool calling
+    model: getAutoRouterModel(true), // requireTools=true
 
     // Tools (identical to AI SDK Tools)
     tools: {

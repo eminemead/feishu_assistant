@@ -304,8 +304,9 @@ IMPORTANT: Every OKR analysis response should include:
 - 使用okr_chart_streaming工具生成完整的OKR分析报告（包含图表和洞察）。
 - 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。
 - 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用okr_chart_streaming工具。`,
-    // Use OpenRouter auto router with free models only
-    model: getAutoRouterModel(),
+    // Use OpenRouter auto router with free models that support tool calling
+    // OKR reviewer uses tools, so we need models that support tool calling
+    model: getAutoRouterModel(true), // requireTools=true
     tools: {
       mgr_okr_review: mgrOkrReviewTool,
       okr_visualization: okrVisualizationTool as any,
