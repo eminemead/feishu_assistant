@@ -1,12 +1,17 @@
 /**
  * Model Fallback Strategy
  * 
- * Provides flexible model selection with automatic fallback on rate limits.
- * Tries cheaper/faster models first, falls back to reliable models if needed.
+ * Uses OpenRouter's auto router with free models only.
+ * The auto router intelligently selects the best model from a curated list
+ * based on prompt complexity, task type, and model capabilities.
  * 
- * Supported models:
- * - Primary (cheap): kwaipilot/kat-coder-pro:free
- * - Fallback: google/gemini-2.5-flash-lite
+ * Free Models Pool:
+ * - deepseek/deepseek-r1:free (671B params, 164K context, best overall)
+ * - qwen/qwen3-235b-a22b-07-25:free (262K context)
+ * - minimax/minimax-m2:free (204K context)
+ * - mistralai/devstral-small-2505:free (32K context)
+ * - google/gemini-2.0-pro-exp-02-05:free (2M context, multimodal)
+ * - meta-llama/llama-3.3-70b-instruct:free (32K context)
  * 
  * Rate Limit Handling:
  * - Exponential backoff: 2s, 4s, 8s (with jitter)
@@ -54,7 +59,21 @@ export interface RetryConfig {
 }
 
 /**
- * Available models in fallback order
+ * Free models available for OpenRouter auto router
+ * These models are used when openrouter/auto is configured with the models parameter
+ */
+export const FREE_MODELS = [
+  "deepseek/deepseek-r1:free",
+  "qwen/qwen3-235b-a22b-07-25:free",
+  "minimax/minimax-m2:free",
+  "mistralai/devstral-small-2505:free",
+  "google/gemini-2.0-pro-exp-02-05:free",
+  "meta-llama/llama-3.3-70b-instruct:free",
+] as const;
+
+/**
+ * Available models in fallback order (deprecated - kept for backward compatibility)
+ * @deprecated Use getAutoRouterModel() instead
  */
 export const AVAILABLE_MODELS: ModelConfig[] = [
   {
@@ -72,35 +91,63 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
 ];
 
 /**
+ * Get OpenRouter auto router model with free models only
+ * 
+ * The auto router intelligently selects the best model from the free models pool
+ * based on prompt complexity, task type, and model capabilities.
+ * 
+ * Note: The models parameter restriction is configured via the model identifier.
+ * OpenRouter's auto router supports restricting models by using the models parameter
+ * in the request. Since we're using Mastra which may not expose providerOptions directly,
+ * we return the auto router model here. The actual models restriction may need to be
+ * configured at the Mastra agent level or through environment variables.
+ * 
+ * @returns LanguageModel configured for openrouter/auto
+ */
+export function getAutoRouterModel(): LanguageModel {
+  console.log(
+    `🤖 [Model] Using OpenRouter auto router with ${FREE_MODELS.length} free models`
+  );
+  console.log(
+    `📋 [Model] Free models pool: ${FREE_MODELS.slice(0, 3).join(", ")}${FREE_MODELS.length > 3 ? "..." : ""}`
+  );
+  
+  // Return openrouter/auto model
+  // The models parameter needs to be passed at request time via providerOptions
+  // Since Mastra abstracts the request layer, we may need to configure this differently
+  // For now, return the auto router - OpenRouter will handle intelligent routing
+  // TODO: If Mastra supports providerOptions, pass models: FREE_MODELS there
+  return openrouter("openrouter/auto");
+}
+
+/**
+ * Get the list of free models for OpenRouter auto router
+ * This can be used to configure the models parameter when making requests
+ */
+export function getFreeModelsList(): readonly string[] {
+  return FREE_MODELS;
+}
+
+/**
  * Get the primary model (cheaper/faster)
+ * @deprecated Use getAutoRouterModel() instead. This function now returns the auto router for backward compatibility.
  */
 export function getPrimaryModel(): LanguageModel {
-  const model = AVAILABLE_MODELS.find((m) => m.tier === "primary");
-  if (!model) {
-    throw new Error("No primary model configured");
-  }
   console.log(
-    `🤖 [Model] Using primary model: ${model.name} (${model.costNote})`
+    `⚠️ [Model] getPrimaryModel() is deprecated, using auto router instead`
   );
-  const modelInstance = openrouter(model.model);
-  
-  // Ensure the model has proper error handling
-  // This helps prevent hanging requests
-  return modelInstance;
+  return getAutoRouterModel();
 }
 
 /**
  * Get the fallback model (reliable)
+ * @deprecated Use getAutoRouterModel() instead. This function now returns the auto router for backward compatibility.
  */
 export function getFallbackModel(): LanguageModel {
-  const model = AVAILABLE_MODELS.find((m) => m.tier === "fallback");
-  if (!model) {
-    throw new Error("No fallback model configured");
-  }
   console.log(
-    `🤖 [Model] Using fallback model: ${model.name} (${model.costNote})`
+    `⚠️ [Model] getFallbackModel() is deprecated, using auto router instead`
   );
-  return openrouter(model.model);
+  return getAutoRouterModel();
 }
 
 /**

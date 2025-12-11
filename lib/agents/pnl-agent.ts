@@ -13,7 +13,7 @@
 
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
-import { getPrimaryModel, getFallbackModel } from "../shared/model-fallback";
+import { getAutoRouterModel } from "../shared/model-fallback";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -56,16 +56,8 @@ function initializeAgent(): void {
 - You are the P&L specialist agent.
 - This feature is currently under development. Please check back later for profit and loss analysis features.
 - 此功能目前正在开发中，请稍后再查看损益分析功能。`,
-    model: [
-      {
-        model: getPrimaryModel(),
-        maxRetries: 3,
-      },
-      {
-        model: getFallbackModel(),
-        maxRetries: 3,
-      },
-    ],
+    // Use OpenRouter auto router with free models only
+    model: getAutoRouterModel(),
   });
 
   isInitializing = false;

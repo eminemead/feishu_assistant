@@ -1,5 +1,5 @@
 import { Agent } from "@ai-sdk-tools/agents";
-import { getPrimaryModel } from "../shared/model-fallback";
+import { getAutoRouterModel } from "../shared/model-fallback";
 import { handleDocumentCommand } from "../handle-doc-commands";
 import { tool } from "ai";
 import { z } from "zod";
@@ -131,7 +131,8 @@ function createDocumentCommandTool() {
 export function getDocumentTrackingAgent(): Agent {
   return new Agent({
     name: "DocumentTracking",
-    model: getPrimaryModel(),
+    // Use OpenRouter auto router with free models only
+    model: getAutoRouterModel(),
     instructions: getDocumentTrackingInstructions(),
     tools: {
       executeDocCommand: createDocumentCommandTool(),

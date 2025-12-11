@@ -46,6 +46,7 @@ const encryptKey = process.env.FEISHU_ENCRYPT_KEY;
 const verificationToken = process.env.FEISHU_VERIFICATION_TOKEN;
 const appId = process.env.FEISHU_APP_ID!;
 const appSecret = process.env.FEISHU_APP_SECRET!;
+const botOpenId = process.env.FEISHU_BOT_OPEN_ID; // Bot's open_id for mention detection
 
 // Track WebSocket health
 let wsClient: lark.WSClient | null = null;
@@ -310,8 +311,17 @@ eventDispatcher.register({
         if (message.chat_type === "group") {
           // Look for bot in mentions array (by open_id, user_id, or app_id)
           const botMentioned = mentions.some(mention => {
-            const mentionId = mention.id?.open_id || mention.id?.user_id || mention.id?.app_id;
-            const isBotMention = mentionId === botUserId;
+            const mentionOpenId = mention.id?.open_id;
+            const mentionUserId = mention.id?.user_id;
+            const mentionAppId = mention.id?.app_id;
+            
+            // Check if this mention matches the bot's IDs
+            // botOpenId is the actual open_id when bot is mentioned in groups
+            // botUserId (appId) is used as fallback
+            const isBotMention = (botOpenId && mentionOpenId === botOpenId) || 
+                                mentionAppId === botUserId ||
+                                mentionUserId === botUserId;
+            
             if (isBotMention) {
               console.log(`✅ [WebSocket] Bot mention found in mentions array: ${JSON.stringify(mention)}`);
             }

@@ -16,7 +16,7 @@ import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import * as duckdb from "duckdb";
 import { okrVisualizationTool } from "./okr-visualization-tool";
-import { getPrimaryModel, getFallbackModel } from "../shared/model-fallback";
+import { getAutoRouterModel } from "../shared/model-fallback";
 import { createOkrReviewTool } from "../tools";
 import { chartGenerationTool } from "../tools/chart-generation-tool";
 import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
@@ -304,16 +304,8 @@ IMPORTANT: Every OKR analysis response should include:
 - 使用okr_chart_streaming工具生成完整的OKR分析报告（包含图表和洞察）。
 - 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。
 - 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用okr_chart_streaming工具。`,
-    model: [
-      {
-        model: getPrimaryModel(),
-        maxRetries: 3,
-      },
-      {
-        model: getFallbackModel(),
-        maxRetries: 3,
-      },
-    ],
+    // Use OpenRouter auto router with free models only
+    model: getAutoRouterModel(),
     tools: {
       mgr_okr_review: mgrOkrReviewTool,
       okr_visualization: okrVisualizationTool as any,

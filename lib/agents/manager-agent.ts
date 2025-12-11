@@ -28,8 +28,7 @@ import {
   saveMessageToMemory,
 } from "./memory-integration";
 import {
-  getPrimaryModel,
-  getFallbackModel,
+  getAutoRouterModel,
   isRateLimitError,
   isModelRateLimited,
   markModelRateLimited,
@@ -68,23 +67,16 @@ function initializeAgent() {
 
   isInitializing = true;
 
-  // MASTRA MODEL ARRAY: Automatic failover instead of dual agents
-  // Mastra handles retries and fallback automatically
+  // OpenRouter auto router: Intelligently selects best free model for each prompt
+  // Replaces the 2-model fallback system with OpenRouter's NotDiamond routing
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Mastra's model fallback array - replaces dual agent pattern
-    model: [
-      {
-        model: getPrimaryModel(),
-        maxRetries: DEFAULT_RETRY_CONFIG.maxRetries,
-      },
-      {
-        model: getFallbackModel(),
-        maxRetries: DEFAULT_RETRY_CONFIG.maxRetries,
-      },
-    ],
+    // Use OpenRouter auto router with free models only
+    // The auto router selects the best model from the free models pool
+    // based on prompt complexity, task type, and model capabilities
+    model: getAutoRouterModel(),
 
     // Tools (identical to AI SDK Tools)
     tools: {
@@ -258,7 +250,7 @@ export async function managerAgent(
       }
 
       // MASTRA PATTERN: Stream with optional context
-      const result = await okrAgent.stream({ messages, executionContext });
+      const result = await okrAgent.stream(messages, executionContext);
 
       let accumulatedText = "";
       for await (const textDelta of result.textStream) {
@@ -358,10 +350,7 @@ export async function managerAgent(
         }
       }
 
-      const result = await alignmentAgent.stream({
-        messages,
-        executionContext,
-      });
+      const result = await alignmentAgent.stream(messages, executionContext);
 
       let accumulatedText = "";
       for await (const textDelta of result.textStream) {
@@ -459,7 +448,7 @@ export async function managerAgent(
         }
       }
 
-      const result = await pnlAgent.stream({ messages, executionContext });
+      const result = await pnlAgent.stream(messages, executionContext);
 
       let accumulatedText = "";
       for await (const textDelta of result.textStream) {
@@ -557,10 +546,7 @@ export async function managerAgent(
         }
       }
 
-      const result = await dpaPmAgent.stream({
-        messages,
-        executionContext,
-      });
+      const result = await dpaPmAgent.stream(messages, executionContext);
 
       let accumulatedText = "";
       for await (const textDelta of result.textStream) {

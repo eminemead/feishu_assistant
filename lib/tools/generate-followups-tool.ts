@@ -1,6 +1,6 @@
 import { tool, generateText, generateObject } from "ai";
 import { z } from "zod";
-import { getPrimaryModel } from "../shared/model-fallback";
+import { getAutoRouterModel } from "../shared/model-fallback";
 
 /**
  * Generates 2-3 follow-up questions or recommendations based on agent response
@@ -29,7 +29,7 @@ export const generateFollowupsTool = tool({
         `🔄 [Followups] Generating ${maxOptions} follow-up questions for response: "${response.substring(0, 50)}..."`
       );
 
-      const model = getPrimaryModel();
+      const model = getAutoRouterModel();
 
       // Generate follow-up questions using the model
       const result = await generateObject({
@@ -123,7 +123,7 @@ export async function generateFollowupQuestions(
       `🔄 [Followups] Generating ${maxOptions} follow-up questions for response: "${response.substring(0, 50)}..."`
     );
 
-    const model = getPrimaryModel();
+    const model = getAutoRouterModel();
     if (!model) {
       console.error(`❌ [Followups] No model available`);
       throw new Error("Model not available");
