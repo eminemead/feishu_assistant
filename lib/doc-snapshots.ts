@@ -6,11 +6,21 @@ import { createHash } from "crypto";
 
 const gzipAsync = promisify(gzip);
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+// Initialize Supabase client (lazy - only if env vars are available)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase not configured. SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+  }
+  if (!supabase) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+}
 
 /**
  * Document snapshot metadata
@@ -162,7 +172,7 @@ class DocumentSnapshotService {
       }
 
       // Store in Supabase
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_snapshots")
         .insert({
           user_id: userId,
@@ -210,7 +220,7 @@ class DocumentSnapshotService {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_snapshots")
         .select("*")
         .match({
@@ -249,7 +259,7 @@ class DocumentSnapshotService {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_snapshots")
         .select("content_compressed")
         .match({
@@ -291,7 +301,7 @@ class DocumentSnapshotService {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_snapshots")
         .select("*")
         .match({ user_id: userId, doc_token: docToken })
@@ -330,7 +340,7 @@ class DocumentSnapshotService {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_snapshots")
         .select("*")
         .match({ user_id: userId, doc_token: docToken });
@@ -402,7 +412,7 @@ class DocumentSnapshotService {
     );
 
     try {
-      let query = supabase
+      let query = getSupabaseClient()
         .from("document_snapshots")
         .delete()
         .match({ user_id: userId })

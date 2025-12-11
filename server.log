@@ -1,43 +1,23 @@
-[info]: [ "client ready" ]
-🔧 AI SDK Devtools: Enabled with enhanced features
-   - StreamInterceptor support
-   - Token usage tracking
-   - Session grouping
-✅ [Memory] Connected to Supabase database
-🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
-🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
-🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
-🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
-🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
-🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
-🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
-🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
-🤖 [Model] Using primary model: kwaipilot/kat-coder-pro (Free tier (may have rate limits))
-🤖 [Model] Using fallback model: Google Gemini 2.5 Flash (Paid (reliable, no rate limits))
-[info]: [ "event-dispatch is ready" ]
-🔧 Devtools available at: http://localhost:4015/devtools
-📋 [Startup] Starting server initialization... (2025-12-11T00:59:12.455Z)
-📋 [Startup] Step 0: Initializing Mastra Observability and Memory...
-✅ [Startup] Step 0a: Mastra Observability enabled
-   Phoenix endpoint: http://localhost:6006/v1/traces
-   Project: feishu-assistant
-   Log level: debug
-✅ [Memory] Connected to PostgreSQL storage (Mastra)
-📋 [Startup] Mode: Subscription (WebSocket)
-📋 [Startup] Step 1: Initializing WebSocket connection...
-[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
-📋 [Startup] Step 2: Starting HTTP server...
-✅ [Startup] Step 2: HTTP server started on port 4015
-✨ [Startup] Server is ready to accept requests in 131ms
-📊 [Startup] Health check: curl http://localhost:4015/health
-🔧 Devtools API: http://localhost:4015/devtools/api/events
-🔧 Devtools Sessions: http://localhost:4015/devtools/api/sessions
-🔧 Devtools Stats: http://localhost:4015/devtools/api/stats
-✅ [Memory] Mastra memory system initialized
-✅ [Startup] Step 0b: Mastra Memory initialized
-✅ [Startup] Step 1: WebSocket connection established
-📋 [Startup] Ready to receive Feishu events
-[info]: [ "[ws]", "ws client ready" ]
-⚠️ [WS Watchdog] Restarting WebSocket due to stale (180s since last event)
-[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
-[info]: [ "[ws]", "ws client ready" ]
+[error]: [ 'appId is needed' ]
+[error]: [ 'appSecret is needed' ]
+[info]: [ 'client ready' ]
+⚠️ [Auth] Supabase URL or ANON_KEY not configured. RLS features will be disabled.
+⚠️ [Auth] SUPABASE_JWT_SECRET not configured. JWT generation will fail.
+⚠️ [Auth] Supabase credentials not configured. RLS features will be disabled.
+/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:67919
+        throw new Error("supabaseUrl is required.");
+        ^
+
+Error: supabaseUrl is required.
+    at validateSupabaseUrl (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:67919:15)
+    at new SupabaseClient2 (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:72703:59)
+    at createClient6 (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:72950:14)
+    at Object.<anonymous> (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:248817:53)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Object..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+
+Node.js v22.19.0

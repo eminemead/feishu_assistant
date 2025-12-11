@@ -1,11 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 import { TrackedDoc, DocMetadata } from "./doc-tracker";
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+// Initialize Supabase client (lazy - only if env vars are available)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase not configured. SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+  }
+  if (!supabase) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+}
 
 /**
  * Tracked document with persistence metadata
@@ -96,7 +106,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_tracking")
         .insert({
           user_id: userId,
@@ -176,7 +186,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_tracking")
         .update({
           last_modified_user: update.lastModifiedUser,
@@ -214,7 +224,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      let query = supabase
+      let query = getSupabaseClient()
         .from("document_tracking")
         .select("*")
         .eq("user_id", userId);
@@ -252,7 +262,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_tracking")
         .select("*")
         .match({ user_id: userId, doc_token: docToken })
@@ -300,7 +310,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_changes")
         .insert({
           user_id: userId,
@@ -349,7 +359,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_changes")
         .select("*")
         .match({ user_id: userId, doc_token: docToken })
@@ -388,7 +398,7 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_changes")
         .select("*")
         .match({ user_id: userId, doc_token: docToken });
@@ -424,7 +434,7 @@ class DocumentPersistence {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const { error } = await supabase.from("document_tracking").select("COUNT(*)").limit(1);
+      const { error } = await getSupabaseClient().from("document_tracking").select("COUNT(*)").limit(1);
       if (error) {
         console.error(`❌ [DocPersistence] Health check failed:`, error);
         return false;

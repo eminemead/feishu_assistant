@@ -8,11 +8,21 @@
 import { DocumentChange } from "./doc-persistence";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+// Initialize Supabase client (lazy - only if env vars are available)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabaseClient() {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase not configured. SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+  }
+  if (!supabase) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+}
 
 /**
  * Condition types for rules
@@ -132,7 +142,7 @@ class RulesEngine {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_rules")
         .select("*")
         .match({ user_id: userId, doc_token: docToken, is_enabled: true });
@@ -159,7 +169,7 @@ class RulesEngine {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_rules")
         .select("*")
         .match({ user_id: userId, id: ruleId })
@@ -196,7 +206,7 @@ class RulesEngine {
       // Validate rule before saving
       this.validateRule({ condition, action });
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_rules")
         .insert({
           user_id: userId,
@@ -275,7 +285,7 @@ class RulesEngine {
         dbUpdate.is_enabled = updates.enabled;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_rules")
         .update(dbUpdate)
         .match({ user_id: userId, id: ruleId })
@@ -678,7 +688,7 @@ class RulesEngine {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from("document_rules")
         .select("*")
         .eq("user_id", userId);
