@@ -7,9 +7,7 @@
 🤖 [Model] Using OpenRouter auto router with 4 tool-calling free models
 📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
 🔧 [Model] Tool calling required, using specific model: qwen/qwen3-235b-a22b:free
-🤖 [Model] Using OpenRouter auto router with 4 tool-calling free models
-📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
-🔧 [Model] Tool calling required, using specific model: qwen/qwen3-235b-a22b:free
+📋 [Model] Fallback models available: mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free
 🤖 [Model] Using OpenRouter auto router with 6 free models
 📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
 🤖 [Model] Using OpenRouter auto router with 6 free models
@@ -18,7 +16,7 @@
 📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
 [info]: [ "event-dispatch is ready" ]
 🔧 Devtools available at: http://localhost:4015/devtools
-📋 [Startup] Starting server initialization... (2025-12-11T07:05:17.120Z)
+📋 [Startup] Starting server initialization... (2025-12-11T07:22:54.896Z)
 📋 [Startup] Step 0: Initializing Mastra Observability and Memory...
 ✅ [Startup] Step 0a: Mastra Observability enabled
    Phoenix endpoint: http://localhost:6006/v1/traces
@@ -30,7 +28,7 @@
 [info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
 📋 [Startup] Step 2: Starting HTTP server...
 ✅ [Startup] Step 2: HTTP server started on port 4015
-✨ [Startup] Server is ready to accept requests in 45ms
+✨ [Startup] Server is ready to accept requests in 17ms
 📊 [Startup] Health check: curl http://localhost:4015/health
 ✅ [Memory] Mastra memory system initialized
 🔧 Devtools API: http://localhost:4015/devtools/api/events

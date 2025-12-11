@@ -29,6 +29,7 @@ import {
 } from "./memory-integration";
 import {
   getAutoRouterModel,
+  getAutoRouterModelWithFallback,
   isRateLimitError,
   isModelRateLimited,
   markModelRateLimited,
@@ -69,13 +70,19 @@ function initializeAgent() {
 
   // OpenRouter auto router: Intelligently selects best free model for each prompt
   // Replaces the 2-model fallback system with OpenRouter's NotDiamond routing
+  // Use model array for automatic fallback on rate limits
+  const toolModels = getAutoRouterModelWithFallback(true); // Get array of tool-calling models
+  
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Use OpenRouter auto router with free models that support tool calling
-    // Since manager agent uses tools (searchWeb), we need models that support tool calling
-    model: getAutoRouterModel(true), // requireTools=true
+    // Use array of models for automatic fallback on rate limits
+    // Mastra will try each model in order if one fails (rate limit, error, etc.)
+    model: toolModels.map((model, idx) => ({
+      model,
+      maxRetries: idx === 0 ? 1 : 2, // First model: 1 retry, fallbacks: 2 retries
+    })),
 
     // Tools (identical to AI SDK Tools)
     tools: {
@@ -695,11 +702,16 @@ export async function managerAgent(
       _memoryAddition: "",
     };
     
-    if (memoryThread && memoryResource) {
+    // Only pass memory context if memory is actually configured
+    // Mastra requires memory to be set on the agent if threadId/resourceId are passed
+    if (memoryThread && memoryResource && mastraMemory) {
       executionContext.threadId = memoryThread;
       executionContext.resourceId = memoryResource;
+      executionContext.memory = mastraMemory; // Pass memory instance
       console.log(`[Manager] Executing agent with memory context`);
       console.log(`   Resource: ${memoryResource}, Thread: ${memoryThread}`);
+    } else {
+      console.log(`[Manager] Executing agent without memory (memory not configured)`);
     }
     
     const stream = await managerAgentInstance!.stream(messagesWithHistory, executionContext);

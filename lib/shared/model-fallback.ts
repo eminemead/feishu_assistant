@@ -117,7 +117,7 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
  * configured at the Mastra agent level or through environment variables.
  * 
  * @param requireTools - If true, only use models that support tool calling (default: false)
- * @returns LanguageModel configured for openrouter/auto
+ * @returns LanguageModel configured for openrouter/auto or specific model with fallback
  */
 export function getAutoRouterModel(requireTools: boolean = false): LanguageModel {
   const models = requireTools ? FREE_MODELS_WITH_TOOLS : FREE_MODELS;
@@ -130,23 +130,30 @@ export function getAutoRouterModel(requireTools: boolean = false): LanguageModel
     `📋 [Model] Models pool: ${models.slice(0, 3).join(", ")}${models.length > 3 ? "..." : ""}`
   );
   
-  // Return openrouter/auto model
-  // The models parameter needs to be passed at request time via providerOptions
-  // Since Mastra abstracts the request layer, we may need to configure this differently
-  // For now, return the auto router - OpenRouter will handle intelligent routing
-  // TODO: If Mastra supports providerOptions, pass models: models there
-  // 
   // IMPORTANT: If tools are required, we should use a specific model that supports tools
   // instead of auto router, since auto router may select models without tool support
   if (requireTools) {
     // Use a specific free model that supports tool calling instead of auto router
     // This ensures tool calling works reliably
+    // Try multiple models in order as fallback for rate limits
     const toolModel = models[0]; // Use first model that supports tools
     console.log(`🔧 [Model] Tool calling required, using specific model: ${toolModel}`);
+    console.log(`📋 [Model] Fallback models available: ${models.slice(1, 3).join(", ")}`);
     return openrouter(toolModel);
   }
   
   return openrouter("openrouter/auto");
+}
+
+/**
+ * Get a model with fallback support for rate limits
+ * Returns an array of models to try in order
+ */
+export function getAutoRouterModelWithFallback(requireTools: boolean = false): LanguageModel[] {
+  const models = requireTools ? FREE_MODELS_WITH_TOOLS : FREE_MODELS;
+  
+  // Return array of models for Mastra's fallback mechanism
+  return models.map(model => openrouter(model));
 }
 
 /**
