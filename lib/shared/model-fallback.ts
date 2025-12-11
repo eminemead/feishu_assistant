@@ -63,12 +63,12 @@ export interface RetryConfig {
  * These models are used when openrouter/auto is configured with the models parameter
  */
 export const FREE_MODELS = [
-  "deepseek/deepseek-r1:free",
-  "qwen/qwen3-235b-a22b-07-25:free",
-  "minimax/minimax-m2:free",
+  "qwen/qwen3-235b-a22b:free",
   "mistralai/devstral-small-2505:free",
-  "google/gemini-2.0-pro-exp-02-05:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
+  "kwaipilot/kat-coder-pro:free",
+  "z-ai/glm-4.5-air:free",
+  "qwen/qwen3-coder:free",
+  "moonshotai/kimi-k2:free",
 ] as const;
 
 /**
