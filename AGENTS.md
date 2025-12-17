@@ -1,5 +1,9 @@
 # AGENTS.md: Quick Reference
 
+## Conciseness Rule (via Matt Pocock)
+In all interactions, plans, and commit messages, be extremely concise and sacrifice grammar for the sake of concision，without losing clarity. Prioritizes actionability over polish.
+
+
 ## Project: Feishu Assistant
 
 **WHY**: Build Feishu AI agent handling OKR review, P&L analysis, and document tracking etc.

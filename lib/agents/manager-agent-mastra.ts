@@ -267,12 +267,44 @@ export async function managerAgent(
       const result = await okrAgent.stream({ messages, executionContext });
 
       let accumulatedText = "";
+      let lastUpdateLength = 0;
+      let lastUpdateTime = Date.now();
+      let chunkCount = 0;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:267',message:'Starting OKR agent stream',data:{agent:'okr_reviewer'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
-        // Stream updates in batches
-        if (updateStatus && accumulatedText.length % 50 === 0) {
+        chunkCount++;
+        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:275',message:'Received chunk',data:{chunkSize:textDelta.length,accumulatedLength:accumulatedText.length,charsSinceLastUpdate,timeSinceLastUpdate,chunkCount},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        // Stream updates in batches - improved with time-based throttling
+        const shouldUpdate = updateStatus && (
+          accumulatedText.length % 50 === 0 ||
+          timeSinceLastUpdate >= 200 ||
+          charsSinceLastUpdate >= 30
+        );
+        if (shouldUpdate) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:283',message:'Updating card',data:{accumulatedLength:accumulatedText.length,charsSinceLastUpdate,timeSinceLastUpdate},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
           updateStatus(accumulatedText);
+          lastUpdateLength = accumulatedText.length;
+          lastUpdateTime = Date.now();
         }
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:293',message:'Stream complete',data:{finalLength:accumulatedText.length,lastUpdateLength,remainingChars:accumulatedText.length-lastUpdateLength,chunkCount},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      // Send final update if there's remaining text
+      if (updateStatus && accumulatedText.length > lastUpdateLength) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:297',message:'Sending final update',data:{finalLength:accumulatedText.length,remainingChars:accumulatedText.length-lastUpdateLength},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        updateStatus(accumulatedText);
       }
 
       // Track response
@@ -366,11 +398,30 @@ export async function managerAgent(
       });
 
       let accumulatedText = "";
+      let lastUpdateLength = 0;
+      let lastUpdateTime = Date.now();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:363',message:'Starting alignment agent stream',data:{agent:'alignment_agent'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
-        if (updateStatus && accumulatedText.length % 50 === 0) {
+        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+        // Stream updates with improved batching
+        const shouldUpdate = updateStatus && (
+          accumulatedText.length % 50 === 0 ||
+          timeSinceLastUpdate >= 200 ||
+          charsSinceLastUpdate >= 30
+        );
+        if (shouldUpdate) {
           updateStatus(accumulatedText);
+          lastUpdateLength = accumulatedText.length;
+          lastUpdateTime = Date.now();
         }
+      }
+      // Send final update if there's remaining text
+      if (updateStatus && accumulatedText.length > lastUpdateLength) {
+        updateStatus(accumulatedText);
       }
 
       const duration = Date.now() - startTime;
@@ -459,11 +510,30 @@ export async function managerAgent(
       const result = await pnlAgent.stream({ messages, executionContext });
 
       let accumulatedText = "";
+      let lastUpdateLength = 0;
+      let lastUpdateTime = Date.now();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:459',message:'Starting PnL agent stream',data:{agent:'pnl_agent'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
-        if (updateStatus && accumulatedText.length % 50 === 0) {
+        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+        // Stream updates with improved batching
+        const shouldUpdate = updateStatus && (
+          accumulatedText.length % 50 === 0 ||
+          timeSinceLastUpdate >= 200 ||
+          charsSinceLastUpdate >= 30
+        );
+        if (shouldUpdate) {
           updateStatus(accumulatedText);
+          lastUpdateLength = accumulatedText.length;
+          lastUpdateTime = Date.now();
         }
+      }
+      // Send final update if there's remaining text
+      if (updateStatus && accumulatedText.length > lastUpdateLength) {
+        updateStatus(accumulatedText);
       }
 
       const duration = Date.now() - startTime;
@@ -555,11 +625,30 @@ export async function managerAgent(
       });
 
       let accumulatedText = "";
+      let lastUpdateLength = 0;
+      let lastUpdateTime = Date.now();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:622',message:'Starting DPA PM agent stream',data:{agent:'dpa_pm'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
-        if (updateStatus && accumulatedText.length % 50 === 0) {
+        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+        // Stream updates with improved batching
+        const shouldUpdate = updateStatus && (
+          accumulatedText.length % 50 === 0 ||
+          timeSinceLastUpdate >= 200 ||
+          charsSinceLastUpdate >= 30
+        );
+        if (shouldUpdate) {
           updateStatus(accumulatedText);
+          lastUpdateLength = accumulatedText.length;
+          lastUpdateTime = Date.now();
         }
+      }
+      // Send final update if there's remaining text
+      if (updateStatus && accumulatedText.length > lastUpdateLength) {
+        updateStatus(accumulatedText);
       }
 
       const duration = Date.now() - startTime;

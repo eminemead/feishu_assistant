@@ -134,24 +134,39 @@ export async function generateFollowupQuestions(
       setTimeout(() => reject(new Error("generateText timeout after 30 seconds")), 30000);
     });
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate-followups-tool.ts:138',message:'Generating follow-ups',data:{responseLength:response.length,contextLength:context?.length||0,maxOptions},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     // Use generateText with JSON parsing instead of generateObject
     const resultPromise = generateText({
       model,
       prompt: `Based on this agent response, generate exactly ${maxOptions} thoughtful follow-up questions or recommendations that users might want to explore next.
 
 Agent Response: "${response}"
-${context ? `\nContext: ${context}` : ""}
+${context ? `\nOriginal User Query: "${context}"` : ""}
 
 Each follow-up should be:
-1. Concise (max 60 characters)
-2. Actionable and relevant to the response
-3. Encourage deeper exploration or next steps
+1. Concise (max 60 characters for button display)
+2. Actionable and directly relevant to the specific response content
+3. Encourage deeper exploration or logical next steps based on what was just discussed
+4. Use specific details from the response when possible (e.g., company names, metrics, time periods mentioned)
+5. Avoid generic questions like "Tell me more" - instead ask about specific aspects
+
+Examples of GOOD follow-ups:
+- If response mentions "Company A has 85% completion": "Show Company A's detailed metrics"
+- If response discusses "Q4 trends": "Compare Q4 with previous quarters"
+- If response analyzes OKR data: "Which companies need improvement?"
+
+Examples of BAD follow-ups (too generic):
+- "Tell me more" (not specific)
+- "What's next?" (not actionable)
+- "How do I apply this?" (too vague)
 
 Return ONLY a JSON array with this exact structure. No markdown, no code blocks, just raw JSON:
 [
-  {"text": "question text", "type": "question"},
-  {"text": "recommendation text", "type": "recommendation"},
-  {"text": "action text", "type": "action"}
+  {"text": "specific actionable question", "type": "question"},
+  {"text": "specific recommendation", "type": "recommendation"},
+  {"text": "specific next action", "type": "action"}
 ]
 
 Types must be: "question", "recommendation", or "action"`,
@@ -216,6 +231,9 @@ Types must be: "question", "recommendation", or "action"`,
       };
     });
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate-followups-tool.ts:218',message:'Follow-ups generated',data:{count:followupsWithMetadata.length,followups:followupsWithMetadata.map(f=>({text:f.text,type:f.type}))},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     console.log(`✅ [Followups] Generated ${followupsWithMetadata.length} follow-up options with metadata`);
     return followupsWithMetadata;
   } catch (error) {
