@@ -6,12 +6,11 @@
  * based on prompt complexity, task type, and model capabilities.
  * 
  * Free Models Pool:
- * - deepseek/deepseek-r1:free (671B params, 164K context, best overall)
- * - qwen/qwen3-235b-a22b-07-25:free (262K context)
- * - minimax/minimax-m2:free (204K context)
- * - mistralai/devstral-small-2505:free (32K context)
- * - google/gemini-2.0-pro-exp-02-05:free (2M context, multimodal)
- * - meta-llama/llama-3.3-70b-instruct:free (32K context)
+ * - nvidia/nemotron-3-nano-30b-a3b:free (30B params, 1M context, supports tools)
+ * - qwen/qwen3-235b-a22b:free (262K context, supports tools)
+ * - mistralai/devstral-small-2505:free (supports tools)
+ * - kwaipilot/kat-coder-pro:free (coding-focused, supports tools)
+ * - qwen/qwen3-coder:free (coding-focused, supports tools)
  * 
  * Rate Limit Handling:
  * - Exponential backoff: 2s, 4s, 8s (with jitter)
@@ -66,12 +65,13 @@ export interface RetryConfig {
  * Some free models may not support tools, so we prioritize models that do.
  */
 export const FREE_MODELS = [
-  "qwen/qwen3-235b-a22b:free",        // Supports tool calling
+  "nvidia/nemotron-3-nano-30b-a3b:free", // 30B params, 1M context, supports tools
+  "qwen/qwen3-235b-a22b:free",           // Supports tool calling
   "mistralai/devstral-small-2505:free", // Supports tool calling
-  "kwaipilot/kat-coder-pro:free",      // Supports tool calling
-  "z-ai/glm-4.5-air:free",             // May support tool calling
-  "qwen/qwen3-coder:free",             // Supports tool calling
-  "moonshotai/kimi-k2:free",          // May support tool calling
+  "kwaipilot/kat-coder-pro:free",        // Supports tool calling
+  "z-ai/glm-4.5-air:free",               // May support tool calling
+  "qwen/qwen3-coder:free",               // Supports tool calling
+  "moonshotai/kimi-k2:free",             // May support tool calling
 ] as const;
 
 /**
@@ -79,6 +79,7 @@ export const FREE_MODELS = [
  * Use this when tools are required
  */
 export const FREE_MODELS_WITH_TOOLS = [
+  "nvidia/nemotron-3-nano-30b-a3b:free", // 1M context, excellent for long tasks
   "qwen/qwen3-235b-a22b:free",
   "mistralai/devstral-small-2505:free",
   "kwaipilot/kat-coder-pro:free",
