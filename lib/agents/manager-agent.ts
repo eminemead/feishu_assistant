@@ -29,7 +29,6 @@ import {
 } from "./memory-integration";
 import {
   getAutoRouterModel,
-  getAutoRouterModelWithFallback,
   isRateLimitError,
   isModelRateLimited,
   markModelRateLimited,
@@ -68,21 +67,17 @@ function initializeAgent() {
 
   isInitializing = true;
 
-  // OpenRouter auto router: Intelligently selects best free model for each prompt
-  // Replaces the 2-model fallback system with OpenRouter's NotDiamond routing
-  // Use model array for automatic fallback on rate limits
-  const toolModels = getAutoRouterModelWithFallback(true); // Get array of tool-calling models
+  // OpenRouter auto router with restricted free models
+  // Use the auto router that injects FREE_MODELS whitelist to prevent paid model selection
+  const model = getAutoRouterModel(true); // Get auto router with tool-calling free models only
   
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Use array of models for automatic fallback on rate limits
-    // Mastra will try each model in order if one fails (rate limit, error, etc.)
-    model: toolModels.map((model, idx) => ({
-      model,
-      maxRetries: idx === 0 ? 1 : 2, // First model: 1 retry, fallbacks: 2 retries
-    })),
+    // Use the openrouter/auto with FREE_MODELS whitelist
+    // This prevents OpenRouter from selecting paid models like Perplexity Sonar
+    model: model,
 
     // Tools (identical to AI SDK Tools)
     tools: {

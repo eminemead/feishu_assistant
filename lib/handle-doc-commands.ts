@@ -128,8 +128,15 @@ export async function handleDocumentCommand(args: {
 
   // Command: watch <doc> (mention already removed)
   if (/^watch\s+/i.test(text)) {
-    await handleWatchCommand(text, chatId, userId);
-    return true;
+    console.log(`[DocCommand] Detected watch command, executing handler for: "${text.substring(0, 80)}..."`);
+    try {
+      await handleWatchCommand(text, chatId, userId);
+      console.log(`[DocCommand] Watch handler completed successfully`);
+      return true;
+    } catch (err) {
+      console.error(`[DocCommand] Watch handler threw error:`, err);
+      throw err; // Re-throw so it bubbles up
+    }
   }
 
   // Command: check <doc>
