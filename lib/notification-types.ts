@@ -207,6 +207,10 @@ export type NotificationPayload = z.infer<typeof NotificationPayloadSchema>;
 /**
  * Complete notification request body as expected by the internal API.
  * This schema is also used server-side to validate inputs at runtime.
+ *
+ * NOTE: This is a version-agnostic schema; API versioning is handled at the
+ * routing level (e.g. /internal/notify/feishu/v1). New versions should prefer
+ * adding fields rather than breaking or reusing this schema.
  */
 export const NotificationRequestSchema = z.object({
   target: NotificationTargetSchema,
@@ -216,4 +220,67 @@ export const NotificationRequestSchema = z.object({
 });
 
 export type NotificationRequest = z.infer<typeof NotificationRequestSchema>;
+
+// --- API response / error contracts -----------------------------------------
+
+/**
+ * Machine-readable error codes for the notification API.
+ *
+ * These are intentionally coarse-grained; clients should not rely on wording
+ * of human-readable messages.
+ */
+export const NotificationErrorCodeSchema = z.enum([
+  // Request/auth issues
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "INVALID_REQUEST",
+  "INVALID_TARGET",
+  "INVALID_PAYLOAD",
+  // Server-side issues
+  "FEISHU_ERROR",
+  "INTERNAL_ERROR",
+]);
+
+export type NotificationErrorCode = z.infer<typeof NotificationErrorCodeSchema>;
+
+export const NotificationSuccessResponseSchema = z.object({
+  status: z.literal("sent"),
+  /**
+   * Primary Feishu message identifier for the delivered notification.
+   */
+  messageId: z.string().min(1),
+  /**
+   * Optional card identifiers when the implementation sends an interactive
+   * card (or streaming card) as part of the notification.
+   */
+  cardId: z.string().min(1).optional(),
+  cardEntityId: z.string().min(1).optional(),
+});
+
+export type NotificationSuccessResponse = z.infer<
+  typeof NotificationSuccessResponseSchema
+>;
+
+export const NotificationErrorResponseSchema = z.object({
+  status: z.literal("error"),
+  errorCode: NotificationErrorCodeSchema,
+  /**
+   * Human-readable error description for logs and debugging. Clients MAY
+   * surface this to humans, but must not depend on its exact text.
+   */
+  message: z.string().min(1),
+});
+
+export type NotificationErrorResponse = z.infer<
+  typeof NotificationErrorResponseSchema
+>;
+
+export const NotificationApiResponseSchema = z.union([
+  NotificationSuccessResponseSchema,
+  NotificationErrorResponseSchema,
+]);
+
+export type NotificationApiResponse = z.infer<
+  typeof NotificationApiResponseSchema
+>;
 

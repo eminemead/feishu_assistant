@@ -16,6 +16,18 @@ import { getObservabilityStatus } from "./lib/observability-config";
 // Import mastra instance to ensure observability is initialized
 import "./lib/observability-config";
 import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
+import {
+  NotificationRequestSchema,
+  NotificationApiResponseSchema,
+  NotificationErrorResponseSchema,
+  NotificationSuccessResponseSchema,
+} from "./lib/notification-types";
+import { authenticateNotificationRequest } from "./lib/notification-auth";
+import { resolveNotificationTarget } from "./lib/notification-targets";
+import {
+  getCachedNotificationResponse,
+  storeNotificationResponse,
+} from "./lib/notification-idempotency";
 
 // Global error handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
@@ -431,6 +443,190 @@ app.get("/health", (c) => {
   return c.json(metrics, statusCode);
 });
 
+// Internal notification API endpoint
+// POST /internal/notify/feishu/v1
+//
+// Allows trusted internal tools (Cursor, AMP, batch jobs, etc.) to send
+// notifications into Feishu via the existing bot ("evi") without going
+// through the Mastra manager agent or public webhooks.
+app.post("/internal/notify/feishu/v1", async (c) => {
+  try {
+    // 1) Authenticate caller using shared-secret header
+    const rawHeaders = c.req.header();
+    const authContext = authenticateNotificationRequest(rawHeaders as Record<string, string | undefined>);
+
+    // 2) Parse and validate JSON body against NotificationRequestSchema
+    const body = await c.req.json().catch(() => {
+      throw new Error("INVALID_REQUEST: body must be valid JSON");
+    });
+
+    const request = NotificationRequestSchema.parse(body);
+
+    const idempotencyKey = request.meta?.idempotencyKey;
+
+    // 2b) If an idempotency key is supplied, return cached success response
+    // when available.
+    if (idempotencyKey) {
+      const cached = getCachedNotificationResponse(idempotencyKey);
+      if (cached) {
+        const response = NotificationSuccessResponseSchema.parse(cached);
+        return c.json(response, 200);
+      }
+    }
+
+    // 3) Resolve target (including logical_name → concrete mapping + auth)
+    const { receiveIdType, receiveId } = resolveNotificationTarget(
+      request.target,
+      authContext,
+    );
+
+    // 4) Dispatch to Feishu based on kind
+    let messageId: string | undefined;
+
+    if (request.kind === "text") {
+      const payload = (request.payload as any).text;
+      if (typeof payload !== "string" || !payload.trim()) {
+        throw new Error("INVALID_PAYLOAD: text payload is required for kind=text");
+      }
+
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const resp = await client.im.message.create({
+            params: {
+              receive_id_type: receiveIdType,
+            },
+            data: {
+              receive_id: receiveId,
+              msg_type: "text",
+              content: JSON.stringify({ text: payload }),
+            },
+          });
+
+          const isSuccess =
+            typeof resp.success === "function"
+              ? resp.success()
+              : resp.code === 0 || resp.code === undefined;
+          if (!isSuccess || !resp.data?.message_id) {
+            throw new Error("FEISHU_ERROR: failed to send text message");
+          }
+          messageId = resp.data.message_id;
+          break;
+        } catch (err) {
+          lastError = err;
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 100 * Math.pow(2, attempt)),
+            );
+          }
+        }
+      }
+      if (!messageId) {
+        throw new Error(
+          `FEISHU_ERROR: failed to send text message after retries: ${String(
+            lastError,
+          )}`,
+        );
+      }
+    } else if (request.kind === "markdown") {
+      const payload = request.payload as any;
+      const markdown: string | undefined = payload.markdown;
+      if (typeof markdown !== "string" || !markdown.trim()) {
+        throw new Error(
+          "INVALID_PAYLOAD: markdown payload is required for kind=markdown",
+        );
+      }
+
+      // For v1 we send markdown as plain text; future versions may switch to
+      // Feishu "post" or an interactive card depending on use case.
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const resp = await client.im.message.create({
+            params: {
+              receive_id_type: receiveIdType,
+            },
+            data: {
+              receive_id: receiveId,
+              msg_type: "text",
+              content: JSON.stringify({ text: markdown }),
+            },
+          });
+
+          const isSuccess =
+            typeof resp.success === "function"
+              ? resp.success()
+              : resp.code === 0 || resp.code === undefined;
+          if (!isSuccess || !resp.data?.message_id) {
+            throw new Error("FEISHU_ERROR: failed to send markdown message");
+          }
+          messageId = resp.data.message_id;
+          break;
+        } catch (err) {
+          lastError = err;
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 100 * Math.pow(2, attempt)),
+            );
+          }
+        }
+      }
+      if (!messageId) {
+        throw new Error(
+          `FEISHU_ERROR: failed to send markdown message after retries: ${String(
+            lastError,
+          )}`,
+        );
+      }
+    } else {
+      // card and chart_report will be implemented in Phase 2 extensions.
+      throw new Error(
+        `INVALID_REQUEST: kind "${request.kind}" is not yet supported by this endpoint`,
+      );
+    }
+
+    const response = NotificationApiResponseSchema.parse({
+      status: "sent",
+      messageId,
+    });
+    return c.json(response, 200);
+  } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[NotificationAPI] Error handling request:", message);
+
+    let statusCode = 500;
+    let errorCode: "UNAUTHORIZED" | "FORBIDDEN" | "INVALID_REQUEST" | "INVALID_TARGET" | "INVALID_PAYLOAD" | "FEISHU_ERROR" | "INTERNAL_ERROR" =
+      "INTERNAL_ERROR";
+
+    if (message.startsWith("UNAUTHORIZED")) {
+      statusCode = 401;
+      errorCode = "UNAUTHORIZED";
+    } else if (message.startsWith("FORBIDDEN")) {
+      statusCode = 403;
+      errorCode = "FORBIDDEN";
+    } else if (message.startsWith("INVALID_TARGET")) {
+      statusCode = 400;
+      errorCode = "INVALID_TARGET";
+    } else if (message.startsWith("INVALID_PAYLOAD")) {
+      statusCode = 400;
+      errorCode = "INVALID_PAYLOAD";
+    } else if (message.startsWith("INVALID_REQUEST")) {
+      statusCode = 400;
+      errorCode = "INVALID_REQUEST";
+    } else if (message.startsWith("FEISHU_ERROR")) {
+      statusCode = 502;
+      errorCode = "FEISHU_ERROR";
+    }
+
+    const errorBody = NotificationErrorResponseSchema.parse({
+      status: "error",
+      errorCode,
+      message,
+    });
+
+    return c.json(errorBody, statusCode);
+  }
+});
 
 // Feishu webhook endpoint (only used in Webhook Mode)
 // In Subscription Mode, events come through WebSocket connection managed by SDK
