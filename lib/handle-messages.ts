@@ -6,6 +6,8 @@ import {
   finalizeCard,
 } from "./feishu-utils";
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
+import { handleDocumentCommand } from "./handle-doc-commands";
+import { devtoolsTracker } from "./devtools-integration";
 
 export interface FeishuMessageData {
   chatId: string;
@@ -18,6 +20,7 @@ export interface FeishuMessageData {
 
 export async function handleNewMessage(data: FeishuMessageData) {
   const { chatId, messageId, rootId, messageText, botUserId, userId } = data;
+  const startTime = Date.now();
 
   console.log(`Handling new message: ${chatId} ${rootId}`);
 
@@ -26,6 +29,52 @@ export async function handleNewMessage(data: FeishuMessageData) {
     /<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g,
     ""
   ).trim();
+
+  // Track in devtools
+  devtoolsTracker.trackAgentCall("FeishuMessage", cleanText, {
+    messageId,
+    rootId,
+    isNewThread: messageId === rootId
+  });
+
+  // Check if this is a document tracking command (early exit before agent)
+  // Document commands should be intercepted and handled directly
+  const isDocCommand = /^(watch|check|unwatch|watched|tracking:\w+)\s+/i.test(cleanText);
+  if (isDocCommand) {
+    console.log(`[DocCommand] Intercepted document command: "${cleanText.substring(0, 50)}..."`);
+    devtoolsTracker.trackAgentCall("DocumentTracking", cleanText, {
+      messageId,
+      rootId,
+      commandIntercepted: true
+    });
+
+    // Create streaming card for command confirmation
+    const card = await createAndSendStreamingCard(chatId, "chat_id", {}, {
+      replyToMessageId: messageId,
+      replyInThread: true,
+    });
+
+    // Handle document command directly (bypasses agent)
+    const handled = await handleDocumentCommand({
+      message: cleanText,
+      chatId,
+      userId,
+      botUserId
+    });
+
+    if (handled) {
+      console.log(`[DocCommand] Command handled successfully`);
+      await updateCardElement(card.cardId, card.elementId, "✅ Command executed");
+      const duration = Date.now() - startTime;
+      devtoolsTracker.trackResponse("DocumentTracking", "Command executed", duration, {
+        threadId: rootId,
+        messageId,
+        commandHandled: true
+      });
+      return; // Early exit - don't call generateResponse
+    }
+    console.log(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
+  }
 
   // Create streaming card - reply in thread if this is a thread message
   const card = await createAndSendStreamingCard(
@@ -85,7 +134,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
 
     // Finalize card with follow-up suggestions and send buttons in separate message
     // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons
-    await finalizeCardWithFollowups(
+    const finalizeResult = await finalizeCardWithFollowups(
       card.cardId,
       card.elementId,
       result,
@@ -98,8 +147,22 @@ export async function handleNewMessage(data: FeishuMessageData) {
         sendButtonsAsSeperateMessage: true
       }
     );
-  } catch (error) {
+
+    // Track successful response
+    const duration = Date.now() - startTime;
+    devtoolsTracker.trackResponse("FeishuMessage", result, duration, {
+      threadId: rootId,
+      messageId
+    });
+    } catch (error) {
     console.error("Error generating response:", error);
+
+    // Track error
+    devtoolsTracker.trackError(
+      "FeishuMessage",
+      error instanceof Error ? error : new Error(String(error)),
+      { messageId, rootId }
+    );
     const errorMessage = "Sorry, I encountered an error processing your request.";
     await updateCardElement(
       card.cardId,

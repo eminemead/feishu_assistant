@@ -31,6 +31,8 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         .replace(/<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g, "")
         // Remove plain text mentions: @_user_1, @user_id, etc. (at start of message)
         .replace(/^@[^\s]+\s+/, "")
+        // Remove @bot prefix if present (could be from second mention or explicit @bot)
+        .replace(/^@bot\s+/i, "")
         .trim();
 
     // Track in devtools
@@ -85,7 +87,8 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         console.log(`[Thread] Processing with ${messages.length} message(s)`);
 
         // Check if this is a document tracking command (early exit before agent)
-        const isDocCommand = /^@?bot\s+(watch|check|unwatch|watched|tracking:\w+)\s*/i.test(cleanText);
+        // After mention removal, cleanText starts directly with the command (e.g., "watch https://...")
+        const isDocCommand = /^(watch|check|unwatch|watched|tracking:\w+)\s+/i.test(cleanText);
         if (isDocCommand) {
             console.log(`[DocCommand] Intercepted document command: "${cleanText.substring(0, 50)}..."`);
             devtoolsTracker.trackAgentCall("DocumentTracking", cleanText, {

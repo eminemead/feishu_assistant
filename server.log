@@ -16,7 +16,7 @@
 📋 [Model] Models pool: nvidia/nemotron-3-nano-30b-a3b:free, qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free...
 [info]: [ "event-dispatch is ready" ]
 🔧 Devtools available at: http://localhost:3000/devtools
-📋 [Startup] Starting server initialization... (2025-12-18T06:11:01.546Z)
+📋 [Startup] Starting server initialization... (2025-12-18T06:26:36.259Z)
 📋 [Startup] Step 0: Initializing Mastra Observability and Memory...
 ✅ [Startup] Step 0a: Mastra Observability enabled
    Phoenix endpoint: http://localhost:6006/v1/traces
@@ -28,7 +28,7 @@
 [info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
 📋 [Startup] Step 2: Starting HTTP server...
 ✅ [Startup] Step 2: HTTP server started on port 3000
-✨ [Startup] Server is ready to accept requests in 16ms
+✨ [Startup] Server is ready to accept requests in 13ms
 📊 [Startup] Health check: curl http://localhost:3000/health
 ✅ [Memory] Mastra memory system initialized
 🔧 Devtools API: http://localhost:3000/devtools/api/events
@@ -38,10 +38,375 @@
 ✅ [Startup] Step 1: WebSocket connection established
 📋 [Startup] Ready to receive Feishu events
 [info]: [ "[ws]", "ws client ready" ]
-⚠️ [WebhookAuth] Signature validation skipped (development mode, no FEISHU_ENCRYPT_KEY)
-📨 [DocWebhook] Received change event for wiki-L7v9dyAvLoaJBixTvgPcecLqnIh
-✅ [DocSupabase] Logged change event for wiki-L7v9dyAvLoaJBixTvgPcecLqnIh
-⚠️ [DocWebhook] No subscription found for wiki-L7v9dyAvLoaJBixTvgPcecLqnIh
+📨 [WebSocket] Event received: im.message.receive_v1
+📨 [WebSocket] Event data: {
+  "schema": "2.0",
+  "event_id": "bfca8c4f4958418f95459f536d8d57c3",
+  "token": "",
+  "create_time": "1766039226546",
+  "event_type": "im.message.receive_v1",
+  "tenant_key": "2de1f662118f575d",
+  "app_id": "cli_a6af6b76c6f0d013",
+  "message": {
+    "chat_id": "oc_5816a7e3517989d56b1b0899d23084ab",
+    "chat_type": "group",
+    "content": "{\"text\":\"@_user_1 @bot watch https://nio.feishu.cn/docx/L7v9dyAvLoaJBixTvgPcecLqnIh\"}",
+    "create_time": "1766039226270",
+    "mentions": [
+      {
+        "id": {
+          "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+          "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+          "user_id": ""
+        },
+        "key": "@_user_1",
+        "name": "Evi",
+        "tenant_key": "2de1f662118f575d"
+      }
+    ],
+    "message_id": "om_x100b5b0da56cc0acc1098267ddc4442",
+    "message_type": "text",
+    "update_time": "1766039226359"
+  },
+  "sender": {
+    "sender_id": {
+      "open_id": "ou_db4d1d08c4fcd3f1f4c253eab32ff580",
+      "union_id": "on_80d62273b85f0904e27382a59cc1f730",
+      "user_id": "xiaofei.yin"
+    },
+    "sender_type": "user",
+    "tenant_key": "2de1f662118f575d"
+  }
+}
+🤖 [WebSocket] Bot User ID: cli_a6af6b76c6f0d013
+👤 [Auth] Extracted user ID: ou_db4d1d08c4fcd3f1f4c253eab32ff580
+📩 [WebSocket] Message details: chatId=oc_5816a7e3517989d56b1b0899d23084ab, messageId=om_x100b5b0da56cc0acc1098267ddc4442, chatType=group
+🔍 [WebSocket] Mentions array: [
+  {
+    "id": {
+      "open_id": "ou_b996baaafd4fd8f41d219ec7ad2af324",
+      "union_id": "on_cb96bf8f32689f8c0b7415ad3a6b6d4e",
+      "user_id": ""
+    },
+    "key": "@_user_1",
+    "name": "Evi",
+    "tenant_key": "2de1f662118f575d"
+  }
+]
+📌 [WebSocket] Extracted mentioned user ID: ou_b996baaafd4fd8f41d219ec7ad2af324 (Evi)
+✅ [WebSocket] Bot mention found in mentions array: {"id":{"open_id":"ou_b996baaafd4fd8f41d219ec7ad2af324","union_id":"on_cb96bf8f32689f8c0b7415ad3a6b6d4e","user_id":""},"key":"@_user_1","name":"Evi","tenant_key":"2de1f662118f575d"}
+✅ [WebSocket] Bot mention detected in mentions array
+👥 [WebSocket] Processing group mention: "@_user_1 @bot watch https://nio.feishu.cn/docx/L7v..."
+💾 [WebSocket] Using user ID for memory context: ou_b996baaafd4fd8f41d219ec7ad2af324 (from mention)
+Handling app mention
+[Devtools] agent_call: {
+  agent: "FeishuMention",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+📤 [Card] Creating and sending streaming card to chat_id:oc_5816a7e3517989d56b1b0899d23084ab
+✅ [Card] Created streaming card: cardId=7585080718964722891, elementId=md_39226606
+📨 [Card] Sending card message with cardId: 7585080718964722891
+📨 [Card] Sending as thread reply to message: om_x100b5b0da56cc0acc1098267ddc4442
+✅ [Card] Card sent successfully: messageId=om_x100b5b0da57e70b0c292209ccfc7b6d, cardId=7585080718964722891
+[Thread] New mention (messageId === rootId), starting fresh conversation
+[Thread] Processing with 1 message(s)
+[DocCommand] Intercepted document command: "watch https://nio.feishu.cn/docx/L7v9dyAvLoaJBixTv..."
+[Devtools] agent_call: {
+  agent: "DocumentTracking",
+  tool: undefined,
+  duration: undefined,
+  error: undefined,
+}
+✅ [DocPersistence] User ID set to ou_b996baaafd4fd8f41d219ec7ad2af324
+Error parsing message content: 91 | function getFeishuClient() {
+92 |   return client;
+93 | }
+94 | function parseMessageContent(content) {
+95 |   try {
+96 |     const contentObj = JSON.parse(content);
+                                 ^
+SyntaxError: JSON Parse error: Unexpected identifier "watch"
+      at parseMessageContent (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:96:29)
+      at handleDocumentCommand (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:251135:13)
+      at handleDocumentCommand (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:251130:38)
+      at handleNewAppMention (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:251563:29)
+
+[DocCommand] Command pattern matched but handler returned false, falling through to agent
+[FeishuMention] Generating response...
+[Manager] Received query: "watch https://nio.feishu.cn/docx/L7v9dyAvLoaJBixTvgPcecLqnIh"
+✅ [Auth] Found existing Supabase user: ou_b996baaafd4fd8f41d219ec7ad2af324 → 94bcbcb5-1af2-5baf-a107-40858dafb11e
+[Manager] Created memory thread: feishu:oc_5816a7e3517989d56b1b0899d23084ab:om_x100b5b0da56cc0acc1098267ddc4442
+✅ [Manager] Mastra Memory initialized with 3-layer architecture
+   Resource (user): user:ou_b996baaafd4fd8f41d219ec7ad2af324, Thread: feishu:oc_5816a7e3517989d56b1b0899d23084ab:om_x100b5b0da56cc0acc1098267ddc4442
+[Manager] No specialist match, using manager agent for query: "watch https://nio.feishu.cn/docx/L7v9dyAvLoaJBixTvgPcecLqnIh"
+[Manager] Loading conversation history from Mastra Memory...
+[Manager] Failed to load memory context: TypeError: mastraMemory.query is not a function. (In 'mastraMemory.query({
+            threadId: memoryThread,
+            resourceId: memoryResource
+          })', 'mastraMemory.query' is undefined)
+      at managerAgent (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:247716:66)
+
+[Manager] Executing agent with memory context
+   Resource: user:ou_b996baaafd4fd8f41d219ec7ad2af324, Thread: feishu:oc_5816a7e3517989d56b1b0899d23084ab:om_x100b5b0da56cc0acc1098267ddc4442
+[Agent:Manager] - No memory is configured but resourceId and threadId were passed in args. This will not work.
+[Cache] MISS
+[Devtools] tool_call: {
+  agent: undefined,
+  tool: "searchWeb",
+  duration: 0,
+  error: undefined,
+}
+[Devtools] error: {
+  agent: "searchWeb",
+  tool: undefined,
+  duration: undefined,
+  error: "Invalid API key",
+}
+[Agent:Manager] - Failed tool execution {
+  name: "searchWeb",
+  runId: "efdd20ea-705c-4a8c-8a90-f492ded2549f",
+  threadId: "feishu:oc_5816a7e3517989d56b1b0899d23084ab:om_x100b5b0da56cc0acc1098267ddc4442",
+  resourceId: "user:ou_b996baaafd4fd8f41d219ec7ad2af324",
+  agentName: "Manager",
+  tracingContext: {
+    currentSpan: DefaultSpan {
+      name: "agent run: 'Manager'",
+      type: "agent_run",
+      attributes: [Object ...],
+      parent: undefined,
+      startTime: 2025-12-18T06:27:07.702Z,
+      endTime: undefined,
+      isEvent: false,
+      isInternal: false,
+      observabilityInstance: [Object ...],
+      input: [
+        [Object ...]
+      ],
+      output: undefined,
+      errorInfo: undefined,
+      metadata: [Object ...],
+      tags: undefined,
+      traceState: undefined,
+      parentSpanId: undefined,
+      id: "4cb4a7176b32080a",
+      traceId: "4dfff6206a882ed7e7b9d350583cacdc",
+      end: [Function],
+      update: [Function],
+      error: [Function: error],
+      isValid: [Getter],
+      export: [AsyncFunction: export],
+      createChildSpan: [Function: createChildSpan],
+      createEventSpan: [Function: createEventSpan],
+      createTracker: [Function: createTracker],
+      isRootSpan: [Getter],
+      getParentSpanId: [Function: getParentSpanId],
+      findParent: [Function: findParent],
+      exportSpan: [Function: exportSpan],
+      externalTraceId: [Getter],
+      executeInContext: [AsyncFunction: executeInContext],
+      executeInContextSync: [Function: executeInContextSync],
+    },
+  },
+  writableStream: undefined,
+  tracingPolicy: undefined,
+  requireApproval: undefined,
+  description: "Use this to search the web for information",
+  model: {
+    modelId: "nvidia/nemotron-3-nano-30b-a3b:free",
+    provider: "openrouter",
+    specificationVersion: "v2",
+  },
+  error: 671 |         } else if (originalError) {
+672 |           const errorMessage = safeParseErrorObject(originalError);
+673 |           error85 = new Error(errorMessage);
+674 |         }
+675 |         const message = errorDefinition.text ?? error85?.message ?? "Unknown error";
+676 |         super(message, { cause: error85 });
+              ^
+error: Invalid API key
+       id: "TOOL_EXECUTION_FAILED",
+   domain: "TOOL",
+ category: "USER",
+  details: [Object ...],
+
+      at new MastraBaseError (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:676:9)
+      at new MastraError (1:23)
+      at <anonymous> (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:194218:29)
+
+226701 |    * @param statusCode HTTP status code
+226702 |    * @param timestamp ISO timestamp from API
+226703 |    * @param path Path that caused the error
+226704 |    */
+226705 |   constructor(message, statusCode, timestamp, path4) {
+226706 |     super(message);
+             ^
+ExaError: Invalid API key
+ statusCode: 401,
+  timestamp: "2025-12-18T06:27:12.537Z",
+       path: "/search",
+
+      at new ExaError (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:226706:5)
+,
+  args: {
+    query: "https://nio.feishu.cn/docx/L7v9dyAvLoaJBixTvgPcecLqnIh",
+    specificDomain: "nio.feishu.cn",
+  },
+}
+🔄 [Card] Updating card element: cardId=7585080718964722891, elementId=md_39226606, sequence=1, contentLength=1
+🔄 [Card] Updating card element: cardId=7585080718964722891, elementId=md_39226606, sequence=2, contentLength=53
+🔄 [Card] Updating card element: cardId=7585080718964722891, elementId=md_39226606, sequence=3, contentLength=105
+🔄 [Card] Updating card element: cardId=7585080718964722891, elementId=md_39226606, sequence=4, contentLength=113
+🔄 [Card] Updating card element: cardId=7585080718964722891, elementId=md_39226606, sequence=5, contentLength=165
+[Manager] Saving conversation to Mastra Memory...
+   ✅ Saved undefined messages to Mastra Memory
+   Thread: feishu:oc_5816a7e3517989d56b1b0899d23084ab:om_x100b5b0da56cc0acc1098267ddc4442, Resource: user:ou_b996baaafd4fd8f41d219ec7ad2af324
+[Devtools] response: {
+  agent: "manager",
+  tool: undefined,
+  duration: 7778,
+  error: undefined,
+}
+[Manager] Response complete (length=173, duration=7778ms)
+[FeishuMention] Response generated (length=173): "I’m unable to retrieve the content from that link ..."
+[FeishuMention] Finalizing card with suggestions. cardId=7585080718964722891, result length=173
+🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=7585080718964722891, contentLength=173
+🎯 [CardSuggestions] Generating follow-up suggestions...
+🔄 [Followups] Generating 3 follow-up questions for response: "I’m unable to retrieve the content from that link ..."
+🤖 [Model] Using OpenRouter auto router with 7 free models
+📋 [Model] Models pool: nvidia/nemotron-3-nano-30b-a3b:free, qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free...
+🔄 [Card] Updating card element: cardId=7585080718964722891, elementId=md_39226606, sequence=6, contentLength=173
+Failed to update card element: {
+  code: 300317,
+  data: {},
+  msg: "ErrMsg: sequence number compare failed; ",
+}
+❌ [Process] Unhandled Promise Rejection: 357 |     }
+358 |   });
+359 |   const isSuccess = typeof resp.success === "function" ? resp.success() : resp.code === 0 || resp.code === void 0;
+360 |   if (!isSuccess) {
+361 |     console.error("Failed to update card element:", resp);
+362 |     throw new Error("Failed to update card element");
+                ^
+error: Failed to update card element
+      at updateCardElement (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:362:11)
+
+   Promise: Promise { <rejected> }
+❌ [WARN] Unhandled rejection at: Promise { <rejected> } reason: 357 |     }
+358 |   });
+359 |   const isSuccess = typeof resp.success === "function" ? resp.success() : resp.code === 0 || resp.code === void 0;
+360 |   if (!isSuccess) {
+361 |     console.error("Failed to update card element:", resp);
+362 |     throw new Error("Failed to update card element");
+                ^
+error: Failed to update card element
+      at updateCardElement (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:362:11)
+
+Failed to update card element: {
+  code: 300317,
+  data: {},
+  msg: "ErrMsg: sequence number compare failed; ",
+}
+❌ [Process] Unhandled Promise Rejection: 357 |     }
+358 |   });
+359 |   const isSuccess = typeof resp.success === "function" ? resp.success() : resp.code === 0 || resp.code === void 0;
+360 |   if (!isSuccess) {
+361 |     console.error("Failed to update card element:", resp);
+362 |     throw new Error("Failed to update card element");
+                ^
+error: Failed to update card element
+      at updateCardElement (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:362:11)
+
+   Promise: Promise { <rejected> }
+❌ [WARN] Unhandled rejection at: Promise { <rejected> } reason: 357 |     }
+358 |   });
+359 |   const isSuccess = typeof resp.success === "function" ? resp.success() : resp.code === 0 || resp.code === void 0;
+360 |   if (!isSuccess) {
+361 |     console.error("Failed to update card element:", resp);
+362 |     throw new Error("Failed to update card element");
+                ^
+error: Failed to update card element
+      at updateCardElement (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:362:11)
+
+Failed to update card element: {
+  code: 300317,
+  data: {},
+  msg: "ErrMsg: sequence number compare failed; ",
+}
+❌ [Process] Unhandled Promise Rejection: 357 |     }
+358 |   });
+359 |   const isSuccess = typeof resp.success === "function" ? resp.success() : resp.code === 0 || resp.code === void 0;
+360 |   if (!isSuccess) {
+361 |     console.error("Failed to update card element:", resp);
+362 |     throw new Error("Failed to update card element");
+                ^
+error: Failed to update card element
+      at updateCardElement (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:362:11)
+
+   Promise: Promise { <rejected> }
+❌ [WARN] Unhandled rejection at: Promise { <rejected> } reason: 357 |     }
+358 |   });
+359 |   const isSuccess = typeof resp.success === "function" ? resp.success() : resp.code === 0 || resp.code === void 0;
+360 |   if (!isSuccess) {
+361 |     console.error("Failed to update card element:", resp);
+362 |     throw new Error("Failed to update card element");
+                ^
+error: Failed to update card element
+      at updateCardElement (/Users/xiaofei.yin/work_repo/feishu_assistant/dist/server.js:362:11)
+
+⚠️ [WebSocket] Duplicate event ignored: bfca8c4f4958418f95459f536d8d57c3
+🔄 [Followups] LLM raw response (first 300 chars): "[  {"text": "How to fix Feishu permission issues?", "type": "question"},
+  {"text": "Share doc text for analysis help", "type": "recommendation"},
+  {"text": "Enable external link sharing", "type": "action"}
+]..."
+🔄 [Followups] Extracted JSON (first 200 chars): "[  {"text": "How to fix Feishu permission issues?", "type": "question"},
+  {"text": "Share doc text for analysis help", "type": "recommendation"},
+  {"text": "Enable external link sharing", "type": "a..."
+✅ [Followups] Generated 3 follow-up options with metadata
+🎯 [CardSuggestions] generateFollowupQuestions returned 3 followups
+🎯 [CardSuggestions] Generated 3 follow-up suggestions (will show as buttons)
+🎯 [CardSuggestions] Disabling streaming mode...
+✅ [CardSuggestions] Streaming mode disabled (card content: response only, no duplicate suggestions)
+🔘 [CardSuggestions] Sending buttons in separate message (Hypothesis 1)...
+🔘 [FollowupButtons] Sending 3 buttons in separate message...
+🔘 [FollowupButtons] Creating card via CardKit...
+🔘 [FollowupButtons] Card created: 7585080841995537621
+🔘 [FollowupButtons] Sending as thread reply to rootId=om_x100b5b0da56cc0acc1098267ddc4442...
+🔘 [FollowupButtons] API response: {
+  "code": 0,
+  "data": {
+    "body": {
+      "content": "{\"title\":\"Suggestions\",\"elements\":[[{\"tag\":\"img\",\"image_key\":\"img_v3_02ad_e19fca1f-912a-450e-95de-3c229091b53g\"},{\"tag\":\"text\",\"text\":\"请升级至最新版本客户端，以查看内容\"},{\"tag\":\"text\",\"text\":\"\"}]]}"
+    },
+    "chat_id": "oc_5816a7e3517989d56b1b0899d23084ab",
+    "create_time": "1766039255442",
+    "deleted": false,
+    "message_id": "om_x100b5b0da3be510cc3e6fee56172343",
+    "msg_type": "interactive",
+    "parent_id": "om...
+🔘 [FollowupButtons] isSuccess=true, code=0, has message_id=true
+✅ [FollowupButtons] Successfully sent buttons message: om_x100b5b0da3be510cc3e6fee56172343
+✅ [CardSuggestions] Buttons sent in separate message: om_x100b5b0da3be510cc3e6fee56172343
+[FeishuMention] Card finalized with suggestions (buttons: om_x100b5b0da3be510cc3e6fee56172343)
+[Devtools] response: {
+  agent: "FeishuMention",
+  tool: undefined,
+  duration: 28764,
+  error: undefined,
+}
+⚠️ [WS Watchdog] Restarting WebSocket due to stale (180s since last event)
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+[info]: [ "[ws]", "ws client ready" ]
+⚠️ [WS Watchdog] Restarting WebSocket due to stale (210s since last event)
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+[info]: [ "[ws]", "ws client ready" ]
+⚠️ [WS Watchdog] Restarting WebSocket due to stale (210s since last event)
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+[info]: [ "[ws]", "ws client ready" ]
+⚠️ [WS Watchdog] Restarting WebSocket due to stale (210s since last event)
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+[info]: [ "[ws]", "ws client ready" ]
 ⚠️ [WS Watchdog] Restarting WebSocket due to stale (180s since last event)
 [info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
 [info]: [ "[ws]", "ws client ready" ]

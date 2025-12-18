@@ -51,9 +51,9 @@ function extractDocTokenFromUrl(input: string): {
     return { docToken: token, docType };
   }
 
-  // URL format (e.g., https://feishu.cn/docs/doccnXXXX)
+  // URL format (e.g., https://feishu.cn/docs/doccnXXXX or https://nio.feishu.cn/docx/XXX)
   const urlMatch = input.match(
-    /https?:\/\/feishu\.cn\/(docs|sheets|bitable|docx)\/([a-zA-Z0-9]+)/
+    /https?:\/\/(?:\w+\.)?feishu\.cn\/(docs|sheets|bitable|docx)\/([a-zA-Z0-9]+)/
   );
   if (urlMatch) {
     const [, urlType, docToken] = urlMatch;
@@ -75,8 +75,8 @@ function extractDocTokenFromUrl(input: string): {
 function parseWatchCommand(
   text: string
 ): { docToken?: string; docType?: string; groupId?: string } {
-  // Remove bot mention and command
-  let remaining = text.replace(/@bot\s+watch\s+/i, "").trim();
+  // Remove watch command (mention already removed)
+  let remaining = text.replace(/^watch\s+/i, "").trim();
 
   // Extract "in:<group_id>" if present
   let groupId: string | undefined;
@@ -126,38 +126,38 @@ export async function handleDocumentCommand(args: {
     return await handleEnhancedCommand({ message: text, chatId, userId, botUserId });
   }
 
-  // Command: @bot watch <doc>
-  if (/^@?bot\s+watch\s+/i.test(text)) {
+  // Command: watch <doc> (mention already removed)
+  if (/^watch\s+/i.test(text)) {
     await handleWatchCommand(text, chatId, userId);
     return true;
   }
 
-  // Command: @bot check <doc>
-  if (/^@?bot\s+check\s+/i.test(text)) {
+  // Command: check <doc>
+  if (/^check\s+/i.test(text)) {
     await handleCheckCommand(text, chatId, userId);
     return true;
   }
 
-  // Command: @bot unwatch <doc>
-  if (/^@?bot\s+unwatch\s+/i.test(text)) {
+  // Command: unwatch <doc>
+  if (/^unwatch\s+/i.test(text)) {
     await handleUnwatchCommand(text, chatId, userId);
     return true;
   }
 
-  // Command: @bot watched [group:<name>]
-  if (/^@?bot\s+watched\s*/i.test(text)) {
+  // Command: watched [group:<name>]
+  if (/^watched\s*/i.test(text)) {
     await handleWatchedCommand(text, chatId, userId);
     return true;
   }
 
-  // Command: @bot tracking:status
-  if (/^@?bot\s+tracking:status/i.test(text)) {
+  // Command: tracking:status
+  if (/^tracking:status/i.test(text)) {
     await handleTrackingStatusCommand(chatId);
     return true;
   }
 
-  // Command: @bot tracking:help
-  if (/^@?bot\s+tracking:help/i.test(text)) {
+  // Command: tracking:help
+  if (/^tracking:help/i.test(text)) {
     await handleTrackingHelpCommand(chatId);
     return true;
   }

@@ -20,6 +20,7 @@
  */
 
 import { LanguageModel } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { openrouter } from "./config";
 
 export type ModelTier = "primary" | "fallback";
@@ -59,19 +60,33 @@ export interface RetryConfig {
 
 /**
  * Free models available for OpenRouter auto router
- * These models are used when openrouter/auto is configured with the models parameter
+ * 
+ * MANDATORY: These are the ONLY models allowed to be selected by openrouter/auto
+ * This whitelist prevents OpenRouter from selecting paid models like Perplexity Sonar
+ * 
+ * These models are passed to OpenRouter API as the models restriction parameter,
+ * ensuring the auto router never selects any paid models.
  * 
  * Note: For tool calling, we need models that support function calling.
  * Some free models may not support tools, so we prioritize models that do.
+ * 
+ * Current approved free models:
+ * 1. nvidia/nemotron-3-nano-30b-a3b:free - 30B params, 1M context, supports tools
+ * 2. qwen/qwen3-235b-a22b:free - Supports tool calling
+ * 3. mistralai/devstral-small-2505:free - Supports tool calling
+ * 4. kwaipilot/kat-coder-pro:free - Supports tool calling
+ * 5. z-ai/glm-4.5-air:free - May support tool calling
+ * 6. qwen/qwen3-coder:free - Supports tool calling
+ * 7. moonshotai/kimi-k2:free - May support tool calling
  */
 export const FREE_MODELS = [
-  "nvidia/nemotron-3-nano-30b-a3b:free", // 30B params, 1M context, supports tools
-  "qwen/qwen3-235b-a22b:free",           // Supports tool calling
-  "mistralai/devstral-small-2505:free", // Supports tool calling
-  "kwaipilot/kat-coder-pro:free",        // Supports tool calling
-  "z-ai/glm-4.5-air:free",               // May support tool calling
-  "qwen/qwen3-coder:free",               // Supports tool calling
-  "moonshotai/kimi-k2:free",             // May support tool calling
+  "nvidia/nemotron-3-nano-30b-a3b:free",
+  "qwen/qwen3-235b-a22b:free",
+  "mistralai/devstral-small-2505:free",
+  "kwaipilot/kat-coder-pro:free",
+  "z-ai/glm-4.5-air:free",
+  "qwen/qwen3-coder:free",
+  "moonshotai/kimi-k2:free",
 ] as const;
 
 /**
@@ -111,14 +126,11 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
  * The auto router intelligently selects the best model from the free models pool
  * based on prompt complexity, task type, and model capabilities.
  * 
- * Note: The models parameter restriction is configured via the model identifier.
- * OpenRouter's auto router supports restricting models by using the models parameter
- * in the request. Since we're using Mastra which may not expose providerOptions directly,
- * we return the auto router model here. The actual models restriction may need to be
- * configured at the Mastra agent level or through environment variables.
+ * MANDATORY: The models parameter is ALWAYS passed to restrict auto router to free models only.
+ * This prevents OpenRouter from selecting paid models like Perplexity Sonar.
  * 
  * @param requireTools - If true, only use models that support tool calling (default: false)
- * @returns LanguageModel configured for openrouter/auto or specific model with fallback
+ * @returns LanguageModel configured for openrouter/auto with FREE_MODELS restriction
  */
 export function getAutoRouterModel(requireTools: boolean = false): LanguageModel {
   const models = requireTools ? FREE_MODELS_WITH_TOOLS : FREE_MODELS;
@@ -143,7 +155,70 @@ export function getAutoRouterModel(requireTools: boolean = false): LanguageModel
     return openrouter(toolModel);
   }
   
-  return openrouter("openrouter/auto");
+  // MANDATORY: Create restricted auto router with models whitelist
+  // This prevents OpenRouter from selecting paid models (e.g., Perplexity Sonar)
+  const modelsArray = Array.from(models) as string[];
+  
+  // Create a new OpenRouter instance with models restriction in provider options
+  // The models array will be passed to OpenRouter's API to restrict auto router selection
+  const restrictedOpenRouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+  });
+  
+  // Call openrouter/auto with models parameter to enforce free models only
+  // We wrap the call to inject the models parameter into every request
+  const baseModel = restrictedOpenRouter("openrouter/auto");
+  
+  // Return wrapped model that injects models restriction on each call
+  return {
+    ...baseModel,
+    // Override the core call method to inject models parameter
+    async call(input: any, options?: any) {
+      const enrichedOptions = {
+        ...options,
+        // Inject models restriction via providerOptions
+        providerOptions: {
+          ...options?.providerOptions,
+          openrouter: {
+            ...options?.providerOptions?.openrouter,
+            models: modelsArray,
+          },
+        },
+      };
+      // @ts-ignore - Accessing internal call method
+      return baseModel.call(input, enrichedOptions);
+    },
+    // Override doStream for streaming responses
+    async doStream(input: any, options?: any) {
+      const enrichedOptions = {
+        ...options,
+        providerOptions: {
+          ...options?.providerOptions,
+          openrouter: {
+            ...options?.providerOptions?.openrouter,
+            models: modelsArray,
+          },
+        },
+      };
+      // @ts-ignore - Accessing internal doStream method
+      return baseModel.doStream(input, enrichedOptions);
+    },
+    // Override doGenerate for non-streaming responses
+    async doGenerate(input: any, options?: any) {
+      const enrichedOptions = {
+        ...options,
+        providerOptions: {
+          ...options?.providerOptions,
+          openrouter: {
+            ...options?.providerOptions?.openrouter,
+            models: modelsArray,
+          },
+        },
+      };
+      // @ts-ignore - Accessing internal doGenerate method
+      return baseModel.doGenerate(input, enrichedOptions);
+    },
+  } as unknown as LanguageModel;
 }
 
 /**
