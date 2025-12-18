@@ -21,6 +21,11 @@ import {
   handleEnhancedCommand,
 } from "./doc-commands-enhanced";
 import { runDocumentTrackingWorkflow } from "./workflows/document-tracking-workflow";
+import {
+  registerDocWebhook,
+  deregisterDocWebhook,
+  webhookStorage,
+} from "./doc-webhook";
 
 /**
  * Parse Feishu URLs and extract document tokens
@@ -200,21 +205,45 @@ async function handleWatchCommand(
       return;
     }
 
-    // Start tracking
-    startTrackingDoc(
-      parsed.docToken,
-      parsed.docType || "doc",
-      parsed.groupId || chatId
-    );
+    const docType = parsed.docType || "doc";
+    const notifyChat = parsed.groupId || chatId;
 
-    // Store in persistence
+    // Register webhook for real-time change notifications
+    try {
+      const registered = await registerDocWebhook(
+        parsed.docToken,
+        docType,
+        notifyChat
+      );
+
+      if (!registered) {
+        throw new Error("Failed to register webhook with Feishu");
+      }
+
+      // Store subscription metadata for future reference
+      await webhookStorage.save({
+        docToken: parsed.docToken,
+        docType: docType as any,
+        chatIdToNotify: notifyChat,
+        subscribedAt: Date.now(),
+      });
+
+      console.log(`✅ [Watch] Webhook registered for ${parsed.docToken}`);
+    } catch (webhookError) {
+      console.error("Failed to register webhook:", webhookError);
+      // Fallback to polling if webhook registration fails
+      console.log(`⚠️ [Watch] Falling back to polling for ${parsed.docToken}`);
+      startTrackingDoc(parsed.docToken, docType, notifyChat);
+    }
+
+    // Store in persistence for historical tracking
     const persistence = getPersistence();
     await persistence.startTracking(
       parsed.docToken,
-      parsed.docType || "doc",
-      parsed.groupId || chatId,
+      docType,
+      notifyChat,
       metadata,
-      `Tracking started by user ${userId}`
+      `Tracking started by user ${userId} via webhook`
     );
 
     // Send confirmation
@@ -225,7 +254,7 @@ async function handleWatchCommand(
 **Type**: ${metadata.docType}
 **Owner**: ${metadata.ownerId}
 
-I'll notify this group whenever changes are detected. Updates will appear here as changes happen.`,
+Webhook registered! You'll get notified in real-time whenever changes are detected.`,
     });
 
     console.log(
@@ -372,7 +401,23 @@ async function handleUnwatchCommand(
       return;
     }
 
-    // Stop tracking
+    const docType = parsed.docType || "doc";
+
+    // Deregister webhook first
+    try {
+      const deregistered = await deregisterDocWebhook(
+        parsed.docToken,
+        docType
+      );
+      if (deregistered) {
+        await webhookStorage.delete(parsed.docToken);
+        console.log(`✅ [Unwatch] Webhook deregistered for ${parsed.docToken}`);
+      }
+    } catch (webhookError) {
+      console.error("Failed to deregister webhook:", webhookError);
+    }
+
+    // Stop polling as fallback
     stopTrackingDoc(parsed.docToken);
 
     // Update persistence
@@ -384,7 +429,7 @@ async function handleUnwatchCommand(
 
     await createAndSendStreamingCard(chatId, "chat_id", {
       title: "⏹️ Stopped Tracking",
-      initialContent: `No longer monitoring: ${parsed.docToken}`,
+      initialContent: `No longer monitoring: ${parsed.docToken}\n\nWebhook deregistered.`,
     });
 
     console.log(

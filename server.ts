@@ -15,6 +15,7 @@ import { initializeMastraMemory } from "./lib/memory-mastra";
 import { getObservabilityStatus } from "./lib/observability-config";
 // Import mastra instance to ensure observability is initialized
 import "./lib/observability-config";
+import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
 
 // Global error handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
@@ -483,6 +484,30 @@ app.post("/webhook/event", async (c) => {
     return c.json({ success: true }, 200);
   } catch (error) {
     console.error("Error processing webhook:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+// Document change webhook endpoint (for docs:event:subscribe)
+// When user watches a document, Feishu pushes change events here
+app.post("/webhook/docs/change", async (c) => {
+  try {
+    const rawBody = await c.req.text();
+
+    // Handle URL verification challenge
+    try {
+      const payload = JSON.parse(rawBody);
+      if (payload.type === "url_verification") {
+        return c.json({ challenge: payload.challenge });
+      }
+    } catch (e) {
+      // Not a challenge, continue with doc change processing
+    }
+
+    const result = await handleDocChangeWebhook(c.req, rawBody);
+    return c.json({ ok: true }, result.status);
+  } catch (error) {
+    console.error("❌ [DocWebhook] Error processing webhook:", error);
     return c.json({ error: "Internal server error" }, 500);
   }
 });
