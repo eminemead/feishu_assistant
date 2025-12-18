@@ -10,10 +10,18 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_ANON_KEY || ""
-);
+// Initialize Supabase client with service role key for trusted backend operations
+// SERVICE_KEY required for RLS bypass in webhook event processing
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || 
+  process.env.SUPABASE_ANON_KEY || 
+  "";
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn("⚠️ Supabase credentials not configured - doc storage will not work");
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export interface DocumentSnapshot {
   doc_token: string;
@@ -48,6 +56,13 @@ export interface ChangeEvent {
  */
 export async function storeDocumentMetadata(meta: DocumentMetadata): Promise<boolean> {
   try {
+    // Verify Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.debug("ℹ️ Supabase not configured - skipping metadata storage");
+      return false;
+    }
+
+    // Store full metadata
     const { error } = await supabase
       .from("documents")
       .upsert(
@@ -65,14 +80,14 @@ export async function storeDocumentMetadata(meta: DocumentMetadata): Promise<boo
       );
 
     if (error) {
-      console.error("❌ Failed to store document metadata:", error);
+      console.error(`❌ [DocSupabase] Failed to store metadata for ${meta.doc_token}:`, error.message);
       return false;
     }
 
-    console.log(`✅ Stored metadata for ${meta.doc_token}`);
+    console.log(`✅ [DocSupabase] Stored metadata for ${meta.doc_token}`);
     return true;
   } catch (error) {
-    console.error("❌ Error storing metadata:", error);
+    console.error(`❌ [DocSupabase] Error storing metadata for ${meta.doc_token}:`, error);
     return false;
   }
 }
@@ -82,11 +97,21 @@ export async function storeDocumentMetadata(meta: DocumentMetadata): Promise<boo
  */
 export async function storeDocumentSnapshot(snapshot: DocumentSnapshot): Promise<boolean> {
   try {
+    // Verify Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.debug("ℹ️ Supabase not configured - skipping snapshot storage");
+      return false;
+    }
+
     // First mark other versions as not latest
-    await supabase
+    const { error: updateError } = await supabase
       .from("doc_snapshots")
       .update({ is_latest: false })
       .eq("doc_token", snapshot.doc_token);
+
+    if (updateError) {
+      console.warn(`⚠️ [DocSupabase] Failed to update old snapshots for ${snapshot.doc_token}:`, updateError.message);
+    }
 
     // Then insert new snapshot
     const { error } = await supabase
@@ -102,14 +127,14 @@ export async function storeDocumentSnapshot(snapshot: DocumentSnapshot): Promise
       });
 
     if (error) {
-      console.error("❌ Failed to store snapshot:", error);
+      console.error(`❌ [DocSupabase] Failed to store snapshot for ${snapshot.doc_token}:`, error.message);
       return false;
     }
 
-    console.log(`✅ Stored snapshot for ${snapshot.doc_token}`);
+    console.log(`✅ [DocSupabase] Stored snapshot for ${snapshot.doc_token}`);
     return true;
   } catch (error) {
-    console.error("❌ Error storing snapshot:", error);
+    console.error(`❌ [DocSupabase] Error storing snapshot for ${snapshot.doc_token}:`, error);
     return false;
   }
 }
@@ -119,6 +144,12 @@ export async function storeDocumentSnapshot(snapshot: DocumentSnapshot): Promise
  */
 export async function logChangeEvent(event: ChangeEvent): Promise<boolean> {
   try {
+    // Verify Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.debug("ℹ️ Supabase not configured - skipping change event logging");
+      return false;
+    }
+
     const { error } = await supabase
       .from("doc_change_events")
       .insert({
@@ -131,14 +162,14 @@ export async function logChangeEvent(event: ChangeEvent): Promise<boolean> {
       });
 
     if (error) {
-      console.error("❌ Failed to log change event:", error);
+      console.error(`❌ [DocSupabase] Failed to log change event for ${event.doc_token}:`, error.message);
       return false;
     }
 
-    console.log(`✅ Logged change event for ${event.doc_token}`);
+    console.log(`✅ [DocSupabase] Logged change event for ${event.doc_token}`);
     return true;
   } catch (error) {
-    console.error("❌ Error logging change event:", error);
+    console.error(`❌ [DocSupabase] Error logging change event for ${event.doc_token}:`, error);
     return false;
   }
 }
@@ -148,6 +179,12 @@ export async function logChangeEvent(event: ChangeEvent): Promise<boolean> {
  */
 export async function getLatestSnapshot(docToken: string): Promise<DocumentSnapshot | null> {
   try {
+    // Verify Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.debug("ℹ️ Supabase not configured - cannot fetch snapshot");
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("doc_snapshots")
       .select("*")
@@ -155,7 +192,12 @@ export async function getLatestSnapshot(docToken: string): Promise<DocumentSnaps
       .eq("is_latest", true)
       .single();
 
-    if (error || !data) {
+    if (error) {
+      console.debug(`ℹ️ [DocSupabase] No snapshot found for ${docToken}:`, error.message);
+      return null;
+    }
+
+    if (!data) {
       return null;
     }
 
@@ -169,7 +211,7 @@ export async function getLatestSnapshot(docToken: string): Promise<DocumentSnaps
       is_latest: data.is_latest,
     };
   } catch (error) {
-    console.error("❌ Error fetching latest snapshot:", error);
+    console.error(`❌ [DocSupabase] Error fetching latest snapshot for ${docToken}:`, error);
     return null;
   }
 }
@@ -179,13 +221,24 @@ export async function getLatestSnapshot(docToken: string): Promise<DocumentSnaps
  */
 export async function getDocumentMetadata(docToken: string): Promise<DocumentMetadata | null> {
   try {
+    // Verify Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.debug("ℹ️ Supabase not configured - cannot fetch metadata");
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("documents")
       .select("*")
       .eq("doc_token", docToken)
       .single();
 
-    if (error || !data) {
+    if (error) {
+      console.debug(`ℹ️ [DocSupabase] No metadata found for ${docToken}:`, error.message);
+      return null;
+    }
+
+    if (!data) {
       return null;
     }
 
@@ -199,7 +252,7 @@ export async function getDocumentMetadata(docToken: string): Promise<DocumentMet
       last_modified_at: data.last_modified_at,
     };
   } catch (error) {
-    console.error("❌ Error fetching document metadata:", error);
+    console.error(`❌ [DocSupabase] Error fetching document metadata for ${docToken}:`, error);
     return null;
   }
 }
@@ -212,6 +265,12 @@ export async function getRecentChanges(
   limit: number = 10
 ): Promise<ChangeEvent[]> {
   try {
+    // Verify Supabase is configured
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.debug("ℹ️ Supabase not configured - cannot fetch changes");
+      return [];
+    }
+
     const { data, error } = await supabase
       .from("doc_change_events")
       .select("*")
@@ -219,7 +278,12 @@ export async function getRecentChanges(
       .order("changed_at", { ascending: false })
       .limit(limit);
 
-    if (error || !data) {
+    if (error) {
+      console.debug(`ℹ️ [DocSupabase] No changes found for ${docToken}:`, error.message);
+      return [];
+    }
+
+    if (!data) {
       return [];
     }
 
@@ -231,7 +295,7 @@ export async function getRecentChanges(
       snapshot_id: event.snapshot_id,
     }));
   } catch (error) {
-    console.error("❌ Error fetching recent changes:", error);
+    console.error(`❌ [DocSupabase] Error fetching recent changes for ${docToken}:`, error);
     return [];
   }
 }

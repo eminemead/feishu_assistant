@@ -4,19 +4,19 @@
    - Token usage tracking
    - Session grouping
 ✅ [Memory] Connected to Supabase database
-🤖 [Model] Using OpenRouter auto router with 4 tool-calling free models
-📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
-🔧 [Model] Tool calling required, using specific model: qwen/qwen3-235b-a22b:free
-📋 [Model] Fallback models available: mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free
-🤖 [Model] Using OpenRouter auto router with 6 free models
-📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
-🤖 [Model] Using OpenRouter auto router with 6 free models
-📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
-🤖 [Model] Using OpenRouter auto router with 6 free models
-📋 [Model] Models pool: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free, kwaipilot/kat-coder-pro:free...
+🤖 [Model] Using OpenRouter auto router with 5 tool-calling free models
+📋 [Model] Models pool: nvidia/nemotron-3-nano-30b-a3b:free, qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free...
+🔧 [Model] Tool calling required, using specific model: nvidia/nemotron-3-nano-30b-a3b:free
+📋 [Model] Fallback models available: qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free
+🤖 [Model] Using OpenRouter auto router with 7 free models
+📋 [Model] Models pool: nvidia/nemotron-3-nano-30b-a3b:free, qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free...
+🤖 [Model] Using OpenRouter auto router with 7 free models
+📋 [Model] Models pool: nvidia/nemotron-3-nano-30b-a3b:free, qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free...
+🤖 [Model] Using OpenRouter auto router with 7 free models
+📋 [Model] Models pool: nvidia/nemotron-3-nano-30b-a3b:free, qwen/qwen3-235b-a22b:free, mistralai/devstral-small-2505:free...
 [info]: [ "event-dispatch is ready" ]
-🔧 Devtools available at: http://localhost:4015/devtools
-📋 [Startup] Starting server initialization... (2025-12-11T07:22:54.896Z)
+🔧 Devtools available at: http://localhost:3000/devtools
+📋 [Startup] Starting server initialization... (2025-12-18T06:11:01.546Z)
 📋 [Startup] Step 0: Initializing Mastra Observability and Memory...
 ✅ [Startup] Step 0a: Mastra Observability enabled
    Phoenix endpoint: http://localhost:6006/v1/traces
@@ -27,14 +27,21 @@
 📋 [Startup] Step 1: Initializing WebSocket connection...
 [info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
 📋 [Startup] Step 2: Starting HTTP server...
-✅ [Startup] Step 2: HTTP server started on port 4015
-✨ [Startup] Server is ready to accept requests in 17ms
-📊 [Startup] Health check: curl http://localhost:4015/health
+✅ [Startup] Step 2: HTTP server started on port 3000
+✨ [Startup] Server is ready to accept requests in 16ms
+📊 [Startup] Health check: curl http://localhost:3000/health
 ✅ [Memory] Mastra memory system initialized
-🔧 Devtools API: http://localhost:4015/devtools/api/events
-🔧 Devtools Sessions: http://localhost:4015/devtools/api/sessions
-🔧 Devtools Stats: http://localhost:4015/devtools/api/stats
+🔧 Devtools API: http://localhost:3000/devtools/api/events
+🔧 Devtools Sessions: http://localhost:3000/devtools/api/sessions
+🔧 Devtools Stats: http://localhost:3000/devtools/api/stats
 ✅ [Startup] Step 0b: Mastra Memory initialized
 ✅ [Startup] Step 1: WebSocket connection established
 📋 [Startup] Ready to receive Feishu events
+[info]: [ "[ws]", "ws client ready" ]
+⚠️ [WebhookAuth] Signature validation skipped (development mode, no FEISHU_ENCRYPT_KEY)
+📨 [DocWebhook] Received change event for wiki-L7v9dyAvLoaJBixTvgPcecLqnIh
+✅ [DocSupabase] Logged change event for wiki-L7v9dyAvLoaJBixTvgPcecLqnIh
+⚠️ [DocWebhook] No subscription found for wiki-L7v9dyAvLoaJBixTvgPcecLqnIh
+⚠️ [WS Watchdog] Restarting WebSocket due to stale (180s since last event)
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
 [info]: [ "[ws]", "ws client ready" ]

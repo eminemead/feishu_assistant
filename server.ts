@@ -504,7 +504,13 @@ app.post("/webhook/docs/change", async (c) => {
       // Not a challenge, continue with doc change processing
     }
 
-    const result = await handleDocChangeWebhook(c.req, rawBody);
+    // Convert Hono request to web Request for validation
+    const webRequest = new Request(c.req.url, {
+      method: c.req.method,
+      headers: c.req.raw.headers,
+    });
+
+    const result = await handleDocChangeWebhook(webRequest, rawBody);
     return c.json({ ok: true }, result.status);
   } catch (error) {
     console.error("❌ [DocWebhook] Error processing webhook:", error);

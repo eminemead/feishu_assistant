@@ -74,15 +74,26 @@ export async function isValidFeishuRequest({
   const nonce = request.headers.get("X-Lark-Request-Nonce");
   const signature = request.headers.get("X-Lark-Signature");
 
-  if (!timestamp || !nonce || !signature || !encryptKey) {
-    console.log("Missing required headers or encrypt key");
+  // Development mode: skip validation if encrypt key not configured
+  // In production, FEISHU_ENCRYPT_KEY must be set
+  if (!encryptKey) {
+    if (process.env.NODE_ENV === "development") {
+      console.log("⚠️ [WebhookAuth] Signature validation skipped (development mode, no FEISHU_ENCRYPT_KEY)");
+      return true;
+    }
+    console.log("❌ Missing required encrypt key");
+    return false;
+  }
+
+  if (!timestamp || !nonce || !signature) {
+    console.log("❌ Missing required webhook headers (timestamp, nonce, signature)");
     return false;
   }
 
   // Prevent replay attacks (5 minutes)
   const currentTime = Math.floor(Date.now() / 1000);
   if (Math.abs(currentTime - parseInt(timestamp)) > 60 * 5) {
-    console.log("Timestamp out of range");
+    console.log("❌ Timestamp out of range (replay attack suspected)");
     return false;
   }
 
@@ -93,10 +104,16 @@ export async function isValidFeishuRequest({
     .update(baseString)
     .digest("hex");
 
-  return crypto.timingSafeEqual(
+  const isValid = crypto.timingSafeEqual(
     Buffer.from(signature),
     Buffer.from(computedSignature)
   );
+
+  if (!isValid) {
+    console.log("❌ Webhook signature mismatch");
+  }
+
+  return isValid;
 }
 
 export const verifyRequest = async ({
