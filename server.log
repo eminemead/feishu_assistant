@@ -410,3 +410,6 @@ error: Failed to update card element
 ⚠️ [WS Watchdog] Restarting WebSocket due to stale (180s since last event)
 [info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
 [info]: [ "[ws]", "ws client ready" ]
+⚠️ [WS Watchdog] Restarting WebSocket due to stale (210s since last event)
+[info]: [ "[ws]", "receive events or callbacks through persistent connection only available in self-build & Feishu app, Configured in:\n        Developer Console(开发者后台) \n          ->\n        Events and Callbacks(事件与回调)\n          -> \n        Mode of event/callback subscription(订阅方式)\n          -> \n        Receive events/callbacks through persistent connection(使用 长连接 接收事件/回调)" ]
+[info]: [ "[ws]", "ws client ready" ]
