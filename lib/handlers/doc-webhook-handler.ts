@@ -14,6 +14,7 @@ import {
   webhookStorage,
 } from "../doc-webhook";
 import { client } from "../feishu-utils";
+import { logChangeEvent } from "../doc-supabase";
 
 /**
  * Handle document change webhook
@@ -36,6 +37,14 @@ export async function handleDocChangeWebhook(
 
     // Handle the change
     const change = handleDocChangeEvent(event);
+
+    // Log change event to Supabase
+    await logChangeEvent({
+      doc_token: change.docToken,
+      change_type: change.changeType,
+      changed_by: change.modifiedBy,
+      changed_at: change.modifiedAt,
+    });
 
     // Find subscription for this doc
     const subscription = await webhookStorage.load(change.docToken);
