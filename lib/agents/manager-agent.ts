@@ -38,6 +38,7 @@ import {
   calculateBackoffDelay,
   DEFAULT_RETRY_CONFIG,
 } from "../shared/model-fallback";
+import { getInternalModel, hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
 import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
 
@@ -69,15 +70,26 @@ function initializeAgent() {
 
   // OpenRouter auto router with restricted free models
   // Use the auto router that injects FREE_MODELS whitelist to prevent paid model selection
-  const model = getAutoRouterModel(true); // Get auto router with tool-calling free models only
+  const models: any[] = [getAutoRouterModel(true)]; // Primary: auto router with tool-calling free models only
+  
+  // Add internal model as fallback if configured
+  if (hasInternalModel()) {
+    const internalModel = getInternalModel();
+    if (internalModel) {
+      console.log(`✅ [Manager] Internal fallback model configured: ${getInternalModelInfo()}`);
+      models.push(internalModel);
+    }
+  }
   
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Use the openrouter/auto with FREE_MODELS whitelist
-    // This prevents OpenRouter from selecting paid models like Perplexity Sonar
-    model: model,
+    // Model selection strategy:
+    // 1. Primary: openrouter/auto with FREE_MODELS whitelist (prevents paid models)
+    // 2. Fallback: internal hosted model if configured
+    // Mastra will retry models in order if one fails (rate limit, error, etc.)
+    model: models.length === 1 ? models[0] : models,
 
     // Tools (identical to AI SDK Tools)
     tools: {
