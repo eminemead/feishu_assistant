@@ -69,23 +69,15 @@ function initializeAgent() {
 
   isInitializing = true;
 
-  // MASTRA MODEL ARRAY: Automatic failover instead of dual agents
-  // Mastra handles retries and fallback automatically
+  // Use a single model with tool support for manager agent
+  // Mastra doesn't support array-based model fallback in the constructor
+  // Fallback is handled at request time via streaming error handling
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Mastra's model fallback array - replaces dual agent pattern
-    model: [
-      {
-        model: getPrimaryModel(),
-        maxRetries: DEFAULT_RETRY_CONFIG.maxRetries,
-      },
-      {
-        model: getFallbackModel(),
-        maxRetries: DEFAULT_RETRY_CONFIG.maxRetries,
-      },
-    ],
+    // Single model with tool support (required for searchWeb tool)
+    model: getPrimaryModel(),
 
     // Tools (identical to AI SDK Tools)
     tools: {

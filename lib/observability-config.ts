@@ -10,7 +10,7 @@
 import { Mastra } from "@mastra/core";
 import { ArizeExporter } from "@mastra/arize";
 import { Observability } from "@mastra/observability";
-import { getManagerAgent } from "./agents/manager-agent";
+import { getManagerAgent } from "./agents/manager-agent-mastra";
 import { getOkrReviewerAgent } from "./agents/okr-reviewer-agent";
 import { getAlignmentAgent } from "./agents/alignment-agent";
 import { getPnlAgent } from "./agents/pnl-agent";

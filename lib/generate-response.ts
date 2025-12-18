@@ -1,5 +1,5 @@
 import { CoreMessage } from "ai";
-import { managerAgent } from "./agents/manager-agent";
+import { managerAgent } from "./agents/manager-agent-mastra";
 
 /**
  * Generate response using the manager agent architecture

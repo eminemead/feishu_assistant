@@ -134,18 +134,29 @@ export async function getDocMetadata(
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
 
-      const resp = (await client.request({
-        method: "POST",
-        url: "/open-apis/suite/docs-api/meta",
-        data: {
-          request_docs: [
-            {
-              docs_token: docToken,
-              docs_type: docType,
-            },
-          ],
-        },
-      })) as any;
+      // For docx documents, try drive API first; fall back to legacy docs-api for other types
+      let resp: any;
+      
+      try {
+        // Use legacy docs-api for all document types (most reliable)
+        console.log(`📄 [DocMetadata] Fetching metadata for ${docType}: ${docToken}`);
+        resp = await client.request({
+          method: "POST",
+          url: "/open-apis/suite/docs-api/meta",
+          data: {
+            request_docs: [
+              {
+                docs_token: docToken,
+                docs_type: docType,
+              },
+            ],
+          },
+        });
+        console.log(`📄 [DocMetadata] Response received for ${docToken}`);
+      } catch (apiError) {
+        console.error(`❌ [DocMetadata] API call failed for ${docToken}:`, apiError);
+        throw apiError;
+      }
 
       // Check response success
       const isSuccess =

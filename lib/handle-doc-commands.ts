@@ -111,12 +111,14 @@ export async function handleDocumentCommand(args: {
   // Set user context for persistence
   setPersistenceUserId(userId);
 
-  // Parse message content if it's JSON
+  // Parse message content if it's JSON (starts with { or [)
   let text = message;
-  try {
-    text = parseMessageContent(message);
-  } catch {
-    text = message;
+  if (message.trim().startsWith('{') || message.trim().startsWith('[')) {
+    try {
+      text = parseMessageContent(message);
+    } catch {
+      text = message;
+    }
   }
 
   text = text.replace(new RegExp(`<at user_id="${botUserId}">.*?</at>`, "g"), "").trim();
@@ -201,15 +203,21 @@ async function handleWatchCommand(
       return;
     }
 
-    // Fetch document metadata to verify it exists
-    const metadata = await getDocMetadata(parsed.docToken, parsed.docType);
-
+    // Fetch document metadata to verify it exists (optional - webhook will fail if doc is invalid)
+    let metadata = await getDocMetadata(parsed.docToken, parsed.docType);
+    
     if (!metadata) {
-      await createAndSendStreamingCard(chatId, "chat_id", {
-        title: "❌ Document Not Found",
-        initialContent: `Could not access document: ${parsed.docToken}\n\nThis could mean:\n- The token is incorrect\n- The document was deleted\n- You don't have permission to access it`,
-      });
-      return;
+      console.warn(`⚠️ [Watch] Could not fetch metadata for ${parsed.docToken}, will try webhook registration anyway`);
+      // Create minimal metadata object to continue
+      metadata = {
+        docToken: parsed.docToken,
+        title: "Unknown Document",
+        ownerId: "unknown",
+        createdTime: Date.now() / 1000,
+        lastModifiedUser: "unknown",
+        lastModifiedTime: Date.now() / 1000,
+        docType: parsed.docType || "doc",
+      };
     }
 
     const docType = parsed.docType || "doc";
@@ -243,15 +251,21 @@ async function handleWatchCommand(
       startTrackingDoc(parsed.docToken, docType, notifyChat);
     }
 
-    // Store in persistence for historical tracking
-    const persistence = getPersistence();
-    await persistence.startTracking(
-      parsed.docToken,
-      docType,
-      notifyChat,
-      metadata,
-      `Tracking started by user ${userId} via webhook`
-    );
+    // Store in persistence for historical tracking (optional - doesn't block webhook)
+    try {
+      const persistence = getPersistence();
+      await persistence.startTracking(
+        parsed.docToken,
+        docType,
+        notifyChat,
+        metadata,
+        `Tracking started by user ${userId} via webhook`
+      );
+      console.log(`✅ [Watch] Tracking record stored for ${parsed.docToken}`);
+    } catch (persistErr) {
+      console.warn(`⚠️ [Watch] Could not store tracking record (not critical):`, persistErr);
+      // Continue - webhook is registered, persistence is just for history
+    }
 
     // Send confirmation
     await createAndSendStreamingCard(chatId, "chat_id", {
