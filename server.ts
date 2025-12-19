@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { HonoServerAdapter, HonoBindings, HonoVariables } from "@mastra/hono";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
@@ -12,8 +13,8 @@ import {
   extractButtonFollowupContext,
 } from "./lib/handle-button-followup";
 import { initializeMastraMemory } from "./lib/memory-mastra";
-import { getObservabilityStatus } from "./lib/observability-config";
-// Import mastra instance to ensure observability is initialized
+import { getObservabilityStatus, mastra } from "./lib/observability-config";
+// Import observability config to ensure it's initialized
 import "./lib/observability-config";
 import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
 import {
@@ -40,7 +41,7 @@ process.on('uncaughtException', (error) => {
   // Don't exit immediately - log and continue
 });
 
-const app = new Hono();
+const app = new Hono<{ Bindings: HonoBindings; Variables: HonoVariables }>();
 
 // Track processed events to prevent duplicates
 const processedEvents = new Set<string>();
@@ -937,6 +938,12 @@ async function startServer() {
     // Continue - memory is optional, agent can work without it
   });
   
+  // Step 0c: Initialize Mastra Server Adapter (exposes agents/workflows as HTTP endpoints)
+  console.log("📋 [Startup] Step 0c: Initializing Mastra Server Adapter...");
+  const mastraAdapter = new HonoServerAdapter({
+    mastra,
+  });
+  
   // Step 1: Initialize WebSocket for Subscription Mode
   if (useSubscriptionMode) {
     console.log("📋 [Startup] Mode: Subscription (WebSocket)");
@@ -991,6 +998,19 @@ async function startServer() {
   } else {
     console.log("📋 [Startup] Mode: Webhook");
     console.log("📋 [Startup] WebSocket disabled - using HTTP webhooks");
+  }
+  
+  // Step 1.5: Initialize Mastra Server routes (must be done before HTTP server starts)
+  console.log("📋 [Startup] Step 1.5: Initializing Mastra Server routes...");
+  try {
+    // Register context middleware and routes
+    mastraAdapter.registerContextMiddleware(app);
+    await mastraAdapter.registerRoutes(app, { prefix: "/api" });
+    console.log("✅ [Startup] Step 1.5: Mastra Server routes initialized");
+    console.log("   Available at: /api/agents/*, /api/workflows/*, etc.");
+  } catch (error) {
+    console.warn("⚠️ [Startup] Step 1.5: Mastra Server initialization warning:", error);
+    // Continue - Mastra is optional, custom endpoints still work
   }
   
   // Step 2: Start HTTP server (immediate, non-blocking)
