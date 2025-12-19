@@ -1,5 +1,5 @@
-import { Agent } from "@ai-sdk-tools/agents";
-import { getAutoRouterModel } from "../shared/model-fallback";
+import { Agent } from "@mastra/core/agent";
+import { getMastraModel } from "../shared/model-router";
 import { handleDocumentCommand } from "../handle-doc-commands";
 import { tool } from "ai";
 import { z } from "zod";
@@ -129,17 +129,17 @@ function createDocumentCommandTool() {
  * 4. Provide helpful responses for Feishu cards
  */
 export function getDocumentTrackingAgent(): Agent {
-  return new Agent({
-    name: "DocumentTracking",
-    // Use OpenRouter auto router with free models only
-    model: getAutoRouterModel(),
-    instructions: getDocumentTrackingInstructions(),
-    tools: {
-      executeDocCommand: createDocumentCommandTool(),
-      semanticDocSearch: documentSemanticSearchTool,
-    },
-  });
-}
+   return new Agent({
+     name: "DocumentTracking",
+     // Use native Mastra model router with free models only
+     model: getMastraModel(),
+     instructions: getDocumentTrackingInstructions(),
+     tools: {
+       executeDocCommand: createDocumentCommandTool(),
+       semanticDocSearch: documentSemanticSearchTool,
+     },
+   });
+ }
 
 /**
  * Get system instructions for document tracking agent

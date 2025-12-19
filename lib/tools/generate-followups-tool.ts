@@ -1,6 +1,6 @@
 import { tool, generateText, generateObject } from "ai";
 import { z } from "zod";
-import { getAutoRouterModel } from "../shared/model-fallback";
+import { getMastraModelSingle } from "../shared/model-router";
 
 /**
  * Generates 2-3 follow-up questions or recommendations based on agent response
@@ -29,9 +29,9 @@ export const generateFollowupsTool = tool({
         `🔄 [Followups] Generating ${maxOptions} follow-up questions for response: "${response.substring(0, 50)}..."`
       );
 
-      const model = getAutoRouterModel();
+      const model = getMastraModelSingle();
 
-      // Generate follow-up questions using the model
+       // Generate follow-up questions using the model
       const result = await generateObject({
         model,
         schema: z.object({
@@ -123,11 +123,11 @@ export async function generateFollowupQuestions(
       `🔄 [Followups] Generating ${maxOptions} follow-up questions for response: "${response.substring(0, 50)}..."`
     );
 
-    const model = getAutoRouterModel();
-    if (!model) {
-      console.error(`❌ [Followups] No model available`);
-      throw new Error("Model not available");
-    }
+    const model = getMastraModelSingle();
+     if (!model) {
+       console.error(`❌ [Followups] No model available`);
+       throw new Error("Model not available");
+     }
 
     // Create a timeout promise for safety (30 seconds max)
     const timeoutPromise = new Promise((_, reject) => {

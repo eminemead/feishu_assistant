@@ -13,7 +13,7 @@
 
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
-import { getAutoRouterModel } from "../shared/model-fallback";
+import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -56,8 +56,8 @@ function initializeAgent(): void {
 - You are the Alignment specialist agent.
 - This feature is currently under development. Please check back later for alignment tracking features.
 - 此功能目前正在开发中，请稍后再查看对齐跟踪功能。`,
-    // Use OpenRouter auto router with free models only
-    model: getAutoRouterModel(),
+    // Use native Mastra model router with free models only
+    model: getMastraModel(),
   });
 
   isInitializing = false;

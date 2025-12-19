@@ -28,7 +28,6 @@ import {
   saveMessageToMemory,
 } from "./memory-integration";
 import {
-  getAutoRouterModel,
   isRateLimitError,
   isModelRateLimited,
   markModelRateLimited,
@@ -38,6 +37,7 @@ import {
   calculateBackoffDelay,
   DEFAULT_RETRY_CONFIG,
 } from "../shared/model-fallback";
+import { getOpenRouterWithWhitelist } from "../shared/model-router-fixed";
 import { getInternalModel, hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
 import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
@@ -56,8 +56,8 @@ let mastraMemoryInstance: any = null;
 /**
  * Initialize the manager agent (lazy - called on first request)
  * 
- * Mastra simplifies model fallback by accepting an array of models
- * with built-in retry logic, so we don't need dual agent instances.
+ * Uses native Mastra model routing with string-based model format.
+ * Mastra accepts array of models for built-in fallback mechanism.
  * 
  * NOTE: Memory must be created AFTER first request (to get user context)
  * so we initialize a basic agent here, then configure memory per-request
@@ -68,16 +68,19 @@ function initializeAgent() {
 
   isInitializing = true;
 
-  // OpenRouter auto router with restricted free models
-  // Use the auto router that injects FREE_MODELS whitelist to prevent paid model selection
-  const models: any[] = [getAutoRouterModel(true)]; // Primary: auto router with tool-calling free models only
+  // Native Mastra model routing (no OpenRouter SDK needed)
+  // Returns array of "openrouter/model" strings with tool-calling support
+  const models: any = getMastraModel(true); // Free models with tool support
+  
+  // Build model array with fallback
+  let modelArray = Array.isArray(models) ? models : [models];
   
   // Add internal model as fallback if configured
   if (hasInternalModel()) {
     const internalModel = getInternalModel();
     if (internalModel) {
       console.log(`✅ [Manager] Internal fallback model configured: ${getInternalModelInfo()}`);
-      models.push(internalModel);
+      modelArray.push(internalModel);
     }
   }
   
@@ -86,10 +89,10 @@ function initializeAgent() {
     instructions: getManagerInstructions(),
     
     // Model selection strategy:
-    // 1. Primary: openrouter/auto with FREE_MODELS whitelist (prevents paid models)
+    // 1. Primary: openrouter/* with FREE_MODELS whitelist (prevents paid models)
     // 2. Fallback: internal hosted model if configured
     // Mastra will retry models in order if one fails (rate limit, error, etc.)
-    model: models.length === 1 ? models[0] : models,
+    model: modelArray.length === 1 ? modelArray[0] : modelArray,
 
     // Tools (identical to AI SDK Tools)
     tools: {
