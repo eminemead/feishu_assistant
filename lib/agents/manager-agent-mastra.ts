@@ -3,7 +3,7 @@
  * 
  * Replaces the AI SDK Tools implementation with Mastra framework.
  * Routes user queries to specialist agents (OKR, Alignment, P&L, DPA-PM).
- * Falls back to web search if no specialist matches.
+ * Falls back to general guidance if no specialist matches (web search disabled - migrating to Brave Search API).
  * 
  * KEY CHANGES FROM AI SDK TOOLS:
  * 1. Uses Mastra's Agent instead of @ai-sdk-tools/agents
@@ -39,12 +39,12 @@ import {
   calculateBackoffDelay,
   DEFAULT_RETRY_CONFIG,
 } from "../shared/model-fallback";
-import { createSearchWebTool } from "../tools";
+// import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
 import { getRoutingDecision } from "../workflows/manager-routing-workflow";
 
-// Create web search tool for fallback
-const searchWebTool = createSearchWebTool(true, true);
+// Web search tool temporarily disabled - will be replaced with Brave Search API
+// const searchWebTool = createSearchWebTool(true, true);
 
 // Track model tier for rate limit handling
 let currentModelTier: "primary" | "fallback" = "primary";
@@ -76,12 +76,12 @@ function initializeAgent() {
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Single model with tool support (required for searchWeb tool)
+    // Single model with tool support
     model: getPrimaryModel(),
 
-    // Tools (identical to AI SDK Tools)
+    // Tools - web search temporarily disabled (will be replaced with Brave Search API)
     tools: {
-      searchWeb: searchWebTool,
+      // searchWeb: searchWebTool, // Disabled - migrating to Brave Search API
     },
   });
 
@@ -99,21 +99,21 @@ function getManagerInstructions(): string {
 2. Alignment Agent: 路由关于对齐(alignment)、对齐、目标对齐的查询
 3. P&L Agent: 路由关于损益(profit & loss)、P&L、损益、利润、亏损、EBIT的查询
 4. DPA Mom Agent: 路由关于DPA、数据团队(data team)、AE、DA、dpa_mom、mom、ma的查询
-5. Fallback: 如果没有匹配的专家，使用网络搜索(searchWeb工具)或提供有用的指导
+5. Fallback: 如果没有匹配的专家，提供有用的指导或说明无法处理该查询
 
 ROUTING RULES (apply in this order):
 1. OKR Reviewer: Route queries about OKR, objectives, key results, manager reviews, has_metric percentage, or 覆盖率
 2. Alignment Agent: Route queries about alignment, 对齐, or 目标对齐
 3. P&L Agent: Route queries about profit & loss, P&L, 损益, 利润, 亏损, or EBIT
 4. DPA Mom Agent: Route queries about DPA, data team, AE, DA, dpa_mom, mom, or ma
-5. Fallback: If no specialist matches, use web search (searchWeb tool) or provide helpful guidance
+5. Fallback: If no specialist matches, provide helpful guidance or explain that the query cannot be handled
 
 GENERAL GUIDELINES:
 - Do not tag users. 不要@用户。
 - Current date is: ${new Date().toISOString().split("T")[0]}
 - Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.
 - Always route to the most appropriate specialist agent when their domain is mentioned.
-- Use web search for general queries that don't match any specialist.
+- Web search is currently disabled (migrating to Brave Search API). For general queries that don't match any specialist, provide helpful guidance or explain limitations.
 - Most queries will be in Chinese - understand Chinese query semantics for better routing.
 
 AVAILABLE SPECIALISTS:
@@ -701,7 +701,7 @@ export async function managerAgent(
     }
   }
 
-  // No specialist matched - use manager agent for web search or general guidance
+  // No specialist matched - use manager agent for general guidance (web search disabled)
   console.log(
     `[Manager] No specialist match, using manager agent for query: "${query}"`
   );
