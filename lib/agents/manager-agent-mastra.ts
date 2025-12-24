@@ -357,8 +357,9 @@ export async function managerAgent(
     }
   }
 
-  // Alignment Agent routing
-  if (routingDecision.category === "alignment") {
+  // Alignment Agent routing - DISABLED (not active yet)
+  // TODO: Re-enable when alignment agent is ready
+  if (false && routingDecision.category === "alignment") {
     console.log(
       `[Manager] Workflow routing: Alignment Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
     );
@@ -474,8 +475,9 @@ export async function managerAgent(
     }
   }
 
-  // P&L Agent routing
-  if (routingDecision.category === "pnl") {
+  // P&L Agent routing - DISABLED (not active yet)
+  // TODO: Re-enable when pnl agent is ready
+  if (false && routingDecision.category === "pnl") {
     console.log(`[Manager] Workflow routing: P&L Agent (confidence: ${routingDecision.confidence.toFixed(2)})`);
     devtoolsTracker.trackAgentCall("Manager", query, {
       workflowRoute: "pnl_agent",

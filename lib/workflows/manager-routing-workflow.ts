@@ -99,10 +99,11 @@ const classifyQueryStep = createStep({
     const dpaScore = dpaMatches / dpaPatterns.length;
 
     // Determine category with confidence
+    // NOTE: alignment and pnl agents are currently disabled - only okr_reviewer and dpa_mom are active
     const scores = {
       okr: okrScore,
-      alignment: alignmentScore,
-      pnl: pnlScore,
+      alignment: 0, // DISABLED: alignment agent not active yet
+      pnl: 0, // DISABLED: pnl agent not active yet
       dpa_mom: dpaScore,
       general: 0.1, // Default fallback
     };
