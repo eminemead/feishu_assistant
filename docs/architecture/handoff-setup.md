@@ -10,7 +10,7 @@ The orchestrator (manager) agent is **correctly configured** to use the handoff 
 
 **Handoffs Array** - All specialist agents registered:
 ```typescript
-handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent]
+handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaMomAgent]
 ```
 
 **Event Handler** - Tracks handoff events:
@@ -50,9 +50,9 @@ All specialist agents are properly set up with `matchOn` patterns:
 - **matchOn**: `["pnl", "profit", "loss", "损益", "利润", "亏损", "ebit"]`
 - **Tools**: None (placeholder)
 
-#### DPA PM Agent
-- **Name**: `dpa_pm`
-- **matchOn**: `["dpa", "data team", "ae", "da"]`
+#### DPA Mom Agent
+- **Name**: `dpa_mom`
+- **matchOn**: `["dpa", "data team", "ae", "da", "dpa_mom", "mom"]` (Note: Mastra agents use workflow-based routing)
 - **Tools**: None (placeholder)
 
 ## How Handoffs Work

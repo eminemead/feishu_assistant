@@ -17,7 +17,7 @@ import { CoreMessage } from "ai";
 import { getOkrReviewerAgent } from "./okr-reviewer-agent";
 import { getAlignmentAgent } from "./alignment-agent";
 import { getPnlAgent } from "./pnl-agent";
-import { getDpaPmAgent } from "./dpa-pm-agent";
+import { getDpaMomAgent } from "./dpa-mom-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -98,14 +98,14 @@ function getManagerInstructions(): string {
 1. OKR Reviewer: 路由关于OKR、目标、关键结果、经理评审、指标覆盖率(has_metric percentage)、覆盖率(覆盖率)的查询
 2. Alignment Agent: 路由关于对齐(alignment)、对齐、目标对齐的查询
 3. P&L Agent: 路由关于损益(profit & loss)、P&L、损益、利润、亏损、EBIT的查询
-4. DPA PM Agent: 路由关于DPA、数据团队(data team)、AE、DA的查询
+4. DPA Mom Agent: 路由关于DPA、数据团队(data team)、AE、DA、dpa_mom、mom、ma的查询
 5. Fallback: 如果没有匹配的专家，使用网络搜索(searchWeb工具)或提供有用的指导
 
 ROUTING RULES (apply in this order):
 1. OKR Reviewer: Route queries about OKR, objectives, key results, manager reviews, has_metric percentage, or 覆盖率
 2. Alignment Agent: Route queries about alignment, 对齐, or 目标对齐
 3. P&L Agent: Route queries about profit & loss, P&L, 损益, 利润, 亏损, or EBIT
-4. DPA PM Agent: Route queries about DPA, data team, AE, or DA
+4. DPA Mom Agent: Route queries about DPA, data team, AE, DA, dpa_mom, mom, or ma
 5. Fallback: If no specialist matches, use web search (searchWeb tool) or provide helpful guidance
 
 GENERAL GUIDELINES:
@@ -120,7 +120,7 @@ AVAILABLE SPECIALISTS:
 - OKR Reviewer (okr_reviewer): For OKR metrics, manager reviews, has_metric percentage analysis / 用于OKR指标、经理评审、指标覆盖率分析
 - Alignment Agent (alignment_agent): For alignment tracking (under development) / 用于对齐跟踪（开发中）
 - P&L Agent (pnl_agent): For profit & loss analysis (under development) / 用于损益分析（开发中）
-- DPA PM Agent (dpa_pm): For product management tasks (under development) / 用于产品管理任务（开发中）`;
+- DPA Mom Agent (dpa_mom): Chief-of-staff and executive assistant to Ian for the DPA team / Ian的首席幕僚和执行助理，负责照顾DPA团队`;
 }
 
 /**
@@ -584,17 +584,17 @@ export async function managerAgent(
     }
   }
 
-  // DPA PM Agent routing
-  if (routingDecision.category === "dpa_pm") {
+  // DPA Mom Agent routing
+  if (routingDecision.category === "dpa_mom") {
     console.log(
-      `[Manager] Workflow routing: DPA PM Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
+      `[Manager] Workflow routing: DPA Mom Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
     );
     devtoolsTracker.trackAgentCall("Manager", query, {
-      workflowRoute: "dpa_pm",
+      workflowRoute: "dpa_mom",
       confidence: routingDecision.confidence,
     });
     try {
-      const dpaPmAgent = getDpaPmAgent();
+      const dpaMomAgent = getDpaMomAgent();
       const executionContext: any = {
         _memoryAddition: "",
       };
@@ -611,7 +611,7 @@ export async function managerAgent(
         }
       }
 
-      const result = await dpaPmAgent.stream({
+      const result = await dpaMomAgent.stream({
         messages,
         executionContext,
       });
@@ -620,7 +620,7 @@ export async function managerAgent(
       let lastUpdateLength = 0;
       let lastUpdateTime = Date.now();
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:622',message:'Starting DPA PM agent stream',data:{agent:'dpa_pm'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:622',message:'Starting DPA Mom agent stream',data:{agent:'dpa_mom'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
@@ -644,10 +644,10 @@ export async function managerAgent(
       }
 
       const duration = Date.now() - startTime;
-      devtoolsTracker.trackResponse("dpa_pm", accumulatedText, duration, {
+      devtoolsTracker.trackResponse("dpa_mom", accumulatedText, duration, {
        manualRoute: true,
       });
-      healthMonitor.trackAgentCall("dpa_pm", duration, true);
+      healthMonitor.trackAgentCall("dpa_mom", duration, true);
 
       // Save routed response to memory
       if (mastraMemory && memoryThread && memoryResource) {
@@ -680,19 +680,19 @@ export async function managerAgent(
            format: 'v2',
          });
          
-         console.log(`[DPA PM] Saved response to memory`);
+         console.log(`[DPA Mom] Saved response to memory`);
         } catch (error) {
-          console.warn("[DPA PM Routing] Failed to save response to memory:", error);
+          console.warn("[DPA Mom Routing] Failed to save response to memory:", error);
         }
        }
 
-      console.log(`[DPA PM] Response complete (length=${accumulatedText.length})`);
+      console.log(`[DPA Mom] Response complete (length=${accumulatedText.length})`);
       return accumulatedText;
     } catch (error) {
-      console.error(`[Manager] Error routing to DPA PM Agent:`, error);
+      console.error(`[Manager] Error routing to DPA Mom Agent:`, error);
       const errorMsg = error instanceof Error ? error.message : String(error);
       devtoolsTracker.trackError(
-        "dpa_pm",
+        "dpa_mom",
         error instanceof Error ? error : new Error(errorMsg),
         { manualRoute: true }
       );

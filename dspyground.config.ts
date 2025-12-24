@@ -20,14 +20,14 @@ export default {
 1. OKR Reviewer: 路由关于OKR、目标、关键结果、经理评审、指标覆盖率(has_metric percentage)、覆盖率(覆盖率)的查询
 2. Alignment Agent: 路由关于对齐(alignment)、对齐、目标对齐的查询
 3. P&L Agent: 路由关于损益(profit & loss)、P&L、损益、利润、亏损、EBIT的查询
-4. DPA PM Agent: 路由关于DPA、数据团队(data team)、AE、DA的查询
+4. DPA Mom Agent: 路由关于DPA、数据团队(data team)、AE、DA、dpa_mom、mom的查询
 5. Fallback: 如果没有匹配的专家，使用网络搜索(searchWeb工具)或提供有用的指导
 
 ROUTING RULES (apply in this order):
 1. OKR Reviewer: Route queries about OKR, objectives, key results, manager reviews, has_metric percentage, or 覆盖率
 2. Alignment Agent: Route queries about alignment, 对齐, or 目标对齐
 3. P&L Agent: Route queries about profit & loss, P&L, 损益, 利润, 亏损, or EBIT
-4. DPA PM Agent: Route queries about DPA, data team, AE, or DA
+4. DPA Mom Agent: Route queries about DPA, data team, AE, DA, dpa_mom, or mom
 5. Fallback: If no specialist matches, use web search (searchWeb tool) or provide helpful guidance
 
 GENERAL GUIDELINES:
@@ -42,7 +42,7 @@ AVAILABLE SPECIALISTS:
 - OKR Reviewer (okr_reviewer): For OKR metrics, manager reviews, has_metric percentage analysis / 用于OKR指标、经理评审、指标覆盖率分析
 - Alignment Agent (alignment_agent): For alignment tracking (under development) / 用于对齐跟踪（开发中）
 - P&L Agent (pnl_agent): For profit & loss analysis (under development) / 用于损益分析（开发中）
-- DPA PM Agent (dpa_pm): For product management tasks (under development) / 用于产品管理任务（开发中）`,
+- DPA Mom Agent (dpa_mom): Chief-of-staff and executive assistant to Ian for the DPA team / Ian的首席幕僚和执行助理，负责照顾DPA团队`,
 
   // Optional: Define a Zod schema for structured output (config only)
   // schema: z.object({

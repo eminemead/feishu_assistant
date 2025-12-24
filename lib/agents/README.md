@@ -50,10 +50,11 @@ The system follows a **Manager Agent → Specialist Agent → Tool** pattern usi
 - **Status**: Placeholder (pending specification)
 - **Keywords**: pnl, profit, loss, 损益, 利润, 亏损
 
-### DPA PM Agent
-- **File**: `dpa-pm-agent.ts`
-- **Status**: Placeholder (pending specification)
-- **Keywords**: dpa, pm, product management, 产品管理
+### DPA Mom Agent
+- **File**: `dpa-mom-agent.ts`
+- **Status**: Active
+- **Role**: Chief-of-staff and executive assistant to Ian for the DPA team
+- **Keywords**: dpa, data team, ae, da, dpa_mom, mom
 
 ## Usage
 

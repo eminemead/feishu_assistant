@@ -29,7 +29,7 @@ The system follows a **Manager Agent → Specialist Agent → Tool** pattern usi
 - **OKR Reviewer**: OKR metrics and manager performance analysis
 - **Alignment Agent**: Alignment tracking (under development)
 - **P&L Agent**: Profit & loss analysis (under development)
-- **DPA PM Agent**: Product management tasks (under development)
+- **DPA Mom Agent**: Chief-of-staff and executive assistant to Ian for the DPA team
 
 For implementation details, see [lib/agents/README.md](../../lib/agents/README.md).
 

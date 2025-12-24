@@ -14,7 +14,7 @@ import { getManagerAgent } from "./agents/manager-agent-mastra";
 import { getOkrReviewerAgent } from "./agents/okr-reviewer-agent";
 import { getAlignmentAgent } from "./agents/alignment-agent";
 import { getPnlAgent } from "./agents/pnl-agent";
-import { getDpaPmAgent } from "./agents/dpa-pm-agent";
+import { getDpaMomAgent } from "./agents/dpa-mom-agent";
 
 // Environment configuration
 const PHOENIX_ENDPOINT = process.env.PHOENIX_ENDPOINT || "http://localhost:6006/v1/traces";
@@ -59,7 +59,7 @@ const registeredAgents = {
   okrReviewer: getOkrReviewerAgent(),
   alignment: getAlignmentAgent(),
   pnl: getPnlAgent(),
-  dpaPm: getDpaPmAgent(),
+  dpaMom: getDpaMomAgent(),
 };
 
 export const mastra = new Mastra({

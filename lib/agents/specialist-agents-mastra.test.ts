@@ -12,7 +12,7 @@
 import { describe, it, expect } from "bun:test";
 import { alignmentAgent } from "./alignment-agent-mastra";
 import { pnlAgent } from "./pnl-agent-mastra";
-import { dpaPmAgent } from "./dpa-pm-agent-mastra";
+import { dpaMomAgent } from "./dpa-mom-agent-mastra";
 import type { CoreMessage } from "ai";
 
 // Mock environment
@@ -202,7 +202,7 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
 
   describe("DPA-PM Agent", () => {
     it("should be callable as async function", () => {
-      expect(typeof dpaPmAgent).toBe("function");
+      expect(typeof dpaMomAgent).toBe("function");
     });
 
     it("should accept required messages parameter", async () => {
@@ -211,7 +211,7 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
       ];
 
       try {
-        const promise = dpaPmAgent(messages);
+        const promise = dpaMomAgent(messages);
         expect(promise instanceof Promise).toBe(true);
       } catch (e) {
         if (e instanceof TypeError) throw e;
@@ -224,7 +224,7 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
       ];
 
       try {
-        const promise = dpaPmAgent(
+        const promise = dpaMomAgent(
           messages,
           (status) => {},
           "c-123",
@@ -243,7 +243,7 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
       ];
 
       try {
-        const result = await dpaPmAgent(messages);
+        const result = await dpaMomAgent(messages);
         expect(typeof result).toBe("string");
       } catch (e) {
         // API errors OK
@@ -257,7 +257,7 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
 
       const updates: string[] = [];
       try {
-        const result = await dpaPmAgent(
+        const result = await dpaMomAgent(
           messages,
           (status) => updates.push(status)
         );
@@ -274,7 +274,7 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
       ];
 
       try {
-        const result = await dpaPmAgent(
+        const result = await dpaMomAgent(
           messages,
           undefined,
           "chat-dpa",
@@ -328,10 +328,10 @@ describe("Specialist Agents (Mastra) - Parameter & Signature Tests", () => {
 
       try {
         // All these should work
-        await dpaPmAgent(messages);
-        await dpaPmAgent(messages, (s) => {});
-        await dpaPmAgent(messages, undefined, "c", "r", "u");
-        await dpaPmAgent(messages, (s) => {}, "c", "r", "u");
+        await dpaMomAgent(messages);
+        await dpaMomAgent(messages, (s) => {});
+        await dpaMomAgent(messages, undefined, "c", "r", "u");
+        await dpaMomAgent(messages, (s) => {}, "c", "r", "u");
       } catch (e) {
         // API errors OK
       }

@@ -10,7 +10,7 @@ The manager agent is correctly configured with:
 
 1. **Handoffs Array**: All specialist agents are registered
    ```typescript
-   handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaPmAgent]
+   handoffs: [okrReviewerAgent, alignmentAgent, pnlAgent, dpaMomAgent]
    ```
 
 2. **Event Handling**: Handoff events are tracked and logged
@@ -39,13 +39,13 @@ Each specialist agent is properly configured with:
    - OKR Reviewer: `["okr", "objective", "key result", "manager review", "has_metric", "覆盖率"]`
    - Alignment Agent: `["alignment", "对齐", "目标对齐"]`
    - P&L Agent: `["pnl", "profit", "loss", "损益", "利润", "亏损", "ebit"]`
-   - DPA PM Agent: `["dpa", "data team", "ae", "da"]`
+   - DPA Mom Agent: `["dpa", "data team", "ae", "da", "dpa_mom", "mom"]`
 
 2. **Agent Names**: Unique identifiers for routing
    - `okr_reviewer`
    - `alignment_agent`
    - `pnl_agent`
-   - `dpa_pm`
+   - `dpa_mom`
 
 3. **Tools**: Each agent has its own specialized tools (scoped to that agent only)
 

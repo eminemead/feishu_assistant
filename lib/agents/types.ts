@@ -9,7 +9,7 @@ export type AgentName =
   | "okr_reviewer"
   | "alignment_agent"
   | "pnl_agent"
-  | "dpa_pm"
+  | "dpa_mom"
   | "Manager";
 
 // Re-export Agent type from @ai-sdk-tools/agents for convenience

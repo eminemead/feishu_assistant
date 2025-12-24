@@ -22,12 +22,12 @@ import { CoreMessage } from "ai";
 import { getOkrReviewerAgent } from "../agents/okr-reviewer-agent";
 import { getAlignmentAgent } from "../agents/alignment-agent";
 import { getPnlAgent } from "../agents/pnl-agent";
-import { getDpaPmAgent } from "../agents/dpa-pm-agent";
+import { getDpaMomAgent } from "../agents/dpa-mom-agent";
 
 /**
  * Query category classification
  */
-export type QueryCategory = "okr" | "alignment" | "pnl" | "dpa_pm" | "general";
+export type QueryCategory = "okr" | "alignment" | "pnl" | "dpa_mom" | "general";
 
 /**
  * Step 1: Classify Query
@@ -42,7 +42,7 @@ const classifyQueryStep = createStep({
   }),
   outputSchema: z.object({
     query: z.string(),
-    category: z.enum(["okr", "alignment", "pnl", "dpa_pm", "general"]),
+    category: z.enum(["okr", "alignment", "pnl", "dpa_mom", "general"]),
     confidence: z.number().min(0).max(1),
     messages: z.any().optional(),
   }),
@@ -93,8 +93,8 @@ const classifyQueryStep = createStep({
     const pnlMatches = pnlPatterns.filter((p) => p.test(lowerQuery)).length;
     const pnlScore = pnlMatches / pnlPatterns.length;
 
-    // DPA PM patterns
-    const dpaPatterns = [/dpa/i, /data team/i, /\bae\b/i, /\bda\b/i];
+    // DPA Mom patterns
+    const dpaPatterns = [/dpa/i, /data team/i, /\bae\b/i, /\bda\b/i, /dpa.mom/i, /mom/i, /\bma\b/i];
     const dpaMatches = dpaPatterns.filter((p) => p.test(lowerQuery)).length;
     const dpaScore = dpaMatches / dpaPatterns.length;
 
@@ -103,7 +103,7 @@ const classifyQueryStep = createStep({
       okr: okrScore,
       alignment: alignmentScore,
       pnl: pnlScore,
-      dpa_pm: dpaScore,
+      dpa_mom: dpaScore,
       general: 0.1, // Default fallback
     };
 
@@ -137,12 +137,12 @@ const determineAgentStep = createStep({
   description: "Map category to agent name for routing",
   inputSchema: z.object({
     query: z.string(),
-    category: z.enum(["okr", "alignment", "pnl", "dpa_pm", "general"]),
+    category: z.enum(["okr", "alignment", "pnl", "dpa_mom", "general"]),
     confidence: z.number(),
   }),
   outputSchema: z.object({
     query: z.string(),
-    category: z.enum(["okr", "alignment", "pnl", "dpa_pm", "general"]),
+    category: z.enum(["okr", "alignment", "pnl", "dpa_mom", "general"]),
     agentName: z.string(),
     confidence: z.number(),
   }),
@@ -154,7 +154,7 @@ const determineAgentStep = createStep({
       okr: "okr_reviewer",
       alignment: "alignment_agent",
       pnl: "pnl_agent",
-      dpa_pm: "dpa_pm",
+      dpa_mom: "dpa_mom",
       general: "manager",
     };
 
@@ -189,7 +189,7 @@ export const managerRoutingWorkflow = createWorkflow({
   }),
   outputSchema: z.object({
     query: z.string(),
-    category: z.enum(["okr", "alignment", "pnl", "dpa_pm", "general"]),
+    category: z.enum(["okr", "alignment", "pnl", "dpa_mom", "general"]),
     agentName: z.string(),
     confidence: z.number(),
   }),

@@ -1,8 +1,14 @@
 /**
- * DPA PM Agent - Mastra Implementation
+ * DPA Mom Agent - Mastra Implementation
  * 
  * Replaces the AI SDK Tools implementation with Mastra framework.
- * Specialized in DPA PM (Product Management) tasks.
+ * Specialized in DPA team support as chief-of-staff/executive assistant to Ian.
+ * 
+ * IDENTITY & SCOPE:
+ * - DPA = Data Product & Analytics team
+ * - Ian is the dad, dpa_mom takes care of every team member with love and care
+ * - Role: Chief-of-staff or executive assistant to Ian
+ * - Scope: Comprehensive support for team operations, coordination, and care
  * 
  * KEY CHANGES FROM AI SDK TOOLS:
  * 1. Uses Mastra's Agent instead of @ai-sdk-tools/agents
@@ -13,7 +19,7 @@
 
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
-import { getMastraModel } from "../shared/model-router";
+import { getPrimaryModel, getFallbackModel } from "../shared/model-fallback";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -30,41 +36,55 @@ function getQueryText(messages: CoreMessage[]): string {
 }
 
 // Lazy-initialized agent
-let dpaPmAgentInstance: Agent | null = null;
+let dpaMomAgentInstance: Agent | null = null;
 let isInitializing = false;
 
 /**
- * Initialize the DPA PM agent (lazy - called on first request)
+ * Initialize the DPA Mom agent (lazy - called on first request)
  */
 function initializeAgent(): void {
-  if (dpaPmAgentInstance || isInitializing) {
+  if (dpaMomAgentInstance || isInitializing) {
     return;
   }
 
   isInitializing = true;
 
   // Create agent with Mastra framework
-  dpaPmAgentInstance = new Agent({
-    name: "dpa_pm",
-    instructions: `You are a Feishu/Lark AI assistant specialized in DPA PM (Product Management) tasks. Most user queries will be in Chinese (中文).
+  dpaMomAgentInstance = new Agent({
+    name: "dpa_mom",
+    instructions: `You are dpa_mom, the loving and caring chief-of-staff and executive assistant to Ian (the dad) for the DPA (Data Product & Analytics) team. Most user queries will be in Chinese (中文).
 
-你是专门负责DPA产品管理任务的Feishu/Lark AI助手。大多数用户查询将是中文。
+你是dpa_mom，是Ian（爸爸）的贴心首席幕僚和执行助理，负责照顾DPA（数据产品与分析）团队的每一位成员。大多数用户查询将是中文。
 
+IDENTITY & ROLE:
+- You are dpa_mom, reflecting love and care for the team
+- Ian is the dad, and you take care of every team member better than the dad
+- Your role is like a chief-of-staff or executive assistant to Ian
+- Your scope is comprehensive: team operations, coordination, support, and care
+
+CORE RESPONSIBILITIES:
+- Executive assistance: Help Ian with strategic planning, coordination, and decision support
+- Team care: Support every DPA team member with their needs, questions, and challenges
+- Operations: Coordinate team activities, track progress, manage information flow
+- Communication: Facilitate clear and effective communication within the team
+- Problem-solving: Proactively identify and address team needs
+
+GUIDELINES:
 - Do not tag users. 不要@用户。
 - Current date is: ${new Date().toISOString().split("T")[0]}
 - Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.
-- You are the DPA PM specialist agent.
-- This feature is currently under development. Please check back later for product management features.
-- 此功能目前正在开发中，请稍后再查看产品管理功能。`,
-    // Use native Mastra model router with free models only
-    model: getMastraModel(),
+- Be warm, caring, and professional - embody the "mom" role with love and attention to detail
+- Think comprehensively about team needs and Ian's priorities
+- Always consider the well-being and success of every team member`,
+    model: getPrimaryModel(),
+    fallbackModel: getFallbackModel(),
   });
 
   isInitializing = false;
 }
 
 /**
- * Main DPA PM Agent function - Mastra implementation
+ * Main DPA Mom Agent function - Mastra implementation
  * 
  * @param messages - Conversation history
  * @param updateStatus - Optional callback for streaming updates
@@ -73,7 +93,7 @@ function initializeAgent(): void {
  * @param userId - Feishu user ID
  * @returns Promise<string> - Agent response text
  */
-export async function dpaPmAgent(
+export async function dpaMomAgent(
   messages: CoreMessage[],
   updateStatus?: (status: string) => void,
   chatId?: string,
@@ -85,14 +105,14 @@ export async function dpaPmAgent(
 
   const query = getQueryText(messages);
   const startTime = Date.now();
-  console.log(`[DPA PM] Received query: "${query}"`);
+  console.log(`[DPA Mom] Received query: "${query}"`);
 
   // Set up memory scoping
   const conversationId = getConversationId(chatId, rootId);
   const userScopeId = getUserScopeId(userId);
 
   console.log(
-    `[DPA PM] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[DPA Mom] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
   );
 
   // Batch updates to avoid spamming Feishu
@@ -134,10 +154,10 @@ export async function dpaPmAgent(
 
   try {
      // Track agent call for devtools monitoring
-     devtoolsTracker.trackAgentCall("dpa_pm", query);
+     devtoolsTracker.trackAgentCall("dpa_mom", query);
 
-     // MASTRA STREAMING: Call DPA PM agent with streaming
-     const stream = await dpaPmAgentInstance!.stream(messages);
+     // MASTRA STREAMING: Call DPA Mom agent with streaming
+     const stream = await dpaMomAgentInstance!.stream(messages);
 
     let text = "";
     for await (const chunk of stream.textStream) {
@@ -147,18 +167,18 @@ export async function dpaPmAgent(
     }
 
     const duration = Date.now() - startTime;
-    devtoolsTracker.trackResponse("dpa_pm", text, duration);
+    devtoolsTracker.trackResponse("dpa_mom", text, duration);
 
     console.log(
-      `[DPA PM] Response complete (length=${text.length}, duration=${duration}ms)`
+      `[DPA Mom] Response complete (length=${text.length}, duration=${duration}ms)`
     );
     return text;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[DPA PM] Error during streaming:`, errorMsg);
+    console.error(`[DPA Mom] Error during streaming:`, errorMsg);
 
     devtoolsTracker.trackError(
-      "DPA PM",
+      "DPA Mom",
       error instanceof Error ? error : new Error(errorMsg)
     );
     throw error;
@@ -166,9 +186,9 @@ export async function dpaPmAgent(
 }
 
 /**
- * Export helper to get DPA PM agent (for internal use)
+ * Export helper to get DPA Mom agent (for internal use)
  */
-export function getDpaPmAgent(): Agent {
+export function getDpaMomAgentMastra(): Agent {
   initializeAgent();
-  return dpaPmAgentInstance!;
+  return dpaMomAgentInstance!;
 }
