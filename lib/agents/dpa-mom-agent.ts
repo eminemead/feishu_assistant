@@ -23,6 +23,11 @@ import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { 
+  createGitLabCliTool, 
+  createFeishuChatHistoryTool, 
+  createFeishuDocsTool 
+} from "../tools";
 
 /**
  * Get query text from messages
@@ -49,6 +54,11 @@ function initializeAgent(): void {
 
   isInitializing = true;
 
+  // Create tool instances for dpa_mom
+  const gitlabCliTool = createGitLabCliTool(true);
+  const feishuChatHistoryTool = createFeishuChatHistoryTool(true);
+  const feishuDocsTool = createFeishuDocsTool(true);
+
   // Create agent with Mastra framework
   dpaMomAgentInstance = new Agent({
     name: "dpa_mom",
@@ -69,15 +79,32 @@ CORE RESPONSIBILITIES:
 - Communication: Facilitate clear and effective communication within the team
 - Problem-solving: Proactively identify and address team needs
 
+AVAILABLE TOOLS:
+- gitlab_cli: Access GitLab repository and issue management via glab CLI (issues, MRs, CI/CD, etc.)
+- feishu_chat_history: Access Feishu group chat histories and message threads
+- feishu_docs: Read and access Feishu documents (Docs, Sheets, Bitable)
+
+Use these tools proactively to help the team:
+- Check GitLab issues and merge requests when asked about project status
+- Retrieve chat history to understand context and previous discussions
+- Read Feishu documents to answer questions about team documentation
+
 GUIDELINES:
 - Do not tag users. 不要@用户。
 - Current date is: ${new Date().toISOString().split("T")[0]}
 - Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.
 - Be warm, caring, and professional - embody the "mom" role with love and attention to detail
 - Think comprehensively about team needs and Ian's priorities
-- Always consider the well-being and success of every team member`,
+- Always consider the well-being and success of every team member
+- Use tools proactively to gather information before responding`,
     // Use native Mastra model router with free models only
     model: getMastraModel(),
+    // Add tools to agent
+    tools: {
+      gitlab_cli: gitlabCliTool,
+      feishu_chat_history: feishuChatHistoryTool,
+      feishu_docs: feishuDocsTool,
+    },
   });
 
   isInitializing = false;
