@@ -42,6 +42,9 @@ import {
 // import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
 import { getRoutingDecision } from "../workflows/manager-routing-workflow";
+import { getSkillRegistry } from "../skills/skill-registry";
+import { injectSkillsIntoInstructions } from "../skills/skill-injector";
+import * as path from "path";
 
 // Web search tool temporarily disabled - will be replaced with Brave Search API
 // const searchWebTool = createSearchWebTool(true, true);
@@ -53,6 +56,25 @@ let currentModelTier: "primary" | "fallback" = "primary";
 let managerAgentInstance: Agent | null = null;
 let isInitializing = false;
 let mastraMemoryInstance: any = null;
+let skillRegistryInitialized = false;
+
+/**
+ * Initialize skill registry (lazy - called on first request)
+ */
+async function initializeSkillRegistry(): Promise<void> {
+  if (skillRegistryInitialized) return;
+  
+  try {
+    const skillsDir = path.join(process.cwd(), "skills");
+    const registry = getSkillRegistry();
+    await registry.initialize(skillsDir);
+    skillRegistryInitialized = true;
+    console.log(`[Manager] Skill registry initialized`);
+  } catch (error) {
+    console.warn(`[Manager] Failed to initialize skill registry:`, error);
+    // Continue without skills - agent can work without them
+  }
+}
 
 /**
  * Initialize the manager agent (lazy - called on first request)
@@ -150,8 +172,9 @@ export async function managerAgent(
   rootId?: string,
   userId?: string,
 ): Promise<string> {
-  // Lazy initialize agent
+  // Lazy initialize agent and skill registry
   initializeAgent();
+  await initializeSkillRegistry();
 
   const query = getQueryText(messages);
   const startTime = Date.now();
@@ -752,8 +775,45 @@ export async function managerAgent(
   })();
 
   try {
+    // Inject relevant skills into instructions dynamically
+    // We inject skills by prepending them to the first user message
+    // This avoids recreating the agent instance
+    let messagesWithSkills = [...messages];
+    try {
+      const skillInjection = await injectSkillsIntoInstructions(
+        getManagerInstructions(),
+        query,
+        {
+          maxSkills: 3,
+          minScore: 0.5,
+          includeMetadata: true,
+        }
+      );
+      
+      if (skillInjection.injectedSkills.length > 0) {
+        console.log(`[Manager] Injected ${skillInjection.injectedSkills.length} skills: ${skillInjection.injectedSkills.map(s => s.metadata.name).join(", ")}`);
+        
+        // Prepend skill instructions to the first user message
+        // This way the agent sees the skills in context without recreating the agent
+        if (messagesWithSkills.length > 0 && messagesWithSkills[0].role === "user") {
+          const firstMessage = messagesWithSkills[0];
+          if (typeof firstMessage.content === "string") {
+            const skillContext = `**Active Skills Available**:\n\n${skillInjection.instructions}\n\n---\n\n`;
+            messagesWithSkills[0] = {
+              ...firstMessage,
+              content: skillContext + firstMessage.content,
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`[Manager] Failed to inject skills:`, error);
+      // Continue without skills
+    }
+    
     // Load conversation history from Mastra Memory before calling agent
-    let messagesWithHistory = [...messages];
+    // Use messagesWithSkills (which may have skill context prepended)
+    let messagesWithHistory = [...messagesWithSkills];
     
     if (mastraMemory && memoryResource && memoryThread) {
       try {

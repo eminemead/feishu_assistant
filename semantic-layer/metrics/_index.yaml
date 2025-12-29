@@ -1,0 +1,24 @@
+# Metrics Index
+# Quick reference for all available metrics
+# Use: cat /semantic-layer/metrics/_index.yaml | grep <keyword>
+
+metrics:
+  # OKR Domain
+  - name: has_metric_percentage
+    file: has_metric_pct.yaml
+    domain: okr
+    description: Percentage of OKRs with associated metrics (quality indicator)
+    keywords: [coverage, metric, quality, okr, 覆盖率, 指标]
+
+  # P&L Domain (placeholders - expand as needed)
+  # - name: revenue
+  #   file: revenue.yaml
+  #   domain: pnl
+  #   description: Total revenue
+  #   keywords: [sales, income, top-line, 收入]
+  
+  # - name: gross_profit
+  #   file: gross_profit.yaml
+  #   domain: pnl
+  #   description: Gross profit margin
+  #   keywords: [profit, margin, gp, 毛利]

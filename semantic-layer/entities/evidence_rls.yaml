@@ -1,0 +1,51 @@
+# evidence_rls_1d_a Table Definition
+# Row-Level Security mapping table
+
+name: evidence_rls_1d_a
+description: |
+  Row-level security table mapping employees to their data access permissions.
+  Used to filter query results based on user's allowed accounts and regions.
+
+database: starrocks
+schema: ${STARROCKS_DATABASE}
+
+columns:
+  - name: emp_ad_account
+    type: STRING
+    description: Employee AD account (derived from Feishu user ID)
+    primary_key: true
+    nullable: false
+
+  - name: project_code
+    type: STRING
+    description: |
+      Allowed project codes for this employee.
+      May be comma-separated or JSON array.
+    nullable: true
+
+  - name: region_name
+    type: STRING
+    description: |
+      Allowed regions for this employee.
+      May be comma-separated or JSON array.
+    nullable: true
+
+usage_notes: |
+  This table is used internally by the RLS provider to filter queries.
+  Agents should NOT query this table directly.
+  
+  The execute_sql tool automatically applies RLS filters based on the
+  user's permissions when a userId is provided.
+
+  See: lib/starrocks/rls-provider.ts
+
+sample_queries:
+  - description: Get permissions for a user (internal use only)
+    sql: |
+      SELECT project_code, region_name
+      FROM evidence_rls_1d_a
+      WHERE emp_ad_account = ?
+
+security_note: |
+  DO NOT expose raw RLS data to users.
+  This table defines what data each user CAN see, not SHOULD see.

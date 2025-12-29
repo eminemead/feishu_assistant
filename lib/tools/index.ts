@@ -21,4 +21,5 @@ export { chartGenerationTool, CHART_TOOL_EXAMPLES } from "./chart-generation-too
 export { createGitLabCliTool } from "./gitlab-cli-tool";
 export { createFeishuChatHistoryTool } from "./feishu-chat-history-tool";
 export { createFeishuDocsTool } from "./feishu-docs-tool";
+export { createExecuteSqlTool } from "./execute-sql-tool";
 

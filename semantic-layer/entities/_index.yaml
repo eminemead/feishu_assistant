@@ -1,0 +1,28 @@
+# Entities Index
+# Quick reference for all available tables/views
+# Use: cat /semantic-layer/entities/_index.yaml | grep <keyword>
+
+entities:
+  # OKR Domain
+  - name: okr_metrics
+    file: okr_metrics.yaml
+    domain: okr
+    database: starrocks
+    description: OKR metrics table with coverage tracking
+    key_columns: [okr_id, manager_id, city_company, has_metric]
+
+  # RLS Domain
+  - name: evidence_rls_1d_a
+    file: evidence_rls.yaml
+    domain: security
+    database: starrocks
+    description: Row-level security mapping table
+    key_columns: [emp_ad_account, project_code, region_name]
+
+  # P&L Domain (placeholders)
+  # - name: pnl_summary
+  #   file: pnl_summary.yaml
+  #   domain: pnl
+  #   database: starrocks
+  #   description: P&L summary by business unit and quarter
+  #   key_columns: [business_unit, quarter, revenue, gross_profit]

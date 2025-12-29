@@ -1,0 +1,124 @@
+# okr_metrics Table Definition
+# Primary table for OKR data and metric coverage analysis
+
+name: okr_metrics
+description: |
+  OKR metrics table containing objective/key-result data with metric coverage tracking.
+  Used for OKR review, manager performance analysis, and coverage reporting.
+  
+  Note: Table name may be suffixed with date (e.g., okr_metrics_20241127).
+  Use STARROCKS_OKR_METRICS_TABLE env var for actual table name.
+
+database: starrocks
+schema: ${STARROCKS_DATABASE}
+table_name_pattern: "okr_metrics" or "okr_metrics_YYYYMMDD"
+
+columns:
+  - name: okr_id
+    type: STRING
+    description: Unique identifier for the OKR
+    primary_key: true
+    nullable: false
+
+  - name: manager_id
+    type: STRING
+    description: ID of the manager who owns this OKR
+    nullable: true
+
+  - name: city_company
+    type: STRING
+    description: |
+      City/company code. Common values:
+      - SH: Shanghai
+      - BJ: Beijing  
+      - GZ: Guangzhou
+      - SZ: Shenzhen
+    nullable: true
+    example_values: ["SH", "BJ", "GZ", "SZ"]
+
+  - name: quarter
+    type: STRING
+    description: Quarter in format 'YYYY-Q#' (e.g., '2024-Q4')
+    nullable: true
+    example_values: ["2024-Q3", "2024-Q4", "2025-Q1"]
+
+  - name: has_metric
+    type: INT
+    description: |
+      Flag indicating if OKR has associated metric.
+      1 = has metric, 0 = no metric
+    nullable: false
+    valid_values: [0, 1]
+
+  - name: metric_type
+    type: STRING
+    description: Type/category of the associated metric
+    nullable: true
+
+  - name: objective_text
+    type: STRING
+    description: The objective text content
+    nullable: true
+
+  - name: department
+    type: STRING
+    description: Department name
+    nullable: true
+
+  - name: created_at
+    type: DATETIME
+    description: When the OKR was created
+    nullable: true
+
+  - name: updated_at
+    type: DATETIME
+    description: When the OKR was last updated
+    nullable: true
+
+common_filters:
+  - 'quarter = "2024-Q4"'
+  - 'city_company IN ("SH", "BJ", "GZ")'
+  - 'has_metric = 1'
+
+common_aggregations:
+  - 'GROUP BY city_company'
+  - 'GROUP BY manager_id, city_company'
+  - 'GROUP BY quarter'
+
+sample_queries:
+  - description: Get row count by city
+    sql: |
+      SELECT city_company, COUNT(*) as cnt
+      FROM okr_metrics
+      GROUP BY city_company
+      ORDER BY cnt DESC
+
+  - description: Get all OKRs for current quarter
+    sql: |
+      SELECT *
+      FROM okr_metrics
+      WHERE quarter = '2024-Q4'
+      LIMIT 100
+
+  - description: Get distinct quarters available
+    sql: |
+      SELECT DISTINCT quarter
+      FROM okr_metrics
+      ORDER BY quarter DESC
+
+joins:
+  - target: employees
+    type: LEFT JOIN
+    on: "okr_metrics.manager_id = employees.employee_id"
+    purpose: Get manager details
+
+indexes:
+  - columns: [city_company, quarter]
+    purpose: Fast filtering by location and time
+  - columns: [manager_id]
+    purpose: Manager-based lookups
+
+notes: |
+  - This is the primary table for OKR analysis
+  - Coverage metric = has_metric_percentage = % of rows where has_metric=1
+  - Table is refreshed periodically (check table suffix for freshness)

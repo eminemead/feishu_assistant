@@ -1,0 +1,113 @@
+# has_metric_percentage Metric Definition
+# Primary OKR quality metric measuring how many OKRs have associated metrics
+
+name: has_metric_percentage
+description: |
+  Percentage of OKRs that have an associated metric.
+  Higher values indicate better OKR quality and measurability.
+  
+  Business context:
+  - Target: >80% coverage across all city companies
+  - Used in manager performance reviews
+  - Key indicator of OKR discipline
+  
+  中文说明：指标覆盖率，衡量有多少OKR关联了可量化指标
+
+sql_expression: |
+  ROUND(
+    SUM(CASE WHEN has_metric = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+    2
+  )
+
+grain: okr_id
+aggregation: percentage
+unit: "%"
+
+source_table: okr_metrics
+database: starrocks
+schema: ${STARROCKS_DATABASE}
+
+dimensions:
+  - city_company      # City/company code (SH, BJ, GZ, etc.)
+  - manager_id        # Manager who owns the OKR
+  - quarter           # Quarter in format YYYY-Q# (e.g., 2024-Q4)
+  - department        # Department name
+  - metric_type       # Type of metric
+
+filters:
+  common:
+    - 'quarter = "2024-Q4"'
+    - 'city_company IN ("SH", "BJ", "GZ")'
+
+examples:
+  - question: What is the has_metric coverage by city?
+    chinese: 各城市的指标覆盖率是多少？
+    sql: |
+      SELECT 
+        city_company,
+        COUNT(*) as total_okrs,
+        SUM(CASE WHEN has_metric = 1 THEN 1 ELSE 0 END) as with_metric,
+        ROUND(
+          SUM(CASE WHEN has_metric = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+          2
+        ) as has_metric_pct
+      FROM okr_metrics
+      GROUP BY city_company
+      ORDER BY has_metric_pct DESC
+
+  - question: Which managers have the lowest OKR metric coverage?
+    chinese: 哪些经理的OKR指标覆盖率最低？
+    sql: |
+      SELECT 
+        manager_id,
+        city_company,
+        COUNT(*) as total_okrs,
+        ROUND(
+          SUM(CASE WHEN has_metric = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+          2
+        ) as coverage_pct
+      FROM okr_metrics
+      GROUP BY manager_id, city_company
+      HAVING COUNT(*) >= 5  -- Only managers with at least 5 OKRs
+      ORDER BY coverage_pct ASC
+      LIMIT 10
+
+  - question: Compare Q4 vs Q3 OKR coverage
+    chinese: 比较Q4和Q3的OKR覆盖率
+    sql: |
+      SELECT 
+        quarter,
+        COUNT(*) as total_okrs,
+        ROUND(
+          SUM(CASE WHEN has_metric = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+          2
+        ) as coverage_pct
+      FROM okr_metrics
+      WHERE quarter IN ('2024-Q3', '2024-Q4')
+      GROUP BY quarter
+      ORDER BY quarter
+
+  - question: Show coverage breakdown by metric type for a specific city
+    chinese: 显示特定城市按指标类型的覆盖率分布
+    sql: |
+      SELECT 
+        metric_type,
+        COUNT(*) as count,
+        ROUND(
+          SUM(CASE WHEN has_metric = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*),
+          2
+        ) as coverage_pct
+      FROM okr_metrics
+      WHERE city_company = 'SH'
+        AND quarter = '2024-Q4'
+      GROUP BY metric_type
+      ORDER BY coverage_pct DESC
+
+related_metrics:
+  - avg_has_metric_pct  # Alias used in some views
+  - average_has_metric_percentage  # Legacy alias
+
+notes: |
+  - Table may be suffixed with date (e.g., okr_metrics_20241127)
+  - Use STARROCKS_OKR_METRICS_TABLE env var for actual table name
+  - Some city_company values are abbreviated (SH=Shanghai, BJ=Beijing)
