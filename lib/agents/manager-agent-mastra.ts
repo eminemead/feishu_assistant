@@ -34,6 +34,8 @@ import { healthMonitor } from "../health-monitor";
 import { routeQuery } from "../routing/skill-based-router";
 import { getSkillRegistry } from "../skills/skill-registry";
 import { injectSkillsIntoInstructions, injectSkillsIntoMessages } from "../skills/skill-injector";
+import { initializeMemoryContext, loadMemoryHistory, saveMessagesToMemory, getWorkingMemory, updateWorkingMemory, buildSystemMessageWithMemory } from "../memory-middleware";
+import { extractAndSaveWorkingMemory } from "../working-memory-extractor";
 import * as path from "path";
 
 // Web search tool temporarily disabled - will be replaced with Brave Search API
@@ -225,6 +227,21 @@ export async function managerAgent(
 
   // Legacy memory system removed - using Mastra Memory only
 
+  // Initialize memory context for working memory access
+  let memoryContext = null;
+  if (userId && chatId && rootId) {
+    memoryContext = await initializeMemoryContext(userId, chatId, rootId);
+  }
+
+  // Load working memory (Layer 1) - user facts and preferences
+  let workingMemory = null;
+  if (memoryContext) {
+    workingMemory = await getWorkingMemory(memoryContext);
+    if (workingMemory) {
+      console.log(`[Manager] Loaded working memory:`, workingMemory);
+    }
+  }
+
   // Use skill-based routing for declarative classification
   const routingDecision = await routeQuery(query);
 
@@ -262,6 +279,12 @@ export async function managerAgent(
           if (userId) {
             executionContext.feishuUserId = userId;
           }
+        }
+
+        // Add working memory context to execution context
+        if (workingMemory) {
+          executionContext.workingMemory = workingMemory;
+          console.log(`[Manager] Added working memory to execution context:`, workingMemory);
         }
 
         const result = await dpaMomAgent.stream({
@@ -916,32 +939,29 @@ export async function managerAgent(
     if (mastraMemory && memoryResource && memoryThread) {
       try {
         console.log(`[Manager] Loading conversation history from Mastra Memory...`);
-        // Try query() first, fallback to recall() if query doesn't exist
-        let historyMessages: any[] = [];
-        if (typeof mastraMemory.query === 'function') {
-          const result = await mastraMemory.query({
-            threadId: memoryThread,
-            resourceId: memoryResource,
-          });
-          historyMessages = result?.messages || [];
-        } else if (typeof mastraMemory.recall === 'function') {
-          historyMessages = await mastraMemory.recall({
-            threadId: memoryThread,
-            resourceId: memoryResource,
-          });
-        } else {
-          console.warn(`[Manager] Memory instance doesn't have query() or recall() methods`);
-        }
+        const historyMessages = await loadMemoryHistory(memoryContext!);
         
-        if (historyMessages && historyMessages.length > 0) {
-          console.log(`[Manager] ✅ Loaded ${historyMessages.length} messages from Mastra Memory`);
-          // Prepend history to messages for context awareness
-          messagesWithHistory = [...historyMessages, ...messages];
+        if (historyMessages.length > 0) {
+          console.log(`[Manager] Loaded ${historyMessages.length} messages from memory`);
+          // Prepend history to current messages
+          messagesWithHistory = [...historyMessages, ...messagesWithSkills];
         }
       } catch (error) {
-        console.warn(`[Manager] Failed to load memory context:`, error);
-        // Continue without memory - fallback to current messages only
+        console.warn(`[Manager] Failed to load memory history:`, error);
+        // Continue without history
       }
+    }
+    
+    // ENHANCE MESSAGES WITH WORKING MEMORY (Layer 1)
+    if (workingMemory) {
+      console.log(`[Manager] Enhancing messages with working memory:`, workingMemory);
+      // Add working memory as system message at the beginning
+      const workingMemoryContext = buildSystemMessageWithMemory("", workingMemory);
+      const systemMessage: CoreMessage = {
+        role: "system",
+        content: workingMemoryContext.trim(),
+      };
+      messagesWithHistory = [systemMessage, ...messagesWithHistory];
     }
     
     // MASTRA STREAMING: Call manager agent with streaming
@@ -968,12 +988,8 @@ export async function managerAgent(
     }
     
     // Save both user message and response to Mastra Memory for future conversations
-    if (mastraMemory && memoryThread && memoryResource) {
+    if (memoryContext && mastraMemory) {
       try {
-        console.log(`[Manager] Saving conversation to Mastra Memory...`);
-        
-        // Mastra Memory requires explicit message storage via saveMessages()
-        // We save both the user query and assistant response for semantic recall
         const timestamp = new Date();
         const userMessageId = `msg-${memoryThread}-user-${timestamp.getTime()}`;
         const assistantMessageId = `msg-${memoryThread}-assistant-${timestamp.getTime()}`;
@@ -1004,6 +1020,9 @@ export async function managerAgent(
         
         console.log(`   ✅ Saved ${savedMessages.length} messages to Mastra Memory`);
         console.log(`   Thread: ${memoryThread}, Resource: ${memoryResource}`);
+        
+        // Extract and save working memory facts from response
+        await extractAndSaveWorkingMemory(text, memoryContext);
       } catch (error) {
         console.warn(`[Manager] Failed to save to memory:`, error);
         // Continue - memory persistence failure shouldn't break the response
