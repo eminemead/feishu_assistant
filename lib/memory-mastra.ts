@@ -23,6 +23,7 @@
 import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 import { getOrCreateSupabaseUser } from './auth/feishu-supabase-auth';
+import { getInternalEmbedding } from './shared/internal-embedding';
 
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL;
 
@@ -86,14 +87,19 @@ export async function createMastraMemory(feishuUserId: string): Promise<Memory |
   return new Memory({
     storage: storage as any,
     options: {
-      // Layer 1: Recent conversation history (short-term context)
+      // Layer 2: Recent conversation history (short-term context)
       lastMessages: 20,
       // Layer 3: Semantic recall configuration
       // Retrieves older messages similar to current context
       semanticRecall: {
         enabled: true,
         maxResults: 10,
+        scope: "resource", // Search across ALL threads for this user (resource-level)
+        messageRange: 2, // Include 2 messages before/after each match
       },
+      // Embedding model for semantic recall
+      // Use internal NIO embedding model to reduce costs
+      embedder: getInternalEmbedding() || "openai/text-embedding-3-small",
     },
   } as any);
 }
