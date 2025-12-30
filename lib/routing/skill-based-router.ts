@@ -298,8 +298,33 @@ export async function routeQuery(query: string): Promise<RoutingDecision> {
   cachedRoutingSkill = routingSkill;
   cachedCompiledRules = compileRoutingRules(routingSkill);
   
-  // Now use cached rules
-  return routeQuery(query);
+  // Now use cached rules - call the internal scoring function directly
+  const scores = scoreQuery(query, cachedCompiledRules);
+  
+  if (scores.length === 0) {
+    return {
+      agentName: "manager",
+      category: "general",
+      confidence: 0.5,
+      matchedKeywords: [],
+      type: "general",
+    };
+  }
+  
+  const bestMatch = scores[0];
+  
+  // Calculate confidence
+  const confidence = bestMatch.score > 0.3 
+    ? Math.min(bestMatch.score * 2, 1.0)
+    : 0.5;
+  
+  return {
+    agentName: bestMatch.rule.agentName,
+    category: bestMatch.rule.category,
+    confidence,
+    matchedKeywords: bestMatch.matches,
+    type: bestMatch.rule.type,
+  };
 }
 
 /**
