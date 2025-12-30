@@ -22,7 +22,6 @@ import { chartGenerationTool } from "../tools/chart-generation-tool";
 import { getUserDataScope } from "../auth/user-data-scope";
 import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
 import { devtoolsTracker } from "../devtools-integration";
-import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";

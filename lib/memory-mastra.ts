@@ -22,8 +22,6 @@
 
 import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
-import { InMemoryProvider } from '@ai-sdk-tools/memory/in-memory';
-import type { MemoryProvider } from '@ai-sdk-tools/memory';
 import { getOrCreateSupabaseUser } from './auth/feishu-supabase-auth';
 
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL;
@@ -86,24 +84,18 @@ export async function createMastraMemory(feishuUserId: string): Promise<Memory |
   }
 
   return new Memory({
-    storage,
+    storage: storage as any,
     options: {
       // Layer 1: Recent conversation history (short-term context)
       lastMessages: 20,
+      // Layer 3: Semantic recall configuration
+      // Retrieves older messages similar to current context
+      semanticRecall: {
+        enabled: true,
+        maxResults: 10,
+      },
     },
-    // Layer 2: Working memory configuration
-    // Stores persistent user facts, preferences, goals
-    workingMemory: {
-      enabled: true,
-      format: 'markdown',
-    },
-    // Layer 3: Semantic recall configuration
-    // Retrieves older messages similar to current context
-    semanticRecall: {
-      enabled: true,
-      maxResults: 10,
-    },
-  });
+  } as any);
 }
 
 /**
@@ -130,10 +122,27 @@ export function getMemoryResource(feishuUserId: string): string {
 }
 
 /**
- * Fallback in-memory provider (for development/testing)
+ * Fallback in-memory storage (for development/testing)
  * Used when PostgreSQL is unavailable
+ * Note: This is a simple fallback - data will be lost on restart
  */
-export const fallbackMemoryProvider: MemoryProvider = new InMemoryProvider();
+class SimpleMemoryStore {
+  private data = new Map<string, any>();
+  
+  async get(key: string) {
+    return this.data.get(key);
+  }
+  
+  async set(key: string, value: any) {
+    this.data.set(key, value);
+  }
+  
+  async clear() {
+    this.data.clear();
+  }
+}
+
+export const fallbackMemoryStore = new SimpleMemoryStore();
 
 /**
  * Initialize global Mastra memory on startup

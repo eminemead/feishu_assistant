@@ -17,12 +17,6 @@ import { CoreMessage } from "ai";
 import { devtoolsTracker } from "../devtools-integration";
 import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
-import { getConversationId, getUserScopeId } from "../memory";
-import {
-  initializeAgentMemoryContext,
-  loadConversationHistory,
-  saveMessageToMemory,
-} from "./memory-integration";
 import {
   isRateLimitError,
   isModelRateLimited,
@@ -229,10 +223,7 @@ export async function managerAgent(
     // Continue without memory - fallback to non-persistent context
   }
 
-  // NOTE: Legacy memory system (@ai-sdk-tools/memory) is deprecated
-  // Using Mastra Memory instead which is more robust
-  // Legacy memory context is skipped to avoid conflicts
-  let memoryContext: any = null;
+  // Legacy memory system removed - using Mastra Memory only
 
   // Use skill-based routing for declarative classification
   const routingDecision = await routeQuery(query);
@@ -262,10 +253,10 @@ export async function managerAgent(
         };
 
         if (chatId && rootId) {
-          const conversationId = getConversationId(chatId!, rootId!);
+          const conversationId = `feishu:${chatId}:${rootId}`;
           const userScopeId = userId
-            ? getUserScopeId(userId)
-            : getUserScopeId(chatId!);
+            ? `user:${userId}`
+            : `user:${chatId}`;
           executionContext.chatId = conversationId;
           executionContext.userId = userScopeId;
           if (userId) {
@@ -371,10 +362,10 @@ export async function managerAgent(
       };
 
       if (chatId && rootId) {
-        const conversationId = getConversationId(chatId!, rootId!);
+        const conversationId = `feishu:${chatId}:${rootId}`;
         const userScopeId = userId
-          ? getUserScopeId(userId)
-          : getUserScopeId(chatId!);
+          ? `user:${userId}`
+          : `user:${chatId}`;
         executionContext.chatId = conversationId;
         executionContext.userId = userScopeId;
         if (userId) {
@@ -617,10 +608,10 @@ export async function managerAgent(
       };
 
       if (chatId && rootId) {
-        const conversationId = getConversationId(chatId!, rootId!);
+        const conversationId = `feishu:${chatId}:${rootId}`;
         const userScopeId = userId
-          ? getUserScopeId(userId)
-          : getUserScopeId(chatId!);
+          ? `user:${userId}`
+          : `user:${chatId}`;
         executionContext.chatId = conversationId;
         executionContext.userId = userScopeId;
         if (userId) {
@@ -735,10 +726,10 @@ export async function managerAgent(
       };
 
       if (chatId && rootId) {
-        const conversationId = getConversationId(chatId!, rootId!);
+        const conversationId = `feishu:${chatId}:${rootId}`;
         const userScopeId = userId
-          ? getUserScopeId(userId)
-          : getUserScopeId(chatId!);
+          ? `user:${userId}`
+          : `user:${chatId}`;
         executionContext.chatId = conversationId;
         executionContext.userId = userScopeId;
         if (userId) {

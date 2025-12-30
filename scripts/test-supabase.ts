@@ -11,7 +11,7 @@
 import { getOrCreateSupabaseUser } from '../lib/auth/feishu-supabase-auth';
 import { generateSupabaseJWT, createSupabaseClientWithUser } from '../lib/auth/supabase-jwt';
 import { getUserDataScope } from '../lib/auth/user-data-scope';
-import { createMemoryProvider } from '../lib/memory';
+import { createMastraMemory } from '../lib/memory-mastra';
 
 const testFeishuUserId = process.argv[2] || 'test-user-123';
 
@@ -58,13 +58,17 @@ async function runTests() {
     console.log(`      - Allowed departments: ${scope.allowedDepartments.length}`);
     console.log(`      - Allowed regions: ${scope.allowedRegions.length}\n`);
 
-    // Test 5: Create memory provider
-    console.log('5️⃣  Testing memory provider creation...');
+    // Test 5: Create Mastra memory
+    console.log('5️⃣  Testing Mastra memory creation...');
     try {
-      const memoryProvider = await createMemoryProvider(testFeishuUserId);
-      console.log('   ✅ Memory provider created\n');
+      const memory = await createMastraMemory(testFeishuUserId);
+      if (memory) {
+        console.log('   ✅ Mastra memory created\n');
+      } else {
+        console.log('   ⚠️  Mastra memory not available (fallback mode)\n');
+      }
     } catch (error: any) {
-      console.log(`   ⚠️  Memory provider creation warning: ${error.message}\n`);
+      console.log(`   ⚠️  Memory creation warning: ${error.message}\n`);
     }
 
     // Test 6: Test RLS enforcement (if Supabase client is available)

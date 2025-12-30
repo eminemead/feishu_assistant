@@ -21,12 +21,6 @@ import { getDpaMomAgent } from "./dpa-mom-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
-import { getConversationId, getUserScopeId } from "../memory";
-import {
-  initializeAgentMemoryContext,
-  loadConversationHistory,
-  saveMessageToMemory,
-} from "./memory-integration";
 import {
   isRateLimitError,
   isModelRateLimited,

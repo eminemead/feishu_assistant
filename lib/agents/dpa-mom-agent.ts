@@ -21,7 +21,6 @@ import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
-import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
 import { 
   createGitLabCliTool, 
