@@ -45,10 +45,95 @@ interface CompiledRoutingRule {
  * Load routing skill and extract routing rules
  */
 function getRoutingRules(skill: Skill): Record<string, RoutingRule> {
-  // Parse routing_rules from skill metadata
-  // In YAML frontmatter, this would be parsed automatically
+  // First try to get from metadata
   const metadata = skill.metadata as any;
-  return metadata.routing_rules || {};
+  if (metadata.routing_rules) {
+    return metadata.routing_rules;
+  }
+  
+  // For agent-routing skill, parse from instructions
+  if (skill.id === "agent-routing" || skill.metadata.name === "Agent Routing") {
+    const rules: Record<string, RoutingRule> = {};
+    const lines = skill.instructions.split('\n');
+    let currentAgent: string | null = null;
+    let currentRule: Partial<RoutingRule> = {};
+    
+    for (const line of lines) {
+      // Match agent headers like "### DPA Mom (Priority 1 - Highest)"
+      const agentMatch = line.match(/^###\s*(.+?)\s*\(Priority\s*(\d+)/);
+      if (agentMatch) {
+        // Save previous rule
+        if (currentAgent && currentRule.keywords) {
+          rules[currentAgent] = {
+            keywords: currentRule.keywords,
+            priority: currentRule.priority || 999,
+            enabled: currentRule.enabled !== false,
+            type: currentRule.type || "skill",
+          };
+        }
+        
+        // Start new rule
+        currentAgent = agentMatch[1].toLowerCase().replace(/\s+/g, '_');
+        currentRule = {
+          priority: parseInt(agentMatch[2]),
+          enabled: true,
+          keywords: [],
+        };
+      }
+      // Match keywords line
+      else if (line.includes('**Keywords**:') && currentAgent) {
+        const keywordsMatch = line.match(/\*\*Keywords\*\*:\s*(.+)$/);
+        if (keywordsMatch) {
+          currentRule.keywords = keywordsMatch[1].split(',').map(k => k.trim());
+        }
+      }
+      // Match type line
+      else if (line.includes('**Type**:') && currentAgent) {
+        const typeMatch = line.match(/\*\*Type\*\*:\s*(.+)$/);
+        if (typeMatch) {
+          const type = typeMatch[1].toLowerCase();
+          if (type.includes('subagent')) {
+            currentRule.type = 'subagent';
+          } else {
+            currentRule.type = 'skill';
+          }
+        }
+      }
+      // Match status line
+      else if (line.includes('**Status**:') && currentAgent) {
+        const statusMatch = line.match(/\*\*Status\*\*:\s*(.+)$/);
+        if (statusMatch) {
+          currentRule.enabled = statusMatch[1].toLowerCase().includes('active');
+        }
+      }
+    }
+    
+    // Save last rule
+    if (currentAgent && currentRule.keywords) {
+      rules[currentAgent] = {
+        keywords: currentRule.keywords,
+        priority: currentRule.priority || 999,
+        enabled: currentRule.enabled !== false,
+        type: currentRule.type || "skill",
+      };
+    }
+    
+    // Map display names to agent names
+    const mappedRules: Record<string, RoutingRule> = {};
+    for (const [key, rule] of Object.entries(rules)) {
+      let agentName = key;
+      if (key === 'dpa_mom') agentName = 'dpa_mom';
+      else if (key === 'p&l_agent') agentName = 'pnl_agent';
+      else if (key === 'alignment_agent') agentName = 'alignment_agent';
+      else if (key === 'okr_reviewer') agentName = 'okr_reviewer';
+      
+      mappedRules[agentName] = rule;
+    }
+    
+    return mappedRules;
+  }
+  
+  return {};
 }
 
 /**
@@ -69,8 +154,8 @@ function compileRoutingRules(skill: Skill): CompiledRoutingRule[] {
   for (const [agentName, rules] of Object.entries(routingRules)) {
     if (!rules.enabled) continue;
     
-    const category = categoryMap[agentName] || "general";
-    if (category === "general") continue; // Skip unknown agents
+    const category = categoryMap[agentName];
+    if (!category) continue; // Skip unknown agents
     
     // Pre-compile regex patterns for each keyword
     const patterns = rules.keywords.map(keyword => {
@@ -157,6 +242,11 @@ let cachedRoutingSkill: Skill | null = null;
  */
 export async function routeQuery(query: string): Promise<RoutingDecision> {
   const registry = getSkillRegistry();
+  
+  // Clear cache to ensure latest rules are loaded (for development)
+  if (process.env.NODE_ENV === 'development') {
+    clearRoutingCache();
+  }
   
   // Fast path: use cached compiled rules
   if (cachedCompiledRules && cachedRoutingSkill) {
