@@ -33,7 +33,7 @@ import {
   calculateBackoffDelay,
   DEFAULT_RETRY_CONFIG,
 } from "../shared/model-fallback";
-import { getMastraModel } from "../shared/model-router";
+import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModel, getInternalModelInfo } from "../shared/internal-model";
 // import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
@@ -87,32 +87,22 @@ function initializeAgent() {
 
   isInitializing = true;
 
-  // Use explicit free models (no auto-router to prevent paid models)
-  // getMastraModel returns array of explicit free model IDs
-  const models = getMastraModel(true); // requireTools=true for future tool support
+  // Use single explicit free model (Mastra Agent expects single model, not array)
+  // getMastraModelSingle returns a single model object
+  const model = getMastraModelSingle(true); // requireTools=true for future tool support
   
-  // Build model array with fallback
-  let modelArray = Array.isArray(models) ? models : [models];
-  
-  // Add internal NIO model as final fallback if configured
+  // Log internal model availability
   if (hasInternalModel()) {
-    const internalModel = getInternalModel();
-    if (internalModel) {
-      console.log(`✅ [Manager] Internal fallback model configured: ${getInternalModelInfo()}`);
-      modelArray.push(internalModel);
-    }
+    console.log(`✅ [Manager] Internal fallback model available: ${getInternalModelInfo()}`);
   }
   
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Model fallback chain:
-    // 1. Primary: nvidia/nemotron-3-nano-30b-a3b:free
-    // 2. Alternative: kwaipilot/kat-coder-pro:free
-    // 3. Fallback: NIO ModelSight (Qwen3-Next-80B) - only if both above fail
-    // Mastra automatically tries next model on errors/rate limits/timeouts
-    model: modelArray.length === 1 ? modelArray[0] : modelArray,
+    // Single model - Mastra Agent doesn't support model arrays
+    // Primary: nvidia/nemotron-3-nano-30b-a3b:free
+    model: model,
 
     // Tools - web search temporarily disabled (will be replaced with Brave Search API)
     tools: {
@@ -935,10 +925,22 @@ export async function managerAgent(
     if (mastraMemory && memoryResource && memoryThread) {
       try {
         console.log(`[Manager] Loading conversation history from Mastra Memory...`);
-        const { messages: historyMessages } = await mastraMemory.query({
-          threadId: memoryThread,
-          resourceId: memoryResource,
-        });
+        // Try query() first, fallback to recall() if query doesn't exist
+        let historyMessages: any[] = [];
+        if (typeof mastraMemory.query === 'function') {
+          const result = await mastraMemory.query({
+            threadId: memoryThread,
+            resourceId: memoryResource,
+          });
+          historyMessages = result?.messages || [];
+        } else if (typeof mastraMemory.recall === 'function') {
+          historyMessages = await mastraMemory.recall({
+            threadId: memoryThread,
+            resourceId: memoryResource,
+          });
+        } else {
+          console.warn(`[Manager] Memory instance doesn't have query() or recall() methods`);
+        }
         
         if (historyMessages && historyMessages.length > 0) {
           console.log(`[Manager] ✅ Loaded ${historyMessages.length} messages from Mastra Memory`);
@@ -952,15 +954,17 @@ export async function managerAgent(
     }
     
     // MASTRA STREAMING: Call manager agent with streaming
-    const executionContext: any = {
-      _memoryAddition: "",
-    };
-    
+    // NOTE: Do NOT pass memory instance in executionContext - it causes model resolution issues
+    // Memory operations are handled manually before/after streaming
+    const executionContext: any = {};
     if (memoryThread && memoryResource) {
       executionContext.threadId = memoryThread;
       executionContext.resourceId = memoryResource;
-      console.log(`[Manager] Executing agent with memory context`);
+      // DO NOT pass executionContext.memory - causes "Invalid model configuration" error
+      console.log(`[Manager] Executing agent with thread/resource context`);
       console.log(`   Resource: ${memoryResource}, Thread: ${memoryThread}`);
+    } else {
+      console.log(`[Manager] Executing agent without memory context`);
     }
     
     const stream = await managerAgentInstance!.stream(messagesWithHistory, executionContext);

@@ -33,35 +33,10 @@ const openrouter = createOpenRouter({
  * @returns Primary model object OR array of model objects for fallback
  */
 export function getMastraModel(requireTools: boolean = false): any {
-  const models = requireTools ? FREE_MODELS_WITH_TOOLS : FREE_MODELS;
-  
-  console.log(
-    `✅ [Model Router] Using AI SDK provider with explicit free models`
-  );
-  console.log(
-    `🔐 [Model Router] Whitelist: ${models.length} ${
-      requireTools ? "tool-calling " : ""
-    }free models ONLY`
-  );
-  console.log(
-    `📋 [Model Router] Primary: ${models[0]}`
-  );
-  if (models.length > 1) {
-    console.log(
-      `📋 [Model Router] Fallbacks: ${models.slice(1, 3).join(", ")}${
-        models.length > 3 ? "..." : ""
-      }`
-    );
-  }
-
-  // Create model objects via AI SDK provider
-  // This properly handles the :free suffix for billing
-  const modelObjects = models.map((model) => openrouter(model));
-  
-  console.log(`🎯 [Model Router] Using provider objects: ${models[0]} + ${models.length - 1} fallbacks`);
-  
-  // Return array for Mastra's built-in fallback, or single model if only one
-  return modelObjects.length > 1 ? modelObjects : modelObjects[0];
+  // Mastra Agent expects a single model, not an array
+  // Arrays require { model: ..., enabled: true } format which we don't use
+  // Delegate to getMastraModelSingle for consistency
+  return getMastraModelSingle(requireTools);
 }
 
 /**

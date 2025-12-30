@@ -64,8 +64,8 @@ Each follow-up should be:
 Return exactly ${maxOptions} follow-ups as JSON array.`,
       });
 
-      // Limit to maxOptions
-      const followups = result.followups.slice(0, maxOptions);
+      // Limit to maxOptions - generateObject returns { object: ... }
+      const followups = result.object.followups.slice(0, maxOptions);
 
       console.log(`✅ [Followups] Generated ${followups.length} follow-up options`);
       return {
