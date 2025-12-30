@@ -445,21 +445,52 @@ export async function updateCardElement(
   
   console.log(`🔄 [Card] Updating card element: cardId=${cardId}, elementId=${elementId}, sequence=${sequence}, contentLength=${content.length}`);
   
-  const resp = await client.cardkit.v1.cardElement.content({
-    path: {
-      card_id: cardId,
-      element_id: elementId,
-    },
-    data: {
-      content: content,
-      sequence: sequence,
-    },
-  });
+  try {
+    const resp = await client.cardkit.v1.cardElement.content({
+      path: {
+        card_id: cardId,
+        element_id: elementId,
+      },
+      data: {
+        content: content,
+        sequence: sequence,
+      },
+    });
 
-  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-  if (!isSuccess) {
-    console.error("Failed to update card element:", resp);
-    throw new Error("Failed to update card element");
+    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    if (!isSuccess) {
+      console.error("Failed to update card element:", resp);
+      throw new Error(`Failed to update card element: ${JSON.stringify(resp)}`);
+    }
+  } catch (error: any) {
+    // If it's a sequence error, reset the sequence and retry once
+    if (error.message?.includes('sequence number compare failed') || error.code === 300317) {
+      console.warn(`⚠️ [Card] Sequence error detected, resetting sequence for card ${cardId}`);
+      cardSequences.delete(cardId); // Reset sequence
+      
+      // Retry with new sequence
+      const retrySequence = getNextCardSequence(cardId);
+      console.log(`🔄 [Card] Retrying with new sequence: ${retrySequence}`);
+      
+      const resp = await client.cardkit.v1.cardElement.content({
+        path: {
+          card_id: cardId,
+          element_id: elementId,
+        },
+        data: {
+          content: content,
+          sequence: retrySequence,
+        },
+      });
+      
+      const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+      if (!isSuccess) {
+        console.error("Failed to update card element on retry:", resp);
+        throw new Error(`Failed to update card element on retry: ${JSON.stringify(resp)}`);
+      }
+    } else {
+      throw error;
+    }
   }
 }
 

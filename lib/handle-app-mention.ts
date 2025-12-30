@@ -4,6 +4,7 @@ import {
   createAndSendStreamingCard,
   updateCardElement,
   finalizeCard,
+  client,
 } from "./feishu-utils";
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { devtoolsTracker } from "./devtools-integration";
@@ -159,11 +160,25 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         );
 
         const errorMessage = "Sorry, I encountered an error processing your request.";
-        await updateCardElement(
-            card.cardId,
-            card.elementId,
-            errorMessage
-        );
+        try {
+            await updateCardElement(
+                card.cardId,
+                card.elementId,
+                errorMessage
+            );
+        } catch (updateError) {
+            // If card update fails (e.g., sequence error), create a new error message
+            console.error("Failed to update card with error message:", updateError);
+            // Send a new message instead of updating the card
+            await client.im.message.reply({
+                path: { message_id: messageId },
+                data: {
+                    content: errorMessage,
+                    msg_type: "text",
+                    reply_in_thread: true,
+                },
+            });
+        }
         // Finalize with error message but still try to add suggestions
         await finalizeCardWithFollowups(
             card.cardId,
