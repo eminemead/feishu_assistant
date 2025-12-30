@@ -243,6 +243,17 @@ eventDispatcher.register({
 eventDispatcher.register({
   "im.message.receive_v1": async (data) => {
       try {
+        // IMMEDIATE FIX: Filter out old messages to prevent processing during WebSocket reconnections
+        const messageCreateTime = (data as any).message?.create_time || (data as any).message?.timestamp;
+        const now = Date.now();
+        const messageAgeMs = messageCreateTime ? (now - messageCreateTime * 1000) : 0; // Feishu uses seconds
+        
+        // Ignore messages older than 5 minutes (300000 ms) to prevent reprocessing on reconnect
+        if (messageAgeMs > 300000) {
+          console.log(`⚠️ [WebSocket] Ignoring old message (${Math.round(messageAgeMs / 1000)}s ago): messageId=${(data as any).message?.message_id}`);
+          return;
+        }
+
         // Deduplicate events by event_id
         const eventId = (data as any).event_id || (data as any).event?.event_id;
         if (eventId && processedEvents.has(eventId)) {
