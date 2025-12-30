@@ -19,7 +19,7 @@
 
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
-import { getPrimaryModel, getFallbackModel } from "../shared/model-fallback";
+import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
 import { memoryProvider, getConversationId, getUserScopeId } from "../memory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -97,8 +97,7 @@ GUIDELINES:
 - Think comprehensively about team needs and Ian's priorities
 - Always consider the well-being and success of every team member
 - Use tools proactively to gather information before responding`,
-    model: getPrimaryModel(),
-    fallbackModel: getFallbackModel(),
+    model: getMastraModel(true), // requireTools=true (has tools)
     // Add tools to agent
     tools: {
       gitlab_cli: gitlabCliTool,

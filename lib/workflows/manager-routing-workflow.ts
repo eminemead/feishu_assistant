@@ -1,6 +1,18 @@
 /**
  * Manager Routing Workflow
  * 
+ * @deprecated This workflow-based routing has been replaced by skill-based routing.
+ * See `lib/routing/skill-based-router.ts` for the new implementation.
+ * 
+ * Migration Notes:
+ * - Old: `getRoutingDecision()` from this workflow
+ * - New: `routeQuery()` from skill-based-router
+ * - Benefits: Faster (<1ms vs ~6-12ms), declarative (rules in SKILL.md), testable
+ * 
+ * This file is kept for reference but is no longer used in production.
+ * It can be removed in a future cleanup after validation period.
+ * 
+ * Legacy implementation - kept for reference:
  * Declarative routing workflow that classifies queries and routes to specialist agents.
  * Replaces manual regex-based routing with a workflow-based approach.
  * 

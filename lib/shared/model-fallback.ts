@@ -59,46 +59,27 @@ export interface RetryConfig {
 }
 
 /**
- * Free models available for OpenRouter auto router
+ * Free models available for OpenRouter
  * 
- * MANDATORY: These are the ONLY models allowed to be selected by openrouter/auto
- * This whitelist prevents OpenRouter from selecting paid models like Perplexity Sonar
+ * MANDATORY: These are the ONLY models allowed to be selected.
+ * This whitelist prevents OpenRouter from selecting paid models.
  * 
- * These models are passed to OpenRouter API as the models restriction parameter,
- * ensuring the auto router never selects any paid models.
- * 
- * Note: For tool calling, we need models that support function calling.
- * Some free models may not support tools, so we prioritize models that do.
- * 
- * Current approved free models:
- * 1. nvidia/nemotron-3-nano-30b-a3b:free - 30B params, 1M context, supports tools
- * 2. qwen/qwen3-235b-a22b:free - Supports tool calling
- * 3. mistralai/devstral-small-2505:free - Supports tool calling
- * 4. kwaipilot/kat-coder-pro:free - Supports tool calling
- * 5. z-ai/glm-4.5-air:free - May support tool calling
- * 6. qwen/qwen3-coder:free - Supports tool calling
- * 7. moonshotai/kimi-k2:free - May support tool calling
+ * Simplified to 2 models:
+ * 1. Primary: nvidia/nemotron-3-nano-30b-a3b:free (30B params, 1M context, supports tools)
+ * 2. Alternative: kwaipilot/kat-coder-pro:free (coding-focused, supports tools)
  */
 export const FREE_MODELS = [
   "nvidia/nemotron-3-nano-30b-a3b:free",
-  "qwen/qwen3-235b-a22b:free",
-  "mistralai/devstral-small-2505:free",
   "kwaipilot/kat-coder-pro:free",
-  "z-ai/glm-4.5-air:free",
-  "qwen/qwen3-coder:free",
-  "moonshotai/kimi-k2:free",
 ] as const;
 
 /**
- * Free models that support tool calling (subset of FREE_MODELS)
+ * Free models that support tool calling (same as FREE_MODELS - both support tools)
  * Use this when tools are required
  */
 export const FREE_MODELS_WITH_TOOLS = [
   "nvidia/nemotron-3-nano-30b-a3b:free", // 1M context, excellent for long tasks
-  "qwen/qwen3-235b-a22b:free",
-  "mistralai/devstral-small-2505:free",
-  "kwaipilot/kat-coder-pro:free",
-  "qwen/qwen3-coder:free",
+  "kwaipilot/kat-coder-pro:free", // Coding-focused alternative
 ] as const;
 
 /**

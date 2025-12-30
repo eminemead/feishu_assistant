@@ -16,7 +16,7 @@ import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import * as duckdb from "duckdb";
 import { okrVisualizationTool } from "./okr-visualization-tool";
-import { getPrimaryModel, getFallbackModel } from "../shared/model-fallback";
+import { getMastraModel } from "../shared/model-router";
 import { createOkrReviewTool } from "../tools";
 import { chartGenerationTool } from "../tools/chart-generation-tool";
 import { getUserDataScope } from "../auth/user-data-scope";
@@ -278,8 +278,7 @@ IMPORTANT: Every OKR analysis response should include:
 - 使用mgr_okr_review工具获取OKR指标数据。
 - 使用chart_generation工具生成可视化（条形图、饼图）展示数据。
 - 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。`,
-    model: getPrimaryModel(),
-    fallbackModel: getFallbackModel(),
+    model: getMastraModel(true), // requireTools=true (has tools)
     tools: {
       mgr_okr_review: mgrOkrReviewTool,
       okr_visualization: okrVisualizationTool as any,

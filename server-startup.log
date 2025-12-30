@@ -1,0 +1,22 @@
+$ bun server.ts
+[info]: [ "client ready" ]
+🔧 AI SDK Devtools: Enabled with enhanced features
+   - StreamInterceptor support
+   - Token usage tracking
+   - Session grouping
+✅ [Memory] Connected to Supabase database
+81 |  *
+82 |  * NOTE: Memory must be created AFTER first request (to get user context)
+83 |  * so we initialize a basic agent here, then configure memory per-request
+84 |  */
+85 | function initializeAgent() {
+86 |   if (isInitializing) return;
+           ^
+ReferenceError: Cannot access 'isInitializing' before initialization.
+      at initializeAgent (/Users/xiaofei.yin/work_repo/feishu_assistant/lib/agents/manager-agent-mastra.ts:86:7)
+      at getManagerAgent (/Users/xiaofei.yin/work_repo/feishu_assistant/lib/agents/manager-agent-mastra.ts:1040:3)
+      at /Users/xiaofei.yin/work_repo/feishu_assistant/lib/observability-config.ts:58:12
+      at loadAndEvaluateModule (2:1)
+
+Bun v1.2.22 (macOS arm64)
+error: script "dev" exited with code 1

@@ -14,10 +14,6 @@
 
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
-import { getOkrReviewerAgent } from "./okr-reviewer-agent";
-import { getAlignmentAgent } from "./alignment-agent";
-import { getPnlAgent } from "./pnl-agent";
-import { getDpaMomAgent } from "./dpa-mom-agent";
 import { devtoolsTracker } from "../devtools-integration";
 import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
@@ -28,8 +24,6 @@ import {
   saveMessageToMemory,
 } from "./memory-integration";
 import {
-  getPrimaryModel,
-  getFallbackModel,
   isRateLimitError,
   isModelRateLimited,
   markModelRateLimited,
@@ -39,11 +33,13 @@ import {
   calculateBackoffDelay,
   DEFAULT_RETRY_CONFIG,
 } from "../shared/model-fallback";
+import { getMastraModel } from "../shared/model-router";
+import { hasInternalModel, getInternalModel, getInternalModelInfo } from "../shared/internal-model";
 // import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
-import { getRoutingDecision } from "../workflows/manager-routing-workflow";
+import { routeQuery } from "../routing/skill-based-router";
 import { getSkillRegistry } from "../skills/skill-registry";
-import { injectSkillsIntoInstructions } from "../skills/skill-injector";
+import { injectSkillsIntoInstructions, injectSkillsIntoMessages } from "../skills/skill-injector";
 import * as path from "path";
 
 // Web search tool temporarily disabled - will be replaced with Brave Search API
@@ -54,9 +50,9 @@ let currentModelTier: "primary" | "fallback" = "primary";
 
 // Lazy-initialized agent
 let managerAgentInstance: Agent | null = null;
-let isInitializing = false;
+let isInitializing: boolean = false;
 let mastraMemoryInstance: any = null;
-let skillRegistryInitialized = false;
+let skillRegistryInitialized: boolean = false;
 
 /**
  * Initialize skill registry (lazy - called on first request)
@@ -91,15 +87,32 @@ function initializeAgent() {
 
   isInitializing = true;
 
-  // Use a single model with tool support for manager agent
-  // Mastra doesn't support array-based model fallback in the constructor
-  // Fallback is handled at request time via streaming error handling
+  // Use explicit free models (no auto-router to prevent paid models)
+  // getMastraModel returns array of explicit free model IDs
+  const models = getMastraModel(true); // requireTools=true for future tool support
+  
+  // Build model array with fallback
+  let modelArray = Array.isArray(models) ? models : [models];
+  
+  // Add internal NIO model as final fallback if configured
+  if (hasInternalModel()) {
+    const internalModel = getInternalModel();
+    if (internalModel) {
+      console.log(`✅ [Manager] Internal fallback model configured: ${getInternalModelInfo()}`);
+      modelArray.push(internalModel);
+    }
+  }
+  
   managerAgentInstance = new Agent({
     name: "Manager",
     instructions: getManagerInstructions(),
     
-    // Single model with tool support
-    model: getPrimaryModel(),
+    // Model fallback chain:
+    // 1. Primary: nvidia/nemotron-3-nano-30b-a3b:free
+    // 2. Alternative: kwaipilot/kat-coder-pro:free
+    // 3. Fallback: NIO ModelSight (Qwen3-Next-80B) - only if both above fail
+    // Mastra automatically tries next model on errors/rate limits/timeouts
+    model: modelArray.length === 1 ? modelArray[0] : modelArray,
 
     // Tools - web search temporarily disabled (will be replaced with Brave Search API)
     tools: {
@@ -231,34 +244,138 @@ export async function managerAgent(
   // Legacy memory context is skipped to avoid conflicts
   let memoryContext: any = null;
 
-  // Use workflow-based routing for declarative classification
-  const routingDecision = await getRoutingDecision({
-    query,
-    messages,
-    executionContext: {
-      chatId,
-      rootId,
-      userId,
-    },
-  });
+  // Use skill-based routing for declarative classification
+  const routingDecision = await routeQuery(query);
 
   console.log(
-    `[Manager] Workflow routing decision: ${routingDecision.category} (${routingDecision.agentName}, confidence: ${routingDecision.confidence.toFixed(2)})`
+    `[Manager] Skill-based routing decision: ${routingDecision.category} (${routingDecision.agentName}, confidence: ${routingDecision.confidence.toFixed(2)}, type: ${routingDecision.type})`
   );
 
-  // Route to specialist based on workflow classification
-  if (routingDecision.category === "okr") {
+  // Route based on skill-based routing decision
+  if (routingDecision.type === "subagent") {
+    // Route to subagent (DPA Mom priority 1, OKR priority 4)
+    if (routingDecision.category === "dpa_mom") {
+      // DPA Mom routing (highest priority)
+      console.log(
+        `[Manager] Skill-based routing: DPA Mom Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
+      );
+      devtoolsTracker.trackAgentCall("Manager", query, {
+        skillRoute: "dpa_mom",
+        confidence: routingDecision.confidence,
+      });
+      try {
+        // Lazy import to avoid circular dependency with observability-config
+        const { mastra } = await import("../observability-config");
+        const dpaMomAgent = mastra.getAgent("dpaMom");
+        const executionContext: any = {
+          _memoryAddition: "",
+        };
+
+        if (chatId && rootId) {
+          const conversationId = getConversationId(chatId!, rootId!);
+          const userScopeId = userId
+            ? getUserScopeId(userId)
+            : getUserScopeId(chatId!);
+          executionContext.chatId = conversationId;
+          executionContext.userId = userScopeId;
+          if (userId) {
+            executionContext.feishuUserId = userId;
+          }
+        }
+
+        const result = await dpaMomAgent.stream({
+          messages,
+          executionContext,
+        });
+
+        let accumulatedText = "";
+        let lastUpdateLength = 0;
+        let lastUpdateTime = Date.now();
+        for await (const textDelta of result.textStream) {
+          accumulatedText += textDelta;
+          const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+          const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+          const shouldUpdate = updateStatus && (
+            accumulatedText.length % 50 === 0 ||
+            timeSinceLastUpdate >= 200 ||
+            charsSinceLastUpdate >= 30
+          );
+          if (shouldUpdate) {
+            updateStatus(accumulatedText);
+            lastUpdateLength = accumulatedText.length;
+            lastUpdateTime = Date.now();
+          }
+        }
+        if (updateStatus && accumulatedText.length > lastUpdateLength) {
+          updateStatus(accumulatedText);
+        }
+
+        const duration = Date.now() - startTime;
+        devtoolsTracker.trackResponse("dpa_mom", accumulatedText, duration, {
+          skillRoute: true,
+        });
+        healthMonitor.trackAgentCall("dpa_mom", duration, true);
+
+        if (mastraMemory && memoryThread && memoryResource) {
+          try {
+            const timestamp = new Date();
+            const userMessageId = `msg-${memoryThread}-dpa-user-${timestamp.getTime()}`;
+            const assistantMessageId = `msg-${memoryThread}-dpa-assistant-${timestamp.getTime()}`;
+            
+            await mastraMemory.saveMessages({
+              messages: [
+                {
+                  id: userMessageId,
+                  threadId: memoryThread,
+                  resourceId: memoryResource,
+                  role: "user" as const,
+                  content: { content: query },
+                  createdAt: timestamp,
+                },
+                {
+                  id: assistantMessageId,
+                  threadId: memoryThread,
+                  resourceId: memoryResource,
+                  role: "assistant" as const,
+                  content: { content: accumulatedText },
+                  createdAt: timestamp,
+                },
+              ],
+              format: 'v2',
+            });
+            
+            console.log(`[DPA Mom] Saved response to memory`);
+          } catch (error) {
+            console.warn("[DPA Mom Routing] Failed to save response to memory:", error);
+          }
+        }
+
+        console.log(`[DPA Mom] Response complete (length=${accumulatedText.length})`);
+        return accumulatedText;
+      } catch (error) {
+        console.error(`[Manager] Error routing to DPA Mom Agent:`, error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        devtoolsTracker.trackError(
+          "dpa_mom",
+          error instanceof Error ? error : new Error(errorMsg),
+          { skillRoute: true }
+        );
+        // Fall through to manager if specialist fails
+      }
+    } else if (routingDecision.category === "okr") {
+    // OKR routing (lowest priority subagent)
     console.log(
-      `[Manager] Workflow routing: OKR Reviewer (confidence: ${routingDecision.confidence.toFixed(2)})`
+      `[Manager] Skill-based routing: OKR Reviewer (confidence: ${routingDecision.confidence.toFixed(2)})`
     );
     devtoolsTracker.trackAgentCall("Manager", query, {
-      workflowRoute: "okr_reviewer",
+      skillRoute: "okr_reviewer",
       confidence: routingDecision.confidence,
     });
     try {
-      const okrAgent = getOkrReviewerAgent();
+      // Lazy import to avoid circular dependency with observability-config
+      const { mastra } = await import("../observability-config");
+      const okrAgent = mastra.getAgent("okrReviewer");
 
-      // Create execution context with Feishu scoping
       const executionContext: any = {
         _memoryAddition: "",
       };
@@ -278,85 +395,61 @@ export async function managerAgent(
         );
       }
 
-      // MASTRA PATTERN: Stream with optional context
       const result = await okrAgent.stream({ messages, executionContext });
 
       let accumulatedText = "";
       let lastUpdateLength = 0;
       let lastUpdateTime = Date.now();
-      let chunkCount = 0;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:267',message:'Starting OKR agent stream',data:{agent:'okr_reviewer'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       for await (const textDelta of result.textStream) {
         accumulatedText += textDelta;
-        chunkCount++;
         const timeSinceLastUpdate = Date.now() - lastUpdateTime;
         const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:275',message:'Received chunk',data:{chunkSize:textDelta.length,accumulatedLength:accumulatedText.length,charsSinceLastUpdate,timeSinceLastUpdate,chunkCount},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        // Stream updates in batches - improved with time-based throttling
         const shouldUpdate = updateStatus && (
           accumulatedText.length % 50 === 0 ||
           timeSinceLastUpdate >= 200 ||
           charsSinceLastUpdate >= 30
         );
         if (shouldUpdate) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:283',message:'Updating card',data:{accumulatedLength:accumulatedText.length,charsSinceLastUpdate,timeSinceLastUpdate},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           updateStatus(accumulatedText);
           lastUpdateLength = accumulatedText.length;
           lastUpdateTime = Date.now();
         }
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:293',message:'Stream complete',data:{finalLength:accumulatedText.length,lastUpdateLength,remainingChars:accumulatedText.length-lastUpdateLength,chunkCount},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      // Send final update if there's remaining text
       if (updateStatus && accumulatedText.length > lastUpdateLength) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:297',message:'Sending final update',data:{finalLength:accumulatedText.length,remainingChars:accumulatedText.length-lastUpdateLength},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         updateStatus(accumulatedText);
       }
 
-      // Track response
       const duration = Date.now() - startTime;
       devtoolsTracker.trackResponse("okr_reviewer", accumulatedText, duration, {
-        manualRoute: true,
+        skillRoute: true,
       });
       healthMonitor.trackAgentCall("okr_reviewer", duration, true);
 
-      // Save routed response to memory
       if (mastraMemory && memoryThread && memoryResource) {
         try {
           const timestamp = new Date();
           const userMessageId = `msg-${memoryThread}-okr-user-${timestamp.getTime()}`;
           const assistantMessageId = `msg-${memoryThread}-okr-assistant-${timestamp.getTime()}`;
           
-          const routedMessages = [
-            {
-              id: userMessageId,
-              threadId: memoryThread,
-              resourceId: memoryResource,
-              role: "user" as const,
-              content: { content: query },
-              createdAt: timestamp,
-            },
-            {
-              id: assistantMessageId,
-              threadId: memoryThread,
-              resourceId: memoryResource,
-              role: "assistant" as const,
-              content: { content: accumulatedText },
-              createdAt: timestamp,
-            },
-          ];
-          
           await mastraMemory.saveMessages({
-            messages: routedMessages,
+            messages: [
+              {
+                id: userMessageId,
+                threadId: memoryThread,
+                resourceId: memoryResource,
+                role: "user" as const,
+                content: { content: query },
+                createdAt: timestamp,
+              },
+              {
+                id: assistantMessageId,
+                threadId: memoryThread,
+                resourceId: memoryResource,
+                role: "assistant" as const,
+                content: { content: accumulatedText },
+                createdAt: timestamp,
+              },
+            ],
             format: 'v2',
           });
           
@@ -374,14 +467,149 @@ export async function managerAgent(
       devtoolsTracker.trackError(
         "okr_reviewer",
         error instanceof Error ? error : new Error(errorMsg),
-        { manualRoute: true }
+        { skillRoute: true }
       );
       // Fall through to manager if specialist fails
     }
+    } // Close the if (routingDecision.category === "okr") block
+  } else if (routingDecision.type === "skill") {
+    // Inject skill into manager and execute (P&L priority 2, Alignment priority 3)
+    console.log(
+      `[Manager] Skill-based routing: Injecting ${routingDecision.category} skill into manager (confidence: ${routingDecision.confidence.toFixed(2)})`
+    );
+    devtoolsTracker.trackAgentCall("Manager", query, {
+      skillRoute: routingDecision.agentName,
+      confidence: routingDecision.confidence,
+      skillInjection: true,
+    });
+    
+    try {
+      // Get skill for the category
+      const registry = getSkillRegistry();
+      // Skill IDs match directory names
+      const skillId = routingDecision.category === "pnl" ? "pnl-analysis" : 
+                      routingDecision.category === "alignment" ? "alignment-tracking" : null;
+      
+      if (!skillId) {
+        console.warn(`[Manager] Unknown category for skill injection: ${routingDecision.category}`);
+      } else {
+        const skill = registry.getSkill(skillId);
+      
+        if (!skill) {
+          console.warn(`[Manager] Skill ${skillId} not found, falling back to manager`);
+        } else {
+        // Inject skill directly into messages
+        console.log(`[Manager] Injecting skill: ${skill.metadata.name}`);
+        
+        // Compose skill instructions
+        let skillContext = `**Active Skill Available**:\n\n## Skill: ${skill.metadata.name}\n`;
+        skillContext += `**Description**: ${skill.metadata.description}\n`;
+        if (skill.metadata.version) {
+          skillContext += `**Version**: ${skill.metadata.version}\n`;
+        }
+        skillContext += `\n${skill.instructions}\n\n---\n\n`;
+        
+        // Prepend skill instructions to the first user message
+        const enhancedMessages: CoreMessage[] = [...messages];
+        if (enhancedMessages.length > 0 && enhancedMessages[0].role === "user") {
+          const firstMessage = enhancedMessages[0];
+          if (typeof firstMessage.content === "string") {
+            enhancedMessages[0] = {
+              ...firstMessage,
+              content: skillContext + firstMessage.content,
+            };
+          }
+        }
+          
+          // Use manager agent with skill-injected messages
+          const result = await managerAgentInstance!.stream(enhancedMessages);
+          
+          let accumulatedText = "";
+          let lastUpdateLength = 0;
+          let lastUpdateTime = Date.now();
+          
+          for await (const textDelta of result.textStream) {
+            accumulatedText += textDelta;
+            const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+            const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
+            
+            const shouldUpdate = updateStatus && (
+              accumulatedText.length % 50 === 0 ||
+              timeSinceLastUpdate >= 200 ||
+              charsSinceLastUpdate >= 30
+            );
+            
+            if (shouldUpdate) {
+              updateStatus(accumulatedText);
+              lastUpdateLength = accumulatedText.length;
+              lastUpdateTime = Date.now();
+            }
+          }
+          
+          // Send final update
+          if (updateStatus && accumulatedText.length > lastUpdateLength) {
+            updateStatus(accumulatedText);
+          }
+          
+          const duration = Date.now() - startTime;
+          devtoolsTracker.trackResponse(routingDecision.agentName, accumulatedText, duration, {
+            skillRoute: true,
+            skillInjection: true,
+          });
+          healthMonitor.trackAgentCall(routingDecision.agentName, duration, true);
+          
+          // Save to memory
+          if (mastraMemory && memoryThread && memoryResource) {
+            try {
+              const timestamp = new Date();
+              const userMessageId = `msg-${memoryThread}-${routingDecision.category}-user-${timestamp.getTime()}`;
+              const assistantMessageId = `msg-${memoryThread}-${routingDecision.category}-assistant-${timestamp.getTime()}`;
+              
+              await mastraMemory.saveMessages({
+                messages: [
+                  {
+                    id: userMessageId,
+                    threadId: memoryThread,
+                    resourceId: memoryResource,
+                    role: "user" as const,
+                    content: { content: query },
+                    createdAt: timestamp,
+                  },
+                  {
+                    id: assistantMessageId,
+                    threadId: memoryThread,
+                    resourceId: memoryResource,
+                    role: "assistant" as const,
+                    content: { content: accumulatedText },
+                    createdAt: timestamp,
+                  },
+                ],
+                format: 'v2',
+              });
+              
+              console.log(`[Manager] Saved ${routingDecision.category} response to memory`);
+            } catch (error) {
+              console.warn(`[Manager] Failed to save ${routingDecision.category} response to memory:`, error);
+            }
+          }
+          
+          console.log(`[Manager] ${routingDecision.category} response complete (length=${accumulatedText.length})`);
+          return accumulatedText;
+        }
+      }
+    } catch (error) {
+      console.error(`[Manager] Error injecting skill for ${routingDecision.category}:`, error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      devtoolsTracker.trackError(
+        routingDecision.agentName,
+        error instanceof Error ? error : new Error(errorMsg),
+        { skillRoute: true }
+      );
+      // Fall through to manager
+    }
   }
 
-  // Alignment Agent routing - DISABLED (not active yet)
-  // TODO: Re-enable when alignment agent is ready
+  // Legacy alignment agent routing - DISABLED (now handled by skill injection)
   if (false && routingDecision.category === "alignment") {
     console.log(
       `[Manager] Workflow routing: Alignment Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
@@ -391,7 +619,9 @@ export async function managerAgent(
       confidence: routingDecision.confidence,
     });
     try {
-      const alignmentAgent = getAlignmentAgent();
+      // Lazy import to avoid circular dependency with observability-config
+      const { mastra } = await import("../observability-config");
+      const alignmentAgent = mastra.getAgent("alignment");
       const executionContext: any = {
         _memoryAddition: "",
       };
@@ -507,7 +737,9 @@ export async function managerAgent(
       confidence: routingDecision.confidence,
     });
     try {
-      const pnlAgent = getPnlAgent();
+      // Lazy import to avoid circular dependency with observability-config
+      const { mastra } = await import("../observability-config");
+      const pnlAgent = mastra.getAgent("pnl");
       const executionContext: any = {
         _memoryAddition: "",
       };
@@ -603,121 +835,6 @@ export async function managerAgent(
       const errorMsg = error instanceof Error ? error.message : String(error);
       devtoolsTracker.trackError(
         "pnl_agent",
-        error instanceof Error ? error : new Error(errorMsg),
-        { manualRoute: true }
-      );
-    }
-  }
-
-  // DPA Mom Agent routing
-  if (routingDecision.category === "dpa_mom") {
-    console.log(
-      `[Manager] Workflow routing: DPA Mom Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
-    );
-    devtoolsTracker.trackAgentCall("Manager", query, {
-      workflowRoute: "dpa_mom",
-      confidence: routingDecision.confidence,
-    });
-    try {
-      const dpaMomAgent = getDpaMomAgent();
-      const executionContext: any = {
-        _memoryAddition: "",
-      };
-
-      if (chatId && rootId) {
-        const conversationId = getConversationId(chatId!, rootId!);
-        const userScopeId = userId
-          ? getUserScopeId(userId)
-          : getUserScopeId(chatId!);
-        executionContext.chatId = conversationId;
-        executionContext.userId = userScopeId;
-        if (userId) {
-          executionContext.feishuUserId = userId;
-        }
-      }
-
-      const result = await dpaMomAgent.stream({
-        messages,
-        executionContext,
-      });
-
-      let accumulatedText = "";
-      let lastUpdateLength = 0;
-      let lastUpdateTime = Date.now();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:622',message:'Starting DPA Mom agent stream',data:{agent:'dpa_mom'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      for await (const textDelta of result.textStream) {
-        accumulatedText += textDelta;
-        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
-        // Stream updates with improved batching
-        const shouldUpdate = updateStatus && (
-          accumulatedText.length % 50 === 0 ||
-          timeSinceLastUpdate >= 200 ||
-          charsSinceLastUpdate >= 30
-        );
-        if (shouldUpdate) {
-          updateStatus(accumulatedText);
-          lastUpdateLength = accumulatedText.length;
-          lastUpdateTime = Date.now();
-        }
-      }
-      // Send final update if there's remaining text
-      if (updateStatus && accumulatedText.length > lastUpdateLength) {
-        updateStatus(accumulatedText);
-      }
-
-      const duration = Date.now() - startTime;
-      devtoolsTracker.trackResponse("dpa_mom", accumulatedText, duration, {
-       manualRoute: true,
-      });
-      healthMonitor.trackAgentCall("dpa_mom", duration, true);
-
-      // Save routed response to memory
-      if (mastraMemory && memoryThread && memoryResource) {
-       try {
-         const timestamp = new Date();
-         const userMessageId = `msg-${memoryThread}-dpa-user-${timestamp.getTime()}`;
-         const assistantMessageId = `msg-${memoryThread}-dpa-assistant-${timestamp.getTime()}`;
-         
-         const routedMessages = [
-           {
-             id: userMessageId,
-             threadId: memoryThread,
-             resourceId: memoryResource,
-             role: "user" as const,
-             content: { content: query },
-             createdAt: timestamp,
-           },
-           {
-             id: assistantMessageId,
-             threadId: memoryThread,
-             resourceId: memoryResource,
-             role: "assistant" as const,
-             content: { content: accumulatedText },
-             createdAt: timestamp,
-           },
-         ];
-         
-         await mastraMemory.saveMessages({
-           messages: routedMessages,
-           format: 'v2',
-         });
-         
-         console.log(`[DPA Mom] Saved response to memory`);
-        } catch (error) {
-          console.warn("[DPA Mom Routing] Failed to save response to memory:", error);
-        }
-       }
-
-      console.log(`[DPA Mom] Response complete (length=${accumulatedText.length})`);
-      return accumulatedText;
-    } catch (error) {
-      console.error(`[Manager] Error routing to DPA Mom Agent:`, error);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      devtoolsTracker.trackError(
-        "dpa_mom",
         error instanceof Error ? error : new Error(errorMsg),
         { manualRoute: true }
       );
