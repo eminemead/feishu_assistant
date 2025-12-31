@@ -81,15 +81,53 @@ NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
 
 ## Using bv as an AI sidecar
 
-bv is a fast terminal UI for Beads projects (.beads/beads.jsonl). It renders lists/details and precomputes dependency metrics (PageRank, critical path, cycles, etc.) so you instantly see blockers and execution order. For agents, it’s a graph sidecar: instead of parsing JSONL or risking hallucinated traversal, call the robot flags to get deterministic, dependency-aware outputs.
+bv is a fast terminal UI for Beads projects (.beads/beads.jsonl). It renders lists/details and precomputes dependency metrics (PageRank, critical path, cycles, etc.) so you instantly see blockers and execution order. For agents, it's a graph sidecar: instead of parsing JSONL or risking hallucinated traversal, call the robot flags to get deterministic, dependency-aware outputs.
 
 *IMPORTANT: As an agent, you must ONLY use bv with the robot flags, otherwise you'll get stuck in the interactive TUI that's intended for human usage only!*
 
-- bv --robot-help — shows all AI-facing commands.
-- bv --robot-insights — JSON graph metrics (PageRank, betweenness, HITS, critical path, cycles) with top-N summaries for quick triage.
-- bv --robot-plan — JSON execution plan: parallel tracks, items per track, and unblocks lists showing what each item frees up.
-- bv --robot-priority — JSON priority recommendations with reasoning and confidence.
-- bv --robot-recipes — list recipes (default, actionable, blocked, etc.); apply via bv --recipe <name> to pre-filter/sort before other flags.
-- bv --robot-diff --diff-since <commit|date> — JSON diff of issue changes, new/closed items, and cycles introduced/resolved.
+### Core Commands
+- `bv --robot-help` — shows all AI-facing commands
+- `bv --robot-triage` — **THE MEGA-COMMAND**: unified triage with priorities, quick wins, blockers, health metrics
+- `bv --robot-next` — single top recommendation with claim command (minimal output)
+
+### Graph Analysis
+- `bv --robot-insights` — JSON graph metrics (PageRank, betweenness, HITS, k-core, articulation points, slack)
+- `bv --robot-plan` — parallel execution tracks with unblocks lists
+- `bv --robot-priority` — priority recommendations with confidence + reasoning
+
+### File & Code Correlation
+- `bv --robot-history` — bead-to-commit correlations, cycle time stats
+- `bv --robot-file-beads <path>` — beads that touched a file (open + closed)
+- `bv --robot-file-hotspots` — files touched by most beads (conflict zones)
+- `bv --robot-impact <files>` — risk analysis before modifying files
+- `bv --robot-file-relations <path>` — files that frequently co-change
+- `bv --robot-related <bead-id>` — beads related via file/commit/dependency overlap
+
+### Labels & Health
+- `bv --robot-label-health` — per-label health metrics (velocity, flow, criticality)
+- `bv --robot-label-flow` — cross-label dependency matrix
+- `bv --robot-label-attention` — attention-ranked labels needing focus
+- `bv --robot-alerts` — drift + proactive warnings (staleness, cascades, cycles)
+
+### Sprint & Forecasting
+- `bv --robot-sprint-list` — all sprints as JSON
+- `bv --robot-burndown <id|current>` — sprint burndown data
+- `bv --robot-forecast <id|all>` — ETA predictions per issue
+- `bv --robot-capacity [--agents=N]` — team capacity simulation
+
+### Utilities
+- `bv --robot-recipes` — list available recipes; use `bv --recipe <name>` to filter
+- `bv --robot-diff --diff-since <commit|date>` — JSON diff of changes
+- `bv --robot-graph [--graph-format=json|dot|mermaid]` — export dependency graph
+- `bv --robot-suggest` — hygiene suggestions (deps/dupes/labels/cycles)
+- `bv --search "query" --robot-search` — semantic vector search with hybrid ranking
+- `bv --emit-script [--script-limit=N]` — generate shell script for top recommendations
+
+### Filters (work with most robot commands)
+- `--robot-min-confidence 0.6` — filter by minimum confidence
+- `--robot-max-results 5` — limit results
+- `--robot-by-label <label>` — filter by label
+- `--label <label>` — scope analysis to label's subgraph
+- `--as-of <commit|date>` — time-travel to historical state
 
 Use these commands instead of hand-rolling graph logic; bv already computes the hard parts so agents can act safely and quickly.

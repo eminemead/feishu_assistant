@@ -11,3 +11,6 @@ bun.lock
 
 # DSPyGround local data
 .dspyground/
+
+# bv (beads viewer) local config and caches
+.bv/
