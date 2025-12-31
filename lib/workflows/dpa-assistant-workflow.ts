@@ -210,15 +210,16 @@ const executeGitLabCreateStep = createStep({
     }
     
     // Use LLM to parse the issue creation request
-    // Calculate dates for due date parsing
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const daysUntilNextWednesday = (3 - dayOfWeek + 7) % 7 || 7;
-    const nextWednesday = new Date(today);
-    nextWednesday.setDate(today.getDate() + daysUntilNextWednesday);
-    const nextWedStr = nextWednesday.toISOString().split('T')[0];
+    try {
+      // Calculate dates for due date parsing
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const daysUntilNextWednesday = (3 - dayOfWeek + 7) % 7 || 7;
+      const nextWednesday = new Date(today);
+      nextWednesday.setDate(today.getDate() + daysUntilNextWednesday);
+      const nextWedStr = nextWednesday.toISOString().split('T')[0];
     
-    const parsePrompt = `Parse this GitLab issue creation request and extract:
+      const parsePrompt = `Parse this GitLab issue creation request and extract:
 - title: Issue title (required)
 - description: Issue description (expand on the title with context)
 - project: GitLab project path. Look for explicit mentions like "in dpa/xxx", "项目 xxx". 
@@ -315,12 +316,20 @@ LABELS: <comma-separated labels or "none">`;
       glabCommand,
     });
     
-    return {
-      result: preview,
-      intent: "gitlab_create" as const,
-      needsConfirmation: true,
-      confirmationData,
-    };
+      return {
+        result: preview,
+        intent: "gitlab_create" as const,
+        needsConfirmation: true,
+        confirmationData,
+      };
+    } catch (error: any) {
+      // LLM parsing failed - return user-friendly error
+      console.error(`[DPA Workflow] GitLab create parsing failed: ${error.message}`);
+      return {
+        result: `❌ Failed to parse issue request: ${error.message}\n\nPlease try again with a clearer request like:\n"create issue: [title], priority 2, ddl next wednesday"`,
+        intent: "gitlab_create" as const,
+      };
+    }
   }
 });
 
