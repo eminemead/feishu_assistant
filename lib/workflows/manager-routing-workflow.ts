@@ -2,11 +2,11 @@
  * Manager Routing Workflow
  * 
  * @deprecated This workflow-based routing has been replaced by skill-based routing.
- * See `lib/routing/skill-based-router.ts` for the new implementation.
+ * See `lib/routing/query-router.ts` for the new implementation.
  * 
  * Migration Notes:
  * - Old: `getRoutingDecision()` from this workflow
- * - New: `routeQuery()` from skill-based-router
+ * - New: `routeQuery()` from query-router
  * - Benefits: Faster (<1ms vs ~6-12ms), declarative (rules in SKILL.md), testable
  * 
  * This file is kept for reference but is no longer used in production.

@@ -1,13 +1,12 @@
 /**
- * Skill-Based Router
+ * Query Router
  * 
- * Uses Agent Routing skill to classify queries declaratively.
- * Makes routing logic testable, maintainable, and version-controlled.
+ * Routes user queries to appropriate workflows or skills based on keywords.
+ * Reads routing rules from SKILL.md files (skills/agent-routing/SKILL.md).
  * 
- * Supports three execution types:
- * - workflow: Execute via Mastra workflow (deterministic, multi-step)
- * 
- * - skill: Inject instructions into manager (deprecated)
+ * Execution types:
+ * - workflow: Execute via Mastra workflow (deterministic, preferred)
+ * - skill: Inject instructions into manager (legacy)
  * 
  * Performance: <1ms per routing decision (cached, pre-compiled patterns)
  */

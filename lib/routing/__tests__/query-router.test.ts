@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
-import { routeQuery, routeQueries, clearRoutingCache } from "../skill-based-router";
+import { routeQuery, routeQueries, clearRoutingCache } from "../query-router";
 import { getSkillRegistry } from "../../skills/skill-registry";
 import * as path from "path";
 

@@ -37,7 +37,7 @@ export {
 export { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 export { documentTrackingWorkflow, runDocumentTrackingWorkflow } from "./document-tracking-workflow";
 export { dpaAssistantWorkflow, runDpaAssistantWorkflow } from "./dpa-assistant-workflow";
-// Note: manager-routing-workflow is deprecated, see skill-based-router.ts
+// Note: manager-routing-workflow is deprecated, see query-router.ts
 
 import { getWorkflowRegistry, registerWorkflow } from "./registry";
 import { okrAnalysisWorkflow } from "./okr-analysis-workflow";

@@ -31,7 +31,7 @@ import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModel, getInternalModelInfo } from "../shared/internal-model";
 // import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
-import { routeQuery, shouldUseWorkflow, getRoutingSummary } from "../routing/skill-based-router";
+import { routeQuery, shouldUseWorkflow, getRoutingSummary } from "../routing/query-router";
 import { getSkillRegistry } from "../skills/skill-registry";
 import { injectSkillsIntoInstructions, injectSkillsIntoMessages } from "../skills/skill-injector";
 import { executeSkillWorkflow } from "../workflows";
