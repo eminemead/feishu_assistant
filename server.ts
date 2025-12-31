@@ -6,6 +6,7 @@ import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
 import { getBotId, client, parseMessageContent, isThreadBotRelevant } from "./lib/feishu-utils";
 import { extractFeishuUserId } from "./lib/auth/extract-feishu-user-id";
+import { exchangeCodeForToken, generateAuthUrl } from "./lib/auth/feishu-oauth";
 import { healthMonitor } from "./lib/health-monitor";
 import { handleCardAction, parseCardActionCallback } from "./lib/handle-card-action";
 import {
@@ -453,6 +454,67 @@ app.get("/health", (c) => {
   const metrics = healthMonitor.getMetrics();
   const statusCode = metrics.status === 'unhealthy' ? 503 : metrics.status === 'degraded' ? 200 : 200;
   return c.json(metrics, statusCode);
+});
+
+// OAuth callback endpoint for Feishu user authorization
+// Users are redirected here after granting document access permission
+app.get("/oauth/feishu/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  const error = c.req.query("error");
+
+  if (error) {
+    console.error(`[OAuth] Authorization denied: ${error}`);
+    return c.html(`
+      <html>
+        <head><title>授权失败</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ 授权失败</h2>
+          <p>用户拒绝了授权或发生错误: ${error}</p>
+          <p>请返回飞书重新尝试。</p>
+        </body>
+      </html>
+    `);
+  }
+
+  if (!code || !state) {
+    return c.html(`
+      <html>
+        <head><title>参数错误</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ 参数错误</h2>
+          <p>缺少必要的授权参数。</p>
+        </body>
+      </html>
+    `, 400);
+  }
+
+  const result = await exchangeCodeForToken(code, state);
+
+  if (result.success) {
+    return c.html(`
+      <html>
+        <head><title>授权成功</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>✅ 授权成功!</h2>
+          <p>已获得文档访问权限。</p>
+          <p>现在可以关闭此页面，返回飞书继续使用。</p>
+          <p style="color: #666; margin-top: 20px;">Bot 现在可以读取您有权访问的飞书文档了。</p>
+        </body>
+      </html>
+    `);
+  } else {
+    return c.html(`
+      <html>
+        <head><title>授权失败</title></head>
+        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <h2>❌ 授权失败</h2>
+          <p>错误: ${result.error}</p>
+          <p>请返回飞书重新尝试。</p>
+        </body>
+      </html>
+    `, 500);
+  }
 });
 
 // Internal notification API endpoint

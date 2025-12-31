@@ -28,6 +28,7 @@ import {
   createFeishuChatHistoryTool, 
   createFeishuDocsTool 
 } from "../tools";
+import { readAndSummarizeDocs, getAuthPromptIfNeeded } from "../tools/feishu-docs-user-tool";
 import { Agent } from "@mastra/core/agent";
 
 // Free model instances - ONLY these models are used
@@ -211,6 +212,38 @@ const executeGitLabCreateStep = createStep({
     
     // Use LLM to parse the issue creation request
     try {
+      const { userId } = inputData;
+      
+      // Extract Feishu doc URLs from query
+      const docUrlRegex = /https?:\/\/[^\s]*feishu\.cn\/(?:docs|docx|wiki|sheets|bitable)\/[^\s]+/gi;
+      const docUrls = query.match(docUrlRegex) || [];
+      
+      // Read and summarize linked docs if present
+      let docSummaries = "";
+      if (docUrls.length > 0 && userId) {
+        console.log(`[DPA Workflow] Found ${docUrls.length} doc links, fetching summaries...`);
+        
+        const summaries = await readAndSummarizeDocs(docUrls, userId, 400);
+        const successfulSummaries = summaries.filter(s => s.success);
+        
+        if (successfulSummaries.length > 0) {
+          docSummaries = "\n\n---\n**📄 相关文档摘要**\n\n" + 
+            successfulSummaries.map(s => 
+              `### ${s.title}\n${s.summary}\n[查看文档](${s.url})`
+            ).join("\n\n");
+          console.log(`[DPA Workflow] Added ${successfulSummaries.length} doc summaries`);
+        }
+        
+        // Check if auth is needed for failed docs
+        const failedDocs = summaries.filter(s => !s.success);
+        if (failedDocs.length > 0) {
+          const authPrompt = await getAuthPromptIfNeeded(userId);
+          if (authPrompt) {
+            docSummaries += `\n\n⚠️ 部分文档无法读取。${authPrompt}`;
+          }
+        }
+      }
+      
       // Calculate dates for due date parsing
       const today = new Date();
       const dayOfWeek = today.getDay();
@@ -258,7 +291,9 @@ LABELS: <comma-separated labels or "none">`;
     const labelsMatch = text.match(/LABELS:\s*(.+)/i);
     
     const title = titleMatch?.[1]?.trim() || "New Issue";
-    const description = descMatch?.[1]?.trim() || query;
+    // Append doc summaries to description if available
+    const baseDescription = descMatch?.[1]?.trim() || query;
+    const description = docSummaries ? baseDescription + docSummaries : baseDescription;
     const project = projectMatch?.[1]?.trim() || "dpa/dagster";
     
     // Parse priority (1-4)
