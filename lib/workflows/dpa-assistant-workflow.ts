@@ -174,7 +174,8 @@ LABELS: <labels or "none">`;
     const title = titleMatch?.[1]?.trim() || "New Issue";
     const description = descMatch?.[1]?.trim() || query;
     const project = projectMatch?.[1]?.trim() || "dpa/dagster";
-    const labels = labelsMatch?.[1]?.trim().toLowerCase() !== "none" ? labelsMatch?.[1]?.trim() : undefined;
+    const labelsRaw = labelsMatch?.[1]?.trim();
+    const labels = labelsRaw && labelsRaw.toLowerCase() !== "none" ? labelsRaw : undefined;
     
     // Build glab command
     let glabCommand = `issue create -R ${project} -t "${title}" -d "${description}"`;
