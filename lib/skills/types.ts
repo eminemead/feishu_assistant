@@ -3,7 +3,31 @@
  * 
  * Based on the Agent Skills Standard (agentskills.io)
  * Skills are modular, portable, and reusable instruction packages for AI agents.
+ * 
+ * Extended with workflow support for deterministic skill execution.
  */
+
+/**
+ * Skill execution type
+ * - "workflow": Execute via Mastra workflow (deterministic, multi-step)
+ * - "subagent": Delegate to specialist agent (non-deterministic)
+ * - "skill": Inject instructions into manager (deprecated)
+ */
+export type SkillExecutionType = "workflow" | "subagent" | "skill";
+
+/**
+ * Routing rule configuration for a skill
+ */
+export interface SkillRoutingRule {
+  /** Keywords that trigger this skill */
+  keywords: string[];
+  /** Priority (lower = higher priority) */
+  priority: number;
+  /** Whether the rule is enabled */
+  enabled: boolean;
+  /** Execution type */
+  type: SkillExecutionType;
+}
 
 /**
  * Skill metadata from YAML frontmatter
@@ -17,6 +41,22 @@ export interface SkillMetadata {
   author?: string;
   dependencies?: string[];
   tools?: string[];
+  
+  /**
+   * Workflow ID to execute (when type="workflow")
+   * Must match a registered workflow in lib/workflows/
+   */
+  workflowId?: string;
+  
+  /**
+   * Agent name for subagent routing (when type="subagent")
+   */
+  agentName?: string;
+  
+  /**
+   * Routing rules for query classification
+   */
+  routing_rules?: Record<string, SkillRoutingRule>;
 }
 
 /**

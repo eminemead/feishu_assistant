@@ -15,6 +15,9 @@ import { getOkrReviewerAgent } from "./agents/okr-reviewer-agent";
 import { getAlignmentAgent } from "./agents/alignment-agent";
 import { getPnlAgent } from "./agents/pnl-agent";
 import { getDpaMomAgent } from "./agents/dpa-mom-agent";
+import { okrAnalysisWorkflow } from "./workflows/okr-analysis-workflow";
+import { documentTrackingWorkflow } from "./workflows/document-tracking-workflow";
+import { initializeWorkflows } from "./workflows";
 
 // Environment configuration
 const PHOENIX_ENDPOINT = process.env.PHOENIX_ENDPOINT || "http://localhost:6006/v1/traces";
@@ -52,7 +55,7 @@ const observability = new Observability({
 
 /**
  * Initialize Mastra instance with observability enabled and register all
- * production agents so Phoenix spans are emitted automatically.
+ * production agents and workflows so Phoenix spans are emitted automatically.
  */
 const registeredAgents = {
   manager: getManagerAgent(),
@@ -62,11 +65,24 @@ const registeredAgents = {
   dpaMom: getDpaMomAgent(),
 };
 
+/**
+ * Registered workflows for Mastra instance
+ * These enable deterministic skill execution with full observability
+ */
+const registeredWorkflows = {
+  okrAnalysis: okrAnalysisWorkflow,
+  documentTracking: documentTrackingWorkflow,
+};
+
 export const mastra = new Mastra({
   name: "feishu-assistant",
   agents: registeredAgents,
+  workflows: registeredWorkflows,
   observability,
 });
+
+// Initialize workflow registry for skill-based routing
+initializeWorkflows();
 
 /**
  * Check if observability is properly configured

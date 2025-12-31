@@ -4,18 +4,26 @@
  * Uses Agent Routing skill to classify queries declaratively.
  * Makes routing logic testable, maintainable, and version-controlled.
  * 
+ * Supports three execution types:
+ * - workflow: Execute via Mastra workflow (deterministic, multi-step)
+ * - subagent: Delegate to specialist agent (non-deterministic)
+ * - skill: Inject instructions into manager (deprecated)
+ * 
  * Performance: <1ms per routing decision (cached, pre-compiled patterns)
  */
 
 import { getSkillRegistry } from "../skills/skill-registry";
-import type { Skill } from "../skills/types";
+import type { Skill, SkillExecutionType } from "../skills/types";
+import { getWorkflowRegistry } from "../workflows";
 
 export type RoutingDecision = {
   agentName: string;
   category: "okr" | "dpa_mom" | "pnl" | "alignment" | "general";
   confidence: number;
   matchedKeywords: string[];
-  type: "subagent" | "skill" | "general";
+  type: SkillExecutionType | "general";
+  /** Workflow ID when type="workflow" */
+  workflowId?: string;
 };
 
 /**
@@ -25,7 +33,8 @@ interface RoutingRule {
   keywords: string[];
   priority: number;
   enabled: boolean;
-  type: "subagent" | "skill";
+  type: SkillExecutionType;
+  workflowId?: string;
 }
 
 /**
@@ -38,7 +47,8 @@ interface CompiledRoutingRule {
   keywords: string[]; // Store original keywords for match reporting
   priority: number;
   enabled: boolean;
-  type: "subagent" | "skill";
+  type: SkillExecutionType;
+  workflowId?: string;
 }
 
 /**
@@ -46,9 +56,9 @@ interface CompiledRoutingRule {
  */
 function getRoutingRules(skill: Skill): Record<string, RoutingRule> {
   // First try to get from metadata
-  const metadata = skill.metadata as any;
+  const metadata = skill.metadata as Record<string, unknown>;
   if (metadata.routing_rules) {
-    return metadata.routing_rules;
+    return metadata.routing_rules as Record<string, RoutingRule>;
   }
   
   // For agent-routing skill, parse from instructions
@@ -69,6 +79,7 @@ function getRoutingRules(skill: Skill): Record<string, RoutingRule> {
             priority: currentRule.priority || 999,
             enabled: currentRule.enabled !== false,
             type: currentRule.type || "skill",
+            workflowId: currentRule.workflowId,
           };
         }
         
@@ -87,16 +98,25 @@ function getRoutingRules(skill: Skill): Record<string, RoutingRule> {
           currentRule.keywords = keywordsMatch[1].split(',').map(k => k.trim());
         }
       }
-      // Match type line
+      // Match type line (now supports "workflow")
       else if (line.includes('**Type**:') && currentAgent) {
         const typeMatch = line.match(/\*\*Type\*\*:\s*(.+)$/);
         if (typeMatch) {
           const type = typeMatch[1].toLowerCase();
-          if (type.includes('subagent')) {
+          if (type.includes('workflow')) {
+            currentRule.type = 'workflow';
+          } else if (type.includes('subagent')) {
             currentRule.type = 'subagent';
           } else {
             currentRule.type = 'skill';
           }
+        }
+      }
+      // Match workflowId line
+      else if (line.includes('**Workflow**:') && currentAgent) {
+        const workflowMatch = line.match(/\*\*Workflow\*\*:\s*`?([^`\s]+)`?/);
+        if (workflowMatch) {
+          currentRule.workflowId = workflowMatch[1];
         }
       }
       // Match status line
@@ -115,6 +135,7 @@ function getRoutingRules(skill: Skill): Record<string, RoutingRule> {
         priority: currentRule.priority || 999,
         enabled: currentRule.enabled !== false,
         type: currentRule.type || "skill",
+        workflowId: currentRule.workflowId,
       };
     }
     
@@ -172,6 +193,7 @@ function compileRoutingRules(skill: Skill): CompiledRoutingRule[] {
       priority: rules.priority || 999,
       enabled: rules.enabled,
       type: rules.type || "skill",
+      workflowId: rules.workflowId,
     });
   }
   
@@ -238,6 +260,39 @@ let cachedCompiledRules: CompiledRoutingRule[] | null = null;
 let cachedRoutingSkill: Skill | null = null;
 
 /**
+ * Create routing decision from best match
+ */
+function createDecision(
+  bestMatch: { rule: CompiledRoutingRule; score: number; matches: string[] }
+): RoutingDecision {
+  const confidence = bestMatch.score > 0.3 
+    ? Math.min(bestMatch.score * 2, 1.0)
+    : 0.5;
+  
+  return {
+    agentName: bestMatch.rule.agentName,
+    category: bestMatch.rule.category,
+    confidence,
+    matchedKeywords: bestMatch.matches,
+    type: bestMatch.rule.type,
+    workflowId: bestMatch.rule.workflowId,
+  };
+}
+
+/**
+ * Create fallback decision for general routing
+ */
+function createFallbackDecision(): RoutingDecision {
+  return {
+    agentName: "manager",
+    category: "general",
+    confidence: 0.5,
+    matchedKeywords: [],
+    type: "general",
+  };
+}
+
+/**
  * Route query using Agent Routing skill
  */
 export async function routeQuery(query: string): Promise<RoutingDecision> {
@@ -253,29 +308,10 @@ export async function routeQuery(query: string): Promise<RoutingDecision> {
     const scores = scoreQuery(query, cachedCompiledRules);
     
     if (scores.length === 0) {
-      return {
-        agentName: "manager",
-        category: "general",
-        confidence: 0.5,
-        matchedKeywords: [],
-        type: "general",
-      };
+      return createFallbackDecision();
     }
     
-    const bestMatch = scores[0];
-    
-    // Calculate confidence
-    const confidence = bestMatch.score > 0.3 
-      ? Math.min(bestMatch.score * 2, 1.0)
-      : 0.5;
-    
-    return {
-      agentName: bestMatch.rule.agentName,
-      category: bestMatch.rule.category,
-      confidence,
-      matchedKeywords: bestMatch.matches,
-      type: bestMatch.rule.type,
-    };
+    return createDecision(scores[0]);
   }
   
   // Slow path: load and compile rules (first time only)
@@ -285,13 +321,7 @@ export async function routeQuery(query: string): Promise<RoutingDecision> {
   
   if (!routingSkill) {
     console.warn("[Router] Routing skill not found, falling back to general");
-    return {
-      agentName: "manager",
-      category: "general",
-      confidence: 0.5,
-      matchedKeywords: [],
-      type: "general",
-    };
+    return createFallbackDecision();
   }
   
   // Compile and cache rules
@@ -302,29 +332,54 @@ export async function routeQuery(query: string): Promise<RoutingDecision> {
   const scores = scoreQuery(query, cachedCompiledRules);
   
   if (scores.length === 0) {
-    return {
-      agentName: "manager",
-      category: "general",
-      confidence: 0.5,
-      matchedKeywords: [],
-      type: "general",
-    };
+    return createFallbackDecision();
   }
   
-  const bestMatch = scores[0];
+  return createDecision(scores[0]);
+}
+
+/**
+ * Check if a routing decision should use workflow execution
+ */
+export function shouldUseWorkflow(decision: RoutingDecision): boolean {
+  if (decision.type !== "workflow") {
+    return false;
+  }
   
-  // Calculate confidence
-  const confidence = bestMatch.score > 0.3 
-    ? Math.min(bestMatch.score * 2, 1.0)
-    : 0.5;
+  if (!decision.workflowId) {
+    console.warn(`[Router] Workflow routing requested but no workflowId specified for ${decision.agentName}`);
+    return false;
+  }
   
-  return {
-    agentName: bestMatch.rule.agentName,
-    category: bestMatch.rule.category,
-    confidence,
-    matchedKeywords: bestMatch.matches,
-    type: bestMatch.rule.type,
-  };
+  // Verify workflow exists in registry
+  const workflowRegistry = getWorkflowRegistry();
+  if (!workflowRegistry.has(decision.workflowId)) {
+    console.warn(`[Router] Workflow ${decision.workflowId} not found in registry`);
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Get routing summary for logging/debugging
+ */
+export function getRoutingSummary(decision: RoutingDecision): string {
+  const parts = [
+    `category=${decision.category}`,
+    `type=${decision.type}`,
+    `confidence=${decision.confidence.toFixed(2)}`,
+  ];
+  
+  if (decision.workflowId) {
+    parts.push(`workflowId=${decision.workflowId}`);
+  }
+  
+  if (decision.matchedKeywords.length > 0) {
+    parts.push(`keywords=[${decision.matchedKeywords.join(",")}]`);
+  }
+  
+  return parts.join(" ");
 }
 
 /**
@@ -341,4 +396,3 @@ export function clearRoutingCache(): void {
   cachedCompiledRules = null;
   cachedRoutingSkill = null;
 }
-

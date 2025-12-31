@@ -31,9 +31,10 @@ import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModel, getInternalModelInfo } from "../shared/internal-model";
 // import { createSearchWebTool } from "../tools";
 import { healthMonitor } from "../health-monitor";
-import { routeQuery } from "../routing/skill-based-router";
+import { routeQuery, shouldUseWorkflow, getRoutingSummary } from "../routing/skill-based-router";
 import { getSkillRegistry } from "../skills/skill-registry";
 import { injectSkillsIntoInstructions, injectSkillsIntoMessages } from "../skills/skill-injector";
+import { executeSkillWorkflow } from "../workflows";
 import { initializeMemoryContext, loadMemoryHistory, saveMessagesToMemory, getWorkingMemory, updateWorkingMemory, buildSystemMessageWithMemory } from "../memory-middleware";
 import { extractAndSaveWorkingMemory } from "../working-memory-extractor";
 import * as path from "path";
@@ -246,10 +247,90 @@ export async function managerAgent(
   const routingDecision = await routeQuery(query);
 
   console.log(
-    `[Manager] Skill-based routing decision: ${routingDecision.category} (${routingDecision.agentName}, confidence: ${routingDecision.confidence.toFixed(2)}, type: ${routingDecision.type})`
+    `[Manager] Skill-based routing: ${getRoutingSummary(routingDecision)}`
   );
 
   // Route based on skill-based routing decision
+  // Priority: workflow > subagent > skill > general
+  
+  // 1. Workflow routing (deterministic multi-step execution)
+  if (shouldUseWorkflow(routingDecision)) {
+    console.log(
+      `[Manager] Workflow routing: ${routingDecision.workflowId} (confidence: ${routingDecision.confidence.toFixed(2)})`
+    );
+    devtoolsTracker.trackAgentCall("Manager", query, {
+      workflowRoute: routingDecision.workflowId,
+      confidence: routingDecision.confidence,
+    });
+
+    try {
+      const result = await executeSkillWorkflow(routingDecision.workflowId!, {
+        query,
+        userId,
+        chatId,
+        messageId: rootId,
+        rootId,
+        onUpdate: updateStatus,
+      });
+
+      const duration = Date.now() - startTime;
+      devtoolsTracker.trackResponse(
+        routingDecision.workflowId!,
+        result.response,
+        duration,
+        { workflowRoute: true, success: result.success }
+      );
+      healthMonitor.trackAgentCall(routingDecision.workflowId!, duration, result.success);
+
+      // Save workflow response to memory
+      if (mastraMemory && memoryThread && memoryResource) {
+        try {
+          const timestamp = new Date();
+          const userMessageId = `msg-${memoryThread}-wf-user-${timestamp.getTime()}`;
+          const assistantMessageId = `msg-${memoryThread}-wf-assistant-${timestamp.getTime()}`;
+          
+          await mastraMemory.saveMessages({
+            messages: [
+              {
+                id: userMessageId,
+                threadId: memoryThread,
+                resourceId: memoryResource,
+                role: "user" as const,
+                content: { content: query },
+                createdAt: timestamp,
+              },
+              {
+                id: assistantMessageId,
+                threadId: memoryThread,
+                resourceId: memoryResource,
+                role: "assistant" as const,
+                content: { content: result.response },
+                createdAt: timestamp,
+              },
+            ],
+            format: 'v2',
+          });
+          console.log(`[Workflow] Saved response to memory`);
+        } catch (error) {
+          console.warn("[Workflow] Failed to save response to memory:", error);
+        }
+      }
+
+      console.log(`[Workflow] ${routingDecision.workflowId} complete (length=${result.response.length}, durationMs=${result.durationMs})`);
+      return result.response;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[Manager] Workflow ${routingDecision.workflowId} failed:`, errorMsg);
+      healthMonitor.trackError(
+        "workflow_execution",
+        error instanceof Error ? error : new Error(errorMsg),
+        { workflowRoute: true, workflowId: routingDecision.workflowId }
+      );
+      // Fall through to subagent/manager if workflow fails
+    }
+  }
+
+  // 2. Subagent routing (non-deterministic agent delegation)
   if (routingDecision.type === "subagent") {
     // Route to subagent (DPA Mom priority 1, OKR priority 4)
     if (routingDecision.category === "dpa_mom") {

@@ -1,9 +1,9 @@
 ---
 name: "Agent Routing"
-description: "Routes user queries to appropriate specialist agents based on query patterns"
-version: "1.0.0"
-tags: ["routing", "classification", "orchestration"]
-keywords: ["route", "classify", "agent", "specialist"]
+description: "Routes user queries to appropriate specialist agents or workflows based on query patterns"
+version: "2.0.0"
+tags: ["routing", "classification", "orchestration", "workflow"]
+keywords: ["route", "classify", "agent", "specialist", "workflow"]
 routing_rules:
   dpa_mom:
     keywords: ["dpa", "data team", "ae", "da", "dpa_mom", "mom", "ma"]
@@ -21,15 +21,36 @@ routing_rules:
     enabled: true
     type: "skill"
   okr_reviewer:
-    keywords: ["okr", "objective", "key result", "manager review", "has_metric", "覆盖率", "指标覆盖率", "经理评审", "目标", "关键结果", "okr指标", "vau", "okr分析"]
+    keywords: ["okr", "objective", "key result", "manager review", "has_metric", "覆盖率", "指标覆盖率", "经理评审", "目标", "关键结果", "okr指标", "vau", "okr分析", "图表", "可视化", "visualization", "chart"]
     priority: 4
     enabled: true
-    type: "subagent"
+    type: "workflow"
+    workflowId: "okr-analysis"
 ---
 
 # Agent Routing Skill
 
-Routes user queries to appropriate specialist agents based on keyword matching and semantic analysis.
+Routes user queries to appropriate specialist agents or workflows based on keyword matching and semantic analysis.
+
+## Execution Types
+
+### Workflow (Deterministic)
+Workflows execute multi-step pipelines with guaranteed step ordering:
+- Query DB → Generate Charts → Analyze → Format Response
+- Different models per step (fast for NLU, smart for analysis)
+- Full observability and traceability
+
+### Subagent (Non-Deterministic)
+Subagents are specialist AI agents that decide tool order:
+- Good for conversational tasks
+- Context isolation from manager
+- Less predictable execution path
+
+### Skill (Deprecated)
+Skills inject instructions into manager agent:
+- Simple but limited
+- No access to specialized tools
+- Being replaced by workflows
 
 ## Routing Rules
 
@@ -51,23 +72,33 @@ Routes user queries to appropriate specialist agents based on keyword matching a
 - **Type**: Skill (injected into manager)
 - **Agent**: `alignment_agent`
 
-### OKR Reviewer (Priority 4 - Lowest)
-- **Keywords**: okr, objective, key result, manager review, has_metric, 覆盖率, 指标覆盖率, 经理评审, 目标, 关键结果, okr指标, 指标, okr分析, 分析, 图表, 可视化, visualization, chart, analysis
+### OKR Reviewer (Priority 4)
+- **Keywords**: okr, objective, key result, manager review, has_metric, 覆盖率, 指标覆盖率, 经理评审, 目标, 关键结果, okr指标, 图表, 可视化, visualization, chart
 - **Status**: Active
-- **Type**: Subagent (context isolation)
-- **Agent**: `okr_reviewer`
+- **Type**: Workflow (deterministic multi-step)
+- **Workflow**: `okr-analysis`
+- **Steps**:
+  1. Query OKR data from StarRocks
+  2. Generate charts (bar, pie, heatmap)
+  3. Analyze with OKR Reviewer agent
+  4. Format final response
 
 ## Routing Logic
 
-1. **Keyword Matching**: Check query against each agent's keywords (case-insensitive, word boundary matching)
+1. **Keyword Matching**: Check query against each rule's keywords (case-insensitive, word boundary matching)
 2. **Score Calculation**: Score = (matches / total_keywords) * priority_weight
    - Priority weight: 1 / priority (lower number = higher priority)
 3. **Confidence**: Confidence = min(score * 2, 1.0) if score > 0.3, else 0.5
-4. **Selection**: Choose agent with highest score, fallback to "general" if no match
+4. **Selection**: Choose rule with highest score, fallback to "general" if no match
+5. **Execution**:
+   - If type="workflow" and workflowId exists → Execute workflow
+   - If type="subagent" → Delegate to specialist agent
+   - If type="skill" → Inject instructions into manager
+   - Otherwise → General manager response
 
 ## Priority Order
 
-When multiple agents match, priority determines the winner:
+When multiple rules match, priority determines the winner:
 1. DPA Mom (priority 1) - Highest
 2. P&L Agent (priority 2)
 3. Alignment Agent (priority 3)
@@ -80,7 +111,7 @@ When multiple agents match, priority determines the winner:
 Query: "Show me DPA team issues"
 → Matches: ["dpa", "team"]
 → Score: 2/7 = 0.286
-→ Route: dpa_mom (confidence: 0.572)
+→ Route: dpa_mom (subagent, confidence: 0.572)
 ```
 
 **Example 2**: P&L Query
@@ -88,30 +119,43 @@ Query: "Show me DPA team issues"
 Query: "What's the profit for Q4?"
 → Matches: ["profit"]
 → Score: 1/7 = 0.143
-→ Route: pnl_agent (confidence: 0.5, but wins due to priority)
+→ Route: pnl_agent (skill, confidence: 0.5)
 ```
 
-**Example 3**: OKR Query
+**Example 3**: OKR Query (Now uses Workflow)
 ```
-Query: "What's the OKR coverage for Q4?"
-→ Matches: ["okr", "coverage"]
-→ Score: 2/19 = 0.105
-→ Route: okr_reviewer (confidence: 0.5)
+Query: "分析10月OKR指标覆盖率"
+→ Matches: ["okr", "覆盖率", "指标"]
+→ Score: 3/15 = 0.2
+→ Route: okr-analysis (workflow)
+→ Execution:
+   Step 1: queryOkrData → Fetch from StarRocks
+   Step 2: generateCharts → Create visualizations
+   Step 3: analyze → OKR Reviewer generates insights
+   Step 4: formatResponse → Combine into report
 ```
 
-**Example 4**: Ambiguous Query
+**Example 4**: Chart Request (OKR Workflow)
 ```
-Query: "Help me with analysis"
-→ Matches: ["analysis"] (OKR)
-→ Score: 1/19 = 0.053
-→ Route: general (confidence: 0.5, too low)
+Query: "生成OKR图表"
+→ Matches: ["okr", "图表"]
+→ Score: 2/15 = 0.133
+→ Route: okr-analysis (workflow, guaranteed charts)
 ```
 
 ## Best Practices
 
+- Prefer workflows for multi-step tasks requiring guaranteed output
+- Use subagents for conversational or exploratory tasks
 - Keep keywords specific to avoid false positives
 - Update keywords based on user feedback
 - Test routing decisions with real queries
 - Monitor routing confidence scores
-- Priority order ensures DPA Mom queries are handled first, OKR last
+- Priority order ensures DPA Mom queries are handled first
 
+## Adding New Workflows
+
+1. Create workflow in `lib/workflows/`
+2. Register in `initializeWorkflows()`
+3. Add routing rule with `type: "workflow"` and `workflowId`
+4. Update this SKILL.md documentation
