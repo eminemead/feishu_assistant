@@ -36,11 +36,13 @@ export {
 // Workflows
 export { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 export { documentTrackingWorkflow, runDocumentTrackingWorkflow } from "./document-tracking-workflow";
+export { dpaAssistantWorkflow, runDpaAssistantWorkflow } from "./dpa-assistant-workflow";
 // Note: manager-routing-workflow is deprecated, see skill-based-router.ts
 
 import { getWorkflowRegistry, registerWorkflow } from "./registry";
 import { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./document-tracking-workflow";
+import { dpaAssistantWorkflow } from "./dpa-assistant-workflow";
 
 /**
  * Initialize and register all workflows
@@ -83,6 +85,19 @@ export function initializeWorkflows(): void {
       estimatedDurationSec: 3,
     },
     documentTrackingWorkflow
+  );
+
+  // Register DPA Assistant Workflow
+  registerWorkflow(
+    {
+      id: "dpa-assistant",
+      name: "DPA Assistant",
+      description: "DPA team assistant with intent-based routing for GitLab, chat, docs, and general conversation",
+      tags: ["dpa", "gitlab", "feishu", "assistant"],
+      supportsStreaming: false,
+      estimatedDurationSec: 5,
+    },
+    dpaAssistantWorkflow
   );
 
   registry.setInitialized();
