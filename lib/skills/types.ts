@@ -10,10 +10,9 @@
 /**
  * Skill execution type
  * - "workflow": Execute via Mastra workflow (deterministic, multi-step)
- * - "subagent": Delegate to specialist agent (non-deterministic)
  * - "skill": Inject instructions into manager (deprecated)
  */
-export type SkillExecutionType = "workflow" | "subagent" | "skill";
+export type SkillExecutionType = "workflow" | "skill";
 
 /**
  * Routing rule configuration for a skill
@@ -49,7 +48,6 @@ export interface SkillMetadata {
   workflowId?: string;
   
   /**
-   * Agent name for subagent routing (when type="subagent")
    */
   agentName?: string;
   

@@ -6,7 +6,7 @@
  * 
  * Supports three execution types:
  * - workflow: Execute via Mastra workflow (deterministic, multi-step)
- * - subagent: Delegate to specialist agent (non-deterministic)
+ * 
  * - skill: Inject instructions into manager (deprecated)
  * 
  * Performance: <1ms per routing decision (cached, pre-compiled patterns)
@@ -105,8 +105,8 @@ function getRoutingRules(skill: Skill): Record<string, RoutingRule> {
           const type = typeMatch[1].toLowerCase();
           if (type.includes('workflow')) {
             currentRule.type = 'workflow';
-          } else if (type.includes('subagent')) {
-            currentRule.type = 'subagent';
+          
+            
           } else {
             currentRule.type = 'skill';
           }
@@ -168,6 +168,7 @@ function compileRoutingRules(skill: Skill): CompiledRoutingRule[] {
   const categoryMap: Record<string, "okr" | "dpa_mom" | "pnl" | "alignment"> = {
     okr_reviewer: "okr",
     dpa_mom: "dpa_mom",
+    dpa_assistant: "dpa_mom",
     pnl_agent: "pnl",
     alignment_agent: "alignment",
   };

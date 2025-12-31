@@ -122,13 +122,11 @@ export interface SkillRoutingConfig {
   /** 
    * Routing type:
    * - "workflow": Execute via Mastra workflow (deterministic)
-   * - "subagent": Delegate to specialist agent (non-deterministic)
    * - "skill": Inject instructions into manager (deprecated)
    */
-  type: "workflow" | "subagent" | "skill";
+  type: "workflow" | "skill";
   /** Workflow ID to execute (required when type="workflow") */
   workflowId?: string;
-  /** Agent name (required when type="subagent") */
   agentName?: string;
 }
 

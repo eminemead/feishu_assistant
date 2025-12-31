@@ -1,15 +1,16 @@
 ---
 name: "Agent Routing"
 description: "Routes user queries to appropriate specialist agents or workflows based on query patterns"
-version: "2.0.0"
+version: "3.0.0"
 tags: ["routing", "classification", "orchestration", "workflow"]
 keywords: ["route", "classify", "agent", "specialist", "workflow"]
 routing_rules:
-  dpa_mom:
-    keywords: ["dpa", "data team", "ae", "da", "dpa_mom", "mom", "ma"]
+  dpa_assistant:
+    keywords: ["dpa", "data team", "ae", "da", "dpa_mom", "mom", "ma", "gitlab", "glab", "issue", "mr"]
     priority: 1
     enabled: true
-    type: "subagent"
+    type: "workflow"
+    workflowId: "dpa-assistant"
   pnl_agent:
     keywords: ["pnl", "profit", "loss", "损益", "利润", "亏损", "ebit"]
     priority: 2
@@ -34,19 +35,14 @@ Routes user queries to appropriate specialist agents or workflows based on keywo
 
 ## Execution Types
 
-### Workflow (Deterministic)
+### Workflow (Deterministic) ✅ Preferred
 Workflows execute multi-step pipelines with guaranteed step ordering:
-- Query DB → Generate Charts → Analyze → Format Response
-- Different models per step (fast for NLU, smart for analysis)
+- Intent classification → Branch → Execute → Format Response
+- Different models per step (fast for classification, smart for generation)
 - Full observability and traceability
+- Cost optimization through model selection
 
-### Subagent (Non-Deterministic)
-Subagents are specialist AI agents that decide tool order:
-- Good for conversational tasks
-- Context isolation from manager
-- Less predictable execution path
-
-### Skill (Deprecated)
+### Skill (Legacy)
 Skills inject instructions into manager agent:
 - Simple but limited
 - No access to specialized tools
@@ -54,11 +50,17 @@ Skills inject instructions into manager agent:
 
 ## Routing Rules
 
-### DPA Mom (Priority 1 - Highest)
-- **Keywords**: dpa, data team, ae, da, dpa_mom, mom, ma
+### DPA Assistant (Priority 1 - Highest)
+- **Keywords**: dpa, data team, ae, da, dpa_mom, mom, ma, gitlab, glab, issue, mr
 - **Status**: Active
-- **Type**: Subagent (context isolation)
-- **Agent**: `dpa_mom`
+- **Type**: Workflow (deterministic, intent-based)
+- **Workflow**: `dpa-assistant`
+- **Intents**:
+  - `gitlab_create`: Create GitLab issues
+  - `gitlab_list`: List/view GitLab issues/MRs
+  - `chat_search`: Search Feishu chat history
+  - `doc_read`: Read Feishu documents
+  - `general_chat`: Conversational AI
 
 ### P&L Agent (Priority 2)
 - **Keywords**: pnl, profit, loss, 损益, 利润, 亏损, ebit
@@ -92,14 +94,13 @@ Skills inject instructions into manager agent:
 4. **Selection**: Choose rule with highest score, fallback to "general" if no match
 5. **Execution**:
    - If type="workflow" and workflowId exists → Execute workflow
-   - If type="subagent" → Delegate to specialist agent
    - If type="skill" → Inject instructions into manager
    - Otherwise → General manager response
 
 ## Priority Order
 
 When multiple rules match, priority determines the winner:
-1. DPA Mom (priority 1) - Highest
+1. DPA Assistant (priority 1) - Highest
 2. P&L Agent (priority 2)
 3. Alignment Agent (priority 3)
 4. OKR Reviewer (priority 4) - Lowest
@@ -108,10 +109,12 @@ When multiple rules match, priority determines the winner:
 
 **Example 1**: DPA Query
 ```
-Query: "Show me DPA team issues"
-→ Matches: ["dpa", "team"]
-→ Score: 2/7 = 0.286
-→ Route: dpa_mom (subagent, confidence: 0.572)
+Query: "Create a GitLab issue for the login bug"
+→ Matches: ["gitlab", "issue"]
+→ Score: 2/12 = 0.167
+→ Route: dpa-assistant (workflow)
+→ Intent: gitlab_create
+→ Execution: glab issue create
 ```
 
 **Example 2**: P&L Query
@@ -122,7 +125,7 @@ Query: "What's the profit for Q4?"
 → Route: pnl_agent (skill, confidence: 0.5)
 ```
 
-**Example 3**: OKR Query (Now uses Workflow)
+**Example 3**: OKR Query (Workflow)
 ```
 Query: "分析10月OKR指标覆盖率"
 → Matches: ["okr", "覆盖率", "指标"]
@@ -135,23 +138,23 @@ Query: "分析10月OKR指标覆盖率"
    Step 4: formatResponse → Combine into report
 ```
 
-**Example 4**: Chart Request (OKR Workflow)
+**Example 4**: DPA Chat Query
 ```
-Query: "生成OKR图表"
-→ Matches: ["okr", "图表"]
-→ Score: 2/15 = 0.133
-→ Route: okr-analysis (workflow, guaranteed charts)
+Query: "DPA team help me find the chat about login"
+→ Matches: ["dpa", "team"]
+→ Route: dpa-assistant (workflow)
+→ Intent: chat_search
+→ Execution: Feishu chat history tool
 ```
 
 ## Best Practices
 
 - Prefer workflows for multi-step tasks requiring guaranteed output
-- Use subagents for conversational or exploratory tasks
 - Keep keywords specific to avoid false positives
 - Update keywords based on user feedback
 - Test routing decisions with real queries
 - Monitor routing confidence scores
-- Priority order ensures DPA Mom queries are handled first
+- Priority order ensures DPA queries are handled first
 
 ## Adding New Workflows
 
