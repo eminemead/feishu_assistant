@@ -1,5 +1,14 @@
 import { CoreMessage } from "ai";
-import { managerAgent } from "./agents/manager-agent-mastra";
+import { managerAgent, ManagerAgentResult } from "./agents/manager-agent-mastra";
+
+/**
+ * Response from generate response, may include confirmation data
+ */
+export interface GenerateResponseResult {
+  text: string;
+  needsConfirmation?: boolean;
+  confirmationData?: string;
+}
 
 /**
  * Generate response using the manager agent architecture
@@ -11,6 +20,7 @@ import { managerAgent } from "./agents/manager-agent-mastra";
  * @param chatId - Feishu chat ID for memory scoping
  * @param rootId - Feishu root message ID (thread identifier) for conversation context
  * @param userId - Feishu user ID (open_id/user_id) for authentication and RLS
+ * @returns Response text or structured result with confirmation data
  */
 export const generateResponse = async (
   messages: CoreMessage[],
@@ -18,6 +28,6 @@ export const generateResponse = async (
   chatId?: string,
   rootId?: string,
   userId?: string,
-) => {
+): Promise<string | GenerateResponseResult> => {
   return await managerAgent(messages, updateStatus, chatId, rootId, userId);
 };

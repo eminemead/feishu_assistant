@@ -65,6 +65,8 @@ export async function sendFollowupButtonsMessage(
       const isFirst = index === 0;
       // Include context in action_id so callback handler can extract it
       const actionId = `${contextPrefix}|${index}`;
+      // Use custom value if provided, otherwise fall back to text
+      const buttonValue = followup.value || followup.text;
       return {
         tag: "button",
         text: {
@@ -76,7 +78,7 @@ export async function sendFollowupButtonsMessage(
           {
             type: "callback",
             action_id: actionId,  // Context encoded in action_id
-            value: followup.text, // What gets sent when user clicks
+            value: buttonValue,   // What gets sent when user clicks
           },
         ],
       };

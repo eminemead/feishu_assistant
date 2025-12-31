@@ -18,6 +18,39 @@ import { generateFollowupQuestions, FollowupOption } from "./tools/generate-foll
 import { formatSuggestionsAsMarkdown } from "./format-suggestions";
 import { sendFollowupButtonsMessage } from "./send-follow-up-buttons-message";
 
+/**
+ * Send confirmation buttons (Confirm/Cancel) for actions that need user confirmation
+ * Used for destructive or important operations like issue creation
+ */
+async function sendConfirmationButtons(
+  conversationId: string,
+  confirmationData: string,
+  rootId: string,
+  threadId?: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    console.log(`🔘 [Confirmation] Sending confirmation buttons...`);
+    
+    // Use the same button format as follow-up buttons
+    // The confirmation callback handler will recognize the __gitlab_confirm__ prefix
+    const confirmationButtons: FollowupOption[] = [
+      { text: "✅ 确认创建 / Confirm", value: `__gitlab_confirm__:${confirmationData}` },
+      { text: "❌ 取消 / Cancel", value: "__gitlab_cancel__" },
+    ];
+    
+    // Use the existing sendFollowupButtonsMessage function
+    return await sendFollowupButtonsMessage(
+      conversationId,
+      confirmationButtons,
+      rootId,
+      threadId
+    );
+  } catch (error: any) {
+    console.error(`❌ [Confirmation] Error sending buttons:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
 export interface FinalizeCardConfig {
   /**
    * Feishu conversation ID (required for sending button message)
@@ -41,6 +74,12 @@ export interface FinalizeCardConfig {
    * Default: true
    */
   sendButtonsAsSeperateMessage?: boolean;
+  
+  /**
+   * If set, send confirmation buttons (Confirm/Cancel) instead of follow-ups
+   * The value is JSON-encoded data to be passed to the confirmation callback
+   */
+  confirmationData?: string;
 }
 
 /**
@@ -69,6 +108,30 @@ export async function finalizeCardWithFollowups(
 }> {
   try {
     console.log(`🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=${cardId}, contentLength=${finalContent?.length || 0}`);
+
+    // Check if this is a confirmation flow (e.g., GitLab issue creation)
+    if (config?.confirmationData && config?.conversationId && config?.rootId) {
+      console.log(`🔘 [CardSuggestions] Sending confirmation buttons...`);
+      
+      // Disable streaming mode first
+      await finalizeCardSettings(cardId, finalContent, feishuClient);
+      
+      // Send confirmation buttons
+      const confirmationResult = await sendConfirmationButtons(
+        config.conversationId,
+        config.confirmationData,
+        config.rootId,
+        config.threadId
+      );
+      
+      if (confirmationResult.success) {
+        console.log(`✅ [CardSuggestions] Confirmation buttons sent: ${confirmationResult.messageId}`);
+      } else {
+        console.log(`⚠️ [CardSuggestions] Failed to send confirmation buttons: ${confirmationResult.error}`);
+      }
+      
+      return { buttonMessageId: confirmationResult.messageId };
+    }
 
     // Step 1: Generate follow-up questions (while streaming is still active)
     console.log(`🎯 [CardSuggestions] Generating follow-up suggestions...`);

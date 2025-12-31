@@ -51,6 +51,10 @@ export interface WorkflowExecutionResult {
     content: string;
     title?: string;
   }>;
+  /** Whether confirmation buttons should be shown */
+  needsConfirmation?: boolean;
+  /** JSON data for confirmation button (passed to callback) */
+  confirmationData?: string;
 }
 
 /**
@@ -120,6 +124,8 @@ export async function executeSkillWorkflow(
     // Extract response from result
     let response: string;
     let artifacts: Array<{ type: string; content: string; title?: string }> | undefined;
+    let needsConfirmation: boolean | undefined;
+    let confirmationData: string | undefined;
     
     if (typeof result === "string") {
       response = result;
@@ -140,6 +146,13 @@ export async function executeSkillWorkflow(
       if ("artifacts" in resultObj && Array.isArray(resultObj.artifacts)) {
         artifacts = resultObj.artifacts;
       }
+      
+      // Extract confirmation data if present
+      if ("needsConfirmation" in resultObj && resultObj.needsConfirmation) {
+        needsConfirmation = true;
+        confirmationData = resultObj.confirmationData as string | undefined;
+        console.log(`[Workflow] Workflow requires confirmation`);
+      }
     } else {
       response = String(result);
     }
@@ -158,6 +171,8 @@ export async function executeSkillWorkflow(
       durationMs,
       workflowId,
       artifacts,
+      needsConfirmation,
+      confirmationData,
     };
   } catch (error) {
     const durationMs = Date.now() - startTime;

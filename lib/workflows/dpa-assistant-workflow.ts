@@ -138,18 +138,76 @@ const executeGitLabCreateStep = createStep({
   outputSchema: z.object({
     result: z.string(),
     intent: IntentEnum,
+    // Confirmation flow data
+    needsConfirmation: z.boolean().optional(),
+    confirmationData: z.string().optional(), // JSON-encoded issue data for confirm button
   }),
   execute: async ({ inputData }) => {
     const { query } = inputData;
     
     console.log(`[DPA Workflow] Executing GitLab create`);
     
+    // Check if this is a confirmation callback (from button click)
+    const CONFIRM_PREFIX = "__gitlab_confirm__:";
+    const CANCEL_PREFIX = "__gitlab_cancel__";
+    
+    if (query.startsWith(CONFIRM_PREFIX)) {
+      // User confirmed - execute the issue creation
+      console.log(`[DPA Workflow] Confirmation received, creating issue...`);
+      try {
+        const issueData = JSON.parse(query.slice(CONFIRM_PREFIX.length));
+        const { title, description, project, glabCommand } = issueData;
+        
+        const result = await gitlabTool.execute({ command: glabCommand });
+        
+        if (result.success) {
+          return {
+            result: `✅ **Issue Created!**\n\n**Title**: ${title}\n**Project**: ${project}\n\n${result.output || "Issue created successfully."}`,
+            intent: "gitlab_create" as const,
+          };
+        } else {
+          return {
+            result: `❌ Failed to create issue\n\nError: ${result.error}`,
+            intent: "gitlab_create" as const,
+          };
+        }
+      } catch (error: any) {
+        return {
+          result: `❌ Error: ${error.message}`,
+          intent: "gitlab_create" as const,
+        };
+      }
+    }
+    
+    if (query.startsWith(CANCEL_PREFIX)) {
+      return {
+        result: `🚫 Issue creation cancelled.`,
+        intent: "gitlab_create" as const,
+      };
+    }
+    
     // Use LLM to parse the issue creation request
+    // Calculate dates for due date parsing
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const daysUntilNextWednesday = (3 - dayOfWeek + 7) % 7 || 7;
+    const nextWednesday = new Date(today);
+    nextWednesday.setDate(today.getDate() + daysUntilNextWednesday);
+    const nextWedStr = nextWednesday.toISOString().split('T')[0];
+    
     const parsePrompt = `Parse this GitLab issue creation request and extract:
-- title: Issue title
-- description: Issue description
-- project: Project name (default: dpa/dagster if not specified)
-- labels: Comma-separated labels (optional)
+- title: Issue title (required)
+- description: Issue description (expand on the title with context)
+- project: GitLab project path. Look for explicit mentions like "in dpa/xxx", "项目 xxx". 
+  Common DPA projects: dpa/dagster (data pipelines), dpa/analytics (analysis/reports), dpa/dbt (data models).
+  If not specified, infer from context or default to "dpa/dagster".
+- priority: Priority level 1-4 (1=critical, 2=high, 3=medium, 4=low). Look for "priority X", "P1", "urgent", "critical", etc.
+- due_date: Due date in YYYY-MM-DD format. Parse "ddl", "deadline", "due", "next wednesday" (=${nextWedStr}), "tomorrow", etc.
+- labels: Extract tags/labels from the request. Look for:
+  * Explicit: "tag:", "label:", "#tag"
+  * Topics: product names (ONVO, ES8, ET7), teams, features
+  * Categories: bug, feature, task, analysis, data-quality
+  * Domains: CAC, LTV, funnel, conversion, retention
 
 Request: "${query}"
 
@@ -157,7 +215,9 @@ Respond in this exact format:
 TITLE: <title>
 DESCRIPTION: <description>
 PROJECT: <project>
-LABELS: <labels or "none">`;
+PRIORITY: <1-4 or "none">
+DUE_DATE: <YYYY-MM-DD or "none">
+LABELS: <comma-separated labels or "none">`;
 
     const { text } = await generateText({
       model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
@@ -169,40 +229,75 @@ LABELS: <labels or "none">`;
     const titleMatch = text.match(/TITLE:\s*(.+)/i);
     const descMatch = text.match(/DESCRIPTION:\s*(.+)/i);
     const projectMatch = text.match(/PROJECT:\s*(.+)/i);
+    const priorityMatch = text.match(/PRIORITY:\s*(.+)/i);
+    const dueDateMatch = text.match(/DUE_DATE:\s*(.+)/i);
     const labelsMatch = text.match(/LABELS:\s*(.+)/i);
     
     const title = titleMatch?.[1]?.trim() || "New Issue";
     const description = descMatch?.[1]?.trim() || query;
     const project = projectMatch?.[1]?.trim() || "dpa/dagster";
+    
+    // Parse priority (1-4)
+    const priorityRaw = priorityMatch?.[1]?.trim();
+    const priority = priorityRaw && /^[1-4]$/.test(priorityRaw) ? priorityRaw : undefined;
+    
+    // Parse due date (YYYY-MM-DD format)
+    const dueDateRaw = dueDateMatch?.[1]?.trim();
+    const dueDate = dueDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dueDateRaw) ? dueDateRaw : undefined;
+    
+    // Parse labels
     const labelsRaw = labelsMatch?.[1]?.trim();
     const labels = labelsRaw && labelsRaw.toLowerCase() !== "none" ? labelsRaw : undefined;
     
-    // Build glab command
-    let glabCommand = `issue create -R ${project} -t "${title}" -d "${description}"`;
+    // Build labels array (include priority as label)
+    const allLabels: string[] = [];
+    if (priority) {
+      allLabels.push(`priority::${priority}`);
+    }
     if (labels) {
-      glabCommand += ` -l ${labels}`;
+      allLabels.push(...labels.split(',').map(l => l.trim()).filter(Boolean));
     }
     
-    try {
-      const result = await gitlabTool.execute({ command: glabCommand });
-      
-      if (result.success) {
-        return {
-          result: `✅ GitLab Issue Created\n\n**Title**: ${title}\n**Project**: ${project}\n\n${result.output || "Issue created successfully."}`,
-          intent: "gitlab_create" as const,
-        };
-      } else {
-        return {
-          result: `❌ Failed to create issue\n\nError: ${result.error}`,
-          intent: "gitlab_create" as const,
-        };
-      }
-    } catch (error: any) {
-      return {
-        result: `❌ GitLab Error: ${error.message}`,
-        intent: "gitlab_create" as const,
-      };
+    // Build glab command
+    let glabCommand = `issue create -R ${project} -t "${title}" -d "${description}"`;
+    if (allLabels.length > 0) {
+      glabCommand += ` -l "${allLabels.join(',')}"`;
     }
+    if (dueDate) {
+      glabCommand += ` --due-date ${dueDate}`;
+    }
+    
+    // Build preview instead of executing immediately
+    let preview = `📋 **Issue Preview**\n\n**Title**: ${title}\n**Project**: ${project}`;
+    if (priority) {
+      preview += `\n**Priority**: P${priority}`;
+    }
+    if (dueDate) {
+      preview += `\n**Due Date**: ${dueDate}`;
+    }
+    if (allLabels.length > 0) {
+      preview += `\n**Labels**: ${allLabels.join(', ')}`;
+    }
+    preview += `\n\n**Description**:\n${description}`;
+    preview += `\n\n---\n*Click ✅ Confirm to create this issue, or ❌ Cancel to abort.*`;
+    
+    // Encode issue data for confirmation button
+    const confirmationData = JSON.stringify({
+      title,
+      description,
+      project,
+      priority,
+      dueDate,
+      labels: allLabels,
+      glabCommand,
+    });
+    
+    return {
+      result: preview,
+      intent: "gitlab_create" as const,
+      needsConfirmation: true,
+      confirmationData,
+    };
   }
 });
 
@@ -478,20 +573,26 @@ const formatResponseStep = createStep({
   inputSchema: z.object({
     result: z.string(),
     intent: IntentEnum,
+    needsConfirmation: z.boolean().optional(),
+    confirmationData: z.string().optional(),
   }),
   outputSchema: z.object({
     response: z.string(),
     intent: z.string(),
+    needsConfirmation: z.boolean().optional(),
+    confirmationData: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
-    const { result, intent } = inputData;
+    const { result, intent, needsConfirmation, confirmationData } = inputData;
     
-    console.log(`[DPA Workflow] Formatting response for intent: ${intent}`);
+    console.log(`[DPA Workflow] Formatting response for intent: ${intent}, needsConfirmation: ${needsConfirmation}`);
     
     // Response is already formatted by execution steps
     return {
       response: result,
       intent,
+      needsConfirmation,
+      confirmationData,
     };
   }
 });
@@ -512,6 +613,8 @@ export const dpaAssistantWorkflow = createWorkflow({
   outputSchema: z.object({
     response: z.string().describe("Formatted response"),
     intent: z.string().describe("Classified intent"),
+    needsConfirmation: z.boolean().optional().describe("Whether confirmation buttons should be shown"),
+    confirmationData: z.string().optional().describe("JSON data for confirmation button"),
   }),
 })
   .then(classifyIntentStep)
@@ -541,13 +644,23 @@ export const dpaAssistantWorkflow = createWorkflow({
   .commit();
 
 /**
+ * Workflow result with optional confirmation data
+ */
+export interface DpaWorkflowResult {
+  response: string;
+  intent: string;
+  needsConfirmation?: boolean;
+  confirmationData?: string;
+}
+
+/**
  * Convenience function to run the workflow
  */
 export async function runDpaAssistantWorkflow(
   query: string,
   chatId?: string,
   userId?: string
-): Promise<{ response: string; intent: string }> {
+): Promise<DpaWorkflowResult> {
   const result = await dpaAssistantWorkflow.run({
     query,
     chatId,
@@ -559,6 +672,8 @@ export async function runDpaAssistantWorkflow(
   return {
     response: output?.response || "No response generated",
     intent: output?.intent || "unknown",
+    needsConfirmation: output?.needsConfirmation,
+    confirmationData: output?.confirmationData,
   };
 }
 

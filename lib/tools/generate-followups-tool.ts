@@ -102,11 +102,13 @@ Return exactly ${maxOptions} follow-ups as JSON array.`,
  */
 export interface FollowupOption {
   text: string;
-  type: "question" | "recommendation" | "action";
+  type?: "question" | "recommendation" | "action";
   rationale?: string;
   id?: string;
   emoji?: string;
   category?: string;
+  /** Optional custom value for button callback (defaults to text) */
+  value?: string;
 }
 
 /**

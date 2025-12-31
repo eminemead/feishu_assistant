@@ -165,13 +165,23 @@ function getQueryText(messages: CoreMessage[]): string {
  * - Manual routing detection (same as before)
  * - Streaming with batch updates for Feishu cards
  */
+
+/**
+ * Manager agent result - can be string or structured with confirmation data
+ */
+export interface ManagerAgentResult {
+  text: string;
+  needsConfirmation?: boolean;
+  confirmationData?: string;
+}
+
 export async function managerAgent(
   messages: CoreMessage[],
   updateStatus?: (status: string) => void,
   chatId?: string,
   rootId?: string,
   userId?: string,
-): Promise<string> {
+): Promise<string | ManagerAgentResult> {
   // Lazy initialize agent and skill registry
   initializeAgent();
   await initializeSkillRegistry();
@@ -317,6 +327,17 @@ export async function managerAgent(
       }
 
       console.log(`[Workflow] ${routingDecision.workflowId} complete (length=${result.response.length}, durationMs=${result.durationMs})`);
+      
+      // Return structured result if confirmation is needed
+      if (result.needsConfirmation && result.confirmationData) {
+        console.log(`[Workflow] Returning confirmation request`);
+        return {
+          text: result.response,
+          needsConfirmation: true,
+          confirmationData: result.confirmationData,
+        };
+      }
+      
       return result.response;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
