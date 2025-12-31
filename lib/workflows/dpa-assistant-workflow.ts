@@ -102,22 +102,29 @@ Query: "${query}"
 Respond with ONLY the intent name (one of: gitlab_create, gitlab_list, chat_search, doc_read, general_chat).
 Do not include any other text.`;
 
-    const { text } = await generateText({
-      model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
-      prompt: classificationPrompt,
-      temperature: 0,
-    });
-    
-    // Parse intent from response
-    const intentRaw = text.trim().toLowerCase().replace(/[^a-z_]/g, "");
     let intent: Intent = "general_chat";
     
-    if (intentRaw === "gitlab_create") intent = "gitlab_create";
-    else if (intentRaw === "gitlab_list") intent = "gitlab_list";
-    else if (intentRaw === "chat_search") intent = "chat_search";
-    else if (intentRaw === "doc_read") intent = "doc_read";
-    
-    console.log(`[DPA Workflow] Classified intent: ${intent}`);
+    try {
+      const { text } = await generateText({
+        model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
+        prompt: classificationPrompt,
+        temperature: 0,
+      });
+      
+      // Parse intent from response
+      const intentRaw = text.trim().toLowerCase().replace(/[^a-z_]/g, "");
+      
+      if (intentRaw === "gitlab_create") intent = "gitlab_create";
+      else if (intentRaw === "gitlab_list") intent = "gitlab_list";
+      else if (intentRaw === "chat_search") intent = "chat_search";
+      else if (intentRaw === "doc_read") intent = "doc_read";
+      
+      console.log(`[DPA Workflow] Classified intent: ${intent}`);
+    } catch (error: any) {
+      // If LLM fails, fallback to general_chat which handles conversation gracefully
+      console.error(`[DPA Workflow] Intent classification failed: ${error.message}. Falling back to general_chat.`);
+      intent = "general_chat";
+    }
     
     // Extract params based on intent
     const params: Record<string, string> = {};
