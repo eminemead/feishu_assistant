@@ -555,7 +555,7 @@ export async function runDpaAssistantWorkflow(
   });
   
   // Extract response from workflow result
-  const output = result.results as any;
+  const output = result as any;
   return {
     response: output?.response || "No response generated",
     intent: output?.intent || "unknown",
