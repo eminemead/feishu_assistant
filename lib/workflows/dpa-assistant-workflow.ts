@@ -73,6 +73,22 @@ const classifyIntentStep = createStep({
     
     console.log(`[DPA Workflow] Classifying intent for: "${query.substring(0, 50)}..."`);
     
+    // EARLY RETURN: Route confirmation callbacks directly without LLM classification
+    // These prefixes are used by the human-in-the-loop confirmation flow
+    const CONFIRM_PREFIX = "__gitlab_confirm__:";
+    const CANCEL_PREFIX = "__gitlab_cancel__";
+    
+    if (query.startsWith(CONFIRM_PREFIX) || query.startsWith(CANCEL_PREFIX)) {
+      console.log(`[DPA Workflow] Detected confirmation callback, routing to gitlab_create`);
+      return {
+        intent: "gitlab_create" as Intent,
+        params: undefined,
+        query,
+        chatId,
+        userId,
+      };
+    }
+    
     const classificationPrompt = `You are an intent classifier. Classify the user query into ONE of these intents:
 
 - gitlab_create: User wants to CREATE a new GitLab issue (e.g., "create issue", "new bug", "报个bug", "创建issue")
