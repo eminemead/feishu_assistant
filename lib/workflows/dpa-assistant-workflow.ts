@@ -29,6 +29,7 @@ import {
   createFeishuDocsTool 
 } from "../tools";
 import { readAndSummarizeDocs, getAuthPromptIfNeeded } from "../tools/feishu-docs-user-tool";
+import { feishuIdToEmpAccount } from "../auth/feishu-account-mapping";
 import { Agent } from "@mastra/core/agent";
 
 // Free model instances - ONLY these models are used
@@ -180,13 +181,18 @@ const executeGitLabCreateStep = createStep({
       console.log(`[DPA Workflow] Confirmation received, creating issue...`);
       try {
         const issueData = JSON.parse(query.slice(CONFIRM_PREFIX.length));
-        const { title, description, project, glabCommand } = issueData;
+        const { title, project, assignee, glabCommand } = issueData;
         
         const result = await gitlabTool.execute({ command: glabCommand });
         
         if (result.success) {
+          let successMsg = `✅ **Issue Created!**\n\n**Title**: ${title}\n**Project**: ${project}`;
+          if (assignee) {
+            successMsg += `\n**Assigned to**: @${assignee}`;
+          }
+          successMsg += `\n\n${result.output || "Issue created successfully."}`;
           return {
-            result: `✅ **Issue Created!**\n\n**Title**: ${title}\n**Project**: ${project}\n\n${result.output || "Issue created successfully."}`,
+            result: successMsg,
             intent: "gitlab_create" as const,
           };
         } else {
@@ -317,8 +323,21 @@ LABELS: <comma-separated labels or "none">`;
       allLabels.push(...labels.split(',').map(l => l.trim()).filter(Boolean));
     }
     
-    // Build glab command
-    let glabCommand = `issue create -R ${project} -t "${title}" -d "${description}"`;
+    // Map Feishu user to GitLab username for attribution
+    const gitlabUsername = userId ? feishuIdToEmpAccount(userId) : null;
+    const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    
+    // Append requester attribution to description
+    const requesterInfo = gitlabUsername 
+      ? `\n\n---\n📋 *Created via Feishu Bot*\n**Requester**: @${gitlabUsername}\n**Created at**: ${createdAt}`
+      : `\n\n---\n📋 *Created via Feishu Bot*\n**Created at**: ${createdAt}`;
+    const enrichedDescription = description + requesterInfo;
+    
+    // Build glab command with assignee (if we can map the user)
+    let glabCommand = `issue create -R ${project} -t "${title}" -d "${enrichedDescription}"`;
+    if (gitlabUsername) {
+      glabCommand += ` -a "${gitlabUsername}"`; // Auto-assign to requester
+    }
     if (allLabels.length > 0) {
       glabCommand += ` -l "${allLabels.join(',')}"`;
     }
@@ -328,6 +347,9 @@ LABELS: <comma-separated labels or "none">`;
     
     // Build preview instead of executing immediately
     let preview = `📋 **Issue Preview**\n\n**Title**: ${title}\n**Project**: ${project}`;
+    if (gitlabUsername) {
+      preview += `\n**Assignee**: @${gitlabUsername}`;
+    }
     if (priority) {
       preview += `\n**Priority**: P${priority}`;
     }
@@ -343,11 +365,12 @@ LABELS: <comma-separated labels or "none">`;
     // Encode issue data for confirmation button
     const confirmationData = JSON.stringify({
       title,
-      description,
+      description: enrichedDescription, // Include attribution in stored description
       project,
       priority,
       dueDate,
       labels: allLabels,
+      assignee: gitlabUsername,
       glabCommand,
     });
     
