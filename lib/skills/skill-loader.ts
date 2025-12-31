@@ -67,6 +67,9 @@ export async function loadSkill(skillPath: string): Promise<Skill> {
       author: parsed.author,
       dependencies: parsed.dependencies,
       tools: parsed.tools,
+      // Workflow support
+      type: parsed.type,  // "workflow" | "skill" | undefined
+      workflowId: parsed.workflowId,  // ID of workflow to execute
     };
     
     // Validate required fields

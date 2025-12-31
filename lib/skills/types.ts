@@ -42,6 +42,13 @@ export interface SkillMetadata {
   tools?: string[];
   
   /**
+   * Skill execution type
+   * - "workflow": Execute via Mastra workflow (deterministic)
+   * - "skill": Inject instructions into manager (legacy)
+   */
+  type?: SkillExecutionType;
+  
+  /**
    * Workflow ID to execute (when type="workflow")
    * Must match a registered workflow in lib/workflows/
    */
