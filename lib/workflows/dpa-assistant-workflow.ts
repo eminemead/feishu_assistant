@@ -12,18 +12,26 @@
  * - chat_search: Search Feishu chat history
  * - doc_read: Read Feishu documents
  * - general_chat: Conversational AI (preserves agent behavior)
+ * 
+ * MODELS: Uses OpenRouter free models ONLY:
+ * - nvidia/nemotron-3-nano-30b-a3b:free (primary)
+ * - kwaipilot/kat-coder-pro:free (alternative)
  */
 
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import { generateText } from "ai";
-import { getMastraModel } from "../shared/model-router";
+import { openrouter } from "../shared/config";
+import { FREE_MODELS } from "../shared/model-fallback";
 import { 
   createGitLabCliTool, 
   createFeishuChatHistoryTool, 
   createFeishuDocsTool 
 } from "../tools";
 import { Agent } from "@mastra/core/agent";
+
+// Free model instances - ONLY these models are used
+const freeModel = openrouter(FREE_MODELS[0]); // nvidia/nemotron-3-nano-30b-a3b:free
 
 // Intent types
 const IntentEnum = z.enum([
@@ -79,7 +87,7 @@ Respond with ONLY the intent name (one of: gitlab_create, gitlab_list, chat_sear
 Do not include any other text.`;
 
     const { text } = await generateText({
-      model: getMastraModel(false), // Fast model, no tools needed
+      model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
       prompt: classificationPrompt,
       temperature: 0,
     });
@@ -152,7 +160,7 @@ PROJECT: <project>
 LABELS: <labels or "none">`;
 
     const { text } = await generateText({
-      model: getMastraModel(false),
+      model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
       prompt: parsePrompt,
       temperature: 0,
     });
@@ -424,6 +432,7 @@ const executeGeneralChatStep = createStep({
     console.log(`[DPA Workflow] Executing general chat`);
     
     // Create inline agent for conversational response
+    // Uses free model: nvidia/nemotron-3-nano-30b-a3b:free
     const dpaMomAgent = new Agent({
       name: "dpa_mom_chat",
       instructions: `You are dpa_mom, the loving chief-of-staff for the DPA (Data Product & Analytics) team.
@@ -440,7 +449,7 @@ GUIDELINES:
 - Be helpful, concise, and friendly
 - Format responses in Markdown
 - Do not tag users (@)`,
-      model: getMastraModel(true), // Smart model for quality responses
+      model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free (OpenRouter free tier)
     });
     
     try {
