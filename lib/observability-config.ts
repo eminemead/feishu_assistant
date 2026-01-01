@@ -79,6 +79,9 @@ export const mastra = new Mastra({
   agents: registeredAgents,
   workflows: registeredWorkflows,
   observability,
+  server: {
+    port: Number(process.env.PORT) || 3000,
+  },
 });
 
 // Initialize workflow registry for skill-based routing

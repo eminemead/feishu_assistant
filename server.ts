@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { HonoServerAdapter, HonoBindings, HonoVariables } from "@mastra/hono";
+import { MastraServer, HonoBindings, HonoVariables } from "@mastra/hono";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { handleNewAppMention } from "./lib/handle-app-mention";
 import { handleNewMessage } from "./lib/handle-messages";
@@ -1011,10 +1011,13 @@ async function startServer() {
     // Continue - memory is optional, agent can work without it
   });
   
-  // Step 0c: Initialize Mastra Server Adapter (exposes agents/workflows as HTTP endpoints)
-  console.log("📋 [Startup] Step 0c: Initializing Mastra Server Adapter...");
-  const mastraAdapter = new HonoServerAdapter({
+  // Step 0c: Initialize Mastra Server (exposes agents/workflows/tools as HTTP endpoints + Studio)
+  console.log("📋 [Startup] Step 0c: Initializing Mastra Server...");
+  const mastraServer = new MastraServer({
+    app,
     mastra,
+    prefix: "/mastra",
+    openapiPath: "/openapi.json",
   });
   
   // Step 1: Initialize WebSocket for Subscription Mode
@@ -1076,11 +1079,9 @@ async function startServer() {
   // Step 1.5: Initialize Mastra Server routes (must be done before HTTP server starts)
   console.log("📋 [Startup] Step 1.5: Initializing Mastra Server routes...");
   try {
-    // Register context middleware and routes
-    mastraAdapter.registerContextMiddleware(app);
-    await mastraAdapter.registerRoutes(app, { prefix: "/api" });
+    await mastraServer.init();
     console.log("✅ [Startup] Step 1.5: Mastra Server routes initialized");
-    console.log("   Available at: /api/agents/*, /api/workflows/*, etc.");
+    console.log("   Available at: /mastra/api/agents, /mastra/api/workflows, etc.");
   } catch (error) {
     console.warn("⚠️ [Startup] Step 1.5: Mastra Server initialization warning:", error);
     // Continue - Mastra is optional, custom endpoints still work
@@ -1106,6 +1107,9 @@ async function startServer() {
   console.log(`✅ [Startup] Step 2: HTTP server started on port ${port}`);
   console.log(`✨ [Startup] Server is ready to accept requests in ${elapsedMs}ms`);
   console.log(`📊 [Startup] Health check: curl http://localhost:${port}/health`);
+  console.log(`📡 [Startup] Mastra API: http://localhost:${port}/mastra/api/agents`);
+  console.log(`📖 [Startup] OpenAPI spec: http://localhost:${port}/mastra/openapi.json`);
+  console.log(`🎨 [Startup] Arize Phoenix (observability): http://localhost:6006`);
 }
 
 // Start the server

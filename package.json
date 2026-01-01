@@ -37,13 +37,13 @@
     "@hono/node-server": "^1.12.0",
     "@larksuiteoapi/lark-mcp": "^0.5.1",
     "@larksuiteoapi/node-sdk": "^1.44.0",
-    "@mastra/arize": "^1.0.0-beta.5",
-    "@mastra/core": "^1.0.0-beta.14",
-    "@mastra/hono": "^0.0.0-trace-timeline-update-20251121092347",
-    "@mastra/memory": "^1.0.0-beta.4",
-    "@mastra/observability": "^1.0.0-beta.4",
-    "@mastra/pg": "^1.0.0-beta.5",
-    "@mastra/rag": "^2.0.0-beta.3",
+    "@mastra/arize": "^1.0.0-beta.10",
+    "@mastra/core": "^1.0.0-beta.19",
+    "@mastra/hono": "^0.1.0-beta.14",
+    "@mastra/memory": "^1.0.0-beta.10",
+    "@mastra/observability": "^1.0.0-beta.9",
+    "@mastra/pg": "^1.0.0-beta.11",
+    "@mastra/rag": "^2.0.0-beta.4",
     "@observablehq/plot": "^0.6.17",
     "@openrouter/ai-sdk-provider": "^1.2.3",
     "@supabase/supabase-js": "^2.81.1",
@@ -69,6 +69,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.17",
     "esbuild": "^0.20.2",
+    "mastra": "^1.0.0-beta.12",
     "typescript": "^5.3.3"
   }
 }
