@@ -18,6 +18,8 @@ import { getObservabilityStatus, mastra } from "./lib/observability-config";
 // Import observability config to ensure it's initialized
 import "./lib/observability-config";
 import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
+import { handleDagsterWebhook } from "./lib/handlers/dagster-webhook-handler";
+import { handleTaskUpdatedEvent, TaskUpdatedEvent } from "./lib/handlers/feishu-task-webhook-handler";
 import {
   NotificationRequestSchema,
   NotificationApiResponseSchema,
@@ -240,6 +242,34 @@ eventDispatcher.register({
       }
     },
   } as any);
+
+// Handle Feishu task status changes (for GitLab-Feishu task sync)
+eventDispatcher.register({
+  "task.task.updated_v1": async (data: any) => {
+    try {
+      console.log("📋 [WebSocket] Task update event received");
+      const taskGuid = data?.object?.guid || data?.task_guid;
+      const eventKey = data?.event_key || data?.action;
+      
+      if (!taskGuid) {
+        console.warn("⚠️ [WebSocket] Task event missing task_guid");
+        return;
+      }
+      
+      // Build event structure expected by handler
+      const event = {
+        schema: "2.0",
+        header: { event_type: "task.task.updated_v1" },
+        event: { task_guid: taskGuid, event_key: eventKey, obj_type: 1 },
+      };
+      
+      const result = await handleTaskUpdatedEvent(event);
+      console.log(`📋 [WebSocket] Task sync result: ${result.message}`);
+    } catch (error) {
+      console.error("❌ [WebSocket] Error handling task update:", error);
+    }
+  },
+} as any);
 
 eventDispatcher.register({
   "im.message.receive_v1": async (data) => {
@@ -784,6 +814,56 @@ app.post("/webhook/docs/change", async (c) => {
     return c.json({ ok: true }, result.status);
   } catch (error) {
     console.error("❌ [DocWebhook] Error processing webhook:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+// Feishu Task webhook endpoint
+// Receives task.task.updated_v1 events to sync task status to GitLab issues
+// Configure this URL in Feishu admin: Event Subscriptions → task.task.updated_v1
+app.post("/webhook/task", async (c) => {
+  try {
+    const rawBody = await c.req.text();
+
+    // Handle URL verification challenge
+    try {
+      const payload = JSON.parse(rawBody);
+      if (payload.type === "url_verification") {
+        return c.json({ challenge: payload.challenge });
+      }
+      
+      // Handle task update event
+      if (payload.header?.event_type === "task.task.updated_v1") {
+        const result = await handleTaskUpdatedEvent(payload as TaskUpdatedEvent);
+        return c.json(result, result.success ? 200 : 500);
+      }
+    } catch (e) {
+      console.error("❌ [TaskWebhook] Error parsing payload:", e);
+    }
+
+    return c.json({ success: true }, 200);
+  } catch (error) {
+    console.error("❌ [TaskWebhook] Error processing webhook:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+// Dagster pipeline webhook endpoint
+// Receives notifications from Dagster sensors on asset materialization, job completion, etc.
+// Security: Validates X-Dagster-Secret header against DAGSTER_WEBHOOK_SECRET env var
+app.post("/webhook/dagster", async (c) => {
+  try {
+    const rawBody = await c.req.text();
+
+    const webRequest = new Request(c.req.url, {
+      method: c.req.method,
+      headers: c.req.raw.headers,
+    });
+
+    const result = await handleDagsterWebhook(webRequest, rawBody);
+    return c.json(result.body, result.status);
+  } catch (error) {
+    console.error("❌ [DagsterWebhook] Error processing webhook:", error);
     return c.json({ error: "Internal server error" }, 500);
   }
 });

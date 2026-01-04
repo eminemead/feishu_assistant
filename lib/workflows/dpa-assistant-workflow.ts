@@ -31,6 +31,8 @@ import {
 import { readAndSummarizeDocs, getAuthPromptIfNeeded } from "../tools/feishu-docs-user-tool";
 import { feishuIdToEmpAccount } from "../auth/feishu-account-mapping";
 import { Agent } from "@mastra/core/agent";
+import { createFeishuTask } from "../services/feishu-task-service";
+import { getFeishuOpenId } from "../services/user-mapping-service";
 
 // Free model instances - ONLY these models are used
 const freeModel = openrouter(FREE_MODELS[0]); // nvidia/nemotron-3-nano-30b-a3b:free
@@ -181,7 +183,7 @@ const executeGitLabCreateStep = createStep({
       console.log(`[DPA Workflow] Confirmation received, creating issue...`);
       try {
         const issueData = JSON.parse(query.slice(CONFIRM_PREFIX.length));
-        const { title, project, assignee, glabCommand } = issueData;
+        const { title, description, project, assignee, dueDate, glabCommand } = issueData;
         
         const result = await gitlabTool.execute({ command: glabCommand });
         
@@ -191,6 +193,46 @@ const executeGitLabCreateStep = createStep({
             successMsg += `\n**Assigned to**: @${assignee}`;
           }
           successMsg += `\n\n${result.output || "Issue created successfully."}`;
+          
+          // Extract issue IID and URL from glab output
+          // glab outputs: "Creating issue in ... \n #123 Title \n https://git.nevint.com/..."
+          const issueIidMatch = result.output?.match(/#(\d+)/);
+          const issueUrlMatch = result.output?.match(/(https?:\/\/[^\s]+)/);
+          const issueIid = issueIidMatch ? parseInt(issueIidMatch[1], 10) : null;
+          const issueUrl = issueUrlMatch ? issueUrlMatch[1] : null;
+          
+          // Create corresponding Feishu task for the assignee
+          if (assignee && issueIid) {
+            try {
+              const assigneeOpenId = await getFeishuOpenId(assignee);
+              if (assigneeOpenId) {
+                const taskResult = await createFeishuTask({
+                  summary: `[GitLab] ${title}`,
+                  description: description || undefined,
+                  dueDate: dueDate || undefined,
+                  assigneeOpenIds: [assigneeOpenId],
+                  gitlabProject: project,
+                  gitlabIssueIid: issueIid,
+                  gitlabIssueUrl: issueUrl || undefined,
+                });
+                
+                if (taskResult.success) {
+                  successMsg += `\n\n📋 **Feishu Task Created** for @${assignee}`;
+                  if (taskResult.taskUrl) {
+                    successMsg += `\n[View Task](${taskResult.taskUrl})`;
+                  }
+                  console.log(`[DPA Workflow] Feishu task created: ${taskResult.taskGuid}`);
+                } else {
+                  console.warn(`[DPA Workflow] Failed to create Feishu task: ${taskResult.error}`);
+                }
+              } else {
+                console.warn(`[DPA Workflow] No Feishu open_id found for GitLab user: ${assignee}`);
+              }
+            } catch (taskError: any) {
+              console.error(`[DPA Workflow] Error creating Feishu task: ${taskError.message}`);
+            }
+          }
+          
           return {
             result: successMsg,
             intent: "gitlab_create" as const,
