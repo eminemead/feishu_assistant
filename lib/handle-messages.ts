@@ -9,6 +9,26 @@ import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { handleDocumentCommand } from "./handle-doc-commands";
 import { devtoolsTracker } from "./devtools-integration";
 
+/**
+ * Format thinking/reasoning content as a collapsible-like section in markdown
+ * Uses Feishu markdown's quote formatting for a subtle appearance
+ */
+function formatThinkingSection(reasoning: string): string {
+  if (!reasoning || reasoning.trim().length === 0) {
+    return "";
+  }
+  
+  // Truncate if too long
+  let content = reasoning.trim();
+  const maxLength = 1500;
+  if (content.length > maxLength) {
+    content = content.substring(0, maxLength) + "...";
+  }
+  
+  // Format as a dimmed section with divider
+  return `\n\n---\n\n<font color="grey">🧠 **Thinking Process**</font>\n\n> ${content.replace(/\n/g, "\n> ")}`;
+}
+
 export interface FeishuMessageData {
   chatId: string;
   messageId: string;
@@ -110,10 +130,11 @@ export async function handleNewMessage(data: FeishuMessageData) {
     // Generate response with streaming and memory context
     const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
     
-    // Handle structured result (with confirmation data) or plain string
+    // Handle structured result (with confirmation data and reasoning) or plain string
     let result: string;
     let needsConfirmation = false;
     let confirmationData: string | undefined;
+    let reasoning: string | undefined;
     
     if (typeof rawResult === "string") {
       result = rawResult;
@@ -121,6 +142,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
       result = rawResult.text;
       needsConfirmation = rawResult.needsConfirmation || false;
       confirmationData = rawResult.confirmationData;
+      reasoning = rawResult.reasoning;
     }
 
     // Extract image_key from result if present
@@ -143,6 +165,15 @@ export async function handleNewMessage(data: FeishuMessageData) {
     } catch (e) {
       // Parsing failed, continue without image
       console.log("Could not extract image_key from result");
+    }
+
+    // Append thinking as collapsed section in markdown if reasoning is present
+    // Note: Feishu collapsible_panel doesn't work with streaming cards, so we use markdown formatting
+    if (reasoning && reasoning.length > 0) {
+      console.log(`[Card] Appending thinking section with ${reasoning.length} chars of reasoning`);
+      // Format thinking as a dimmed/quoted section that users can scroll to see
+      const thinkingSection = formatThinkingSection(reasoning);
+      result = result + thinkingSection;
     }
 
     // Finalize card with follow-up suggestions and send buttons in separate message

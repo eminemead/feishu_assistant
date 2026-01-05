@@ -2,12 +2,13 @@ import { CoreMessage } from "ai";
 import { managerAgent, ManagerAgentResult } from "./agents/manager-agent-mastra";
 
 /**
- * Response from generate response, may include confirmation data
+ * Response from generate response, may include confirmation data and reasoning
  */
 export interface GenerateResponseResult {
   text: string;
   needsConfirmation?: boolean;
   confirmationData?: string;
+  reasoning?: string; // Thinking traces from reasoning models
 }
 
 /**

@@ -10,6 +10,23 @@ import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { devtoolsTracker } from "./devtools-integration";
 import { handleDocumentCommand } from "./handle-doc-commands";
 
+/**
+ * Format thinking/reasoning content as a collapsible-like section in markdown
+ */
+function formatThinkingSection(reasoning: string): string {
+  if (!reasoning || reasoning.trim().length === 0) {
+    return "";
+  }
+  
+  let content = reasoning.trim();
+  const maxLength = 1500;
+  if (content.length > maxLength) {
+    content = content.substring(0, maxLength) + "...";
+  }
+  
+  return `\n\n---\n\n<font color="grey">🧠 **Thinking Process**</font>\n\n> ${content.replace(/\n/g, "\n> ")}`;
+}
+
 export interface FeishuMentionData {
     chatId: string;
     messageId: string;
@@ -122,8 +139,26 @@ export async function handleNewAppMention(data: FeishuMentionData) {
 
         // Generate response with streaming and memory context
         console.log(`[FeishuMention] Generating response...`);
-        const result = await generateResponse(messages, updateCard, chatId, rootId, userId);
-        console.log(`[FeishuMention] Response generated (length=${result?.length || 0}): "${result?.substring(0, 50) || 'N/A'}..."`);
+        const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
+        
+        // Handle structured result (with reasoning) or plain string
+        let result: string;
+        let reasoning: string | undefined;
+        
+        if (typeof rawResult === "string") {
+            result = rawResult;
+        } else {
+            result = rawResult.text;
+            reasoning = rawResult.reasoning;
+        }
+        console.log(`[FeishuMention] Response generated (length=${result?.length || 0}, reasoning=${reasoning?.length || 0}): "${result?.substring(0, 50) || 'N/A'}..."`);
+
+        // Append thinking as markdown section if reasoning is present
+        if (reasoning && reasoning.length > 0) {
+            console.log(`[Card] Appending thinking section with ${reasoning.length} chars of reasoning`);
+            const thinkingSection = formatThinkingSection(reasoning);
+            result = result + thinkingSection;
+        }
 
         // Finalize card with follow-up suggestions and send buttons in separate message
         // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons

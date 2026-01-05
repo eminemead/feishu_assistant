@@ -495,6 +495,96 @@ export async function updateCardElement(
 }
 
 /**
+ * Add a collapsible panel element for thinking/reasoning traces
+ * Uses Feishu Card JSON v2 collapsible_panel component
+ */
+export async function addThinkingPanelToCard(
+  cardId: string,
+  reasoning: string,
+  title: string = "🧠 Show thinking process"
+): Promise<string | null> {
+  if (!reasoning || reasoning.trim().length === 0) {
+    console.log(`[Card] No reasoning content to add to card ${cardId}`);
+    return null;
+  }
+
+  const elementId = `thinking_${Date.now()}`;
+  
+  // Format and limit reasoning content
+  let formattedReasoning = reasoning.trim();
+  const maxLength = 2000;
+  if (formattedReasoning.length > maxLength) {
+    formattedReasoning = formattedReasoning.substring(0, maxLength) + "\n\n*... (truncated)*";
+  }
+  
+  // Escape problematic characters for Feishu markdown
+  formattedReasoning = formattedReasoning
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const thinkingElement = {
+    tag: "collapsible_panel",
+    expanded: false,
+    element_id: elementId,
+    header: {
+      title: {
+        tag: "plain_text",
+        content: title,
+      },
+      vertical_align: "center",
+      icon: {
+        tag: "standard_icon",
+        token: "down-small-ccm_outlined",
+        color: "grey",
+        size: "16px 16px",
+      },
+      icon_position: "right",
+      icon_expanded_angle: -180,
+    },
+    border: {
+      color: "grey",
+      corner_radius: "5px",
+    },
+    background_color: "bg_body_overlay",
+    vertical_spacing: "8px",
+    padding: "8px 8px 8px 8px",
+    elements: [
+      {
+        tag: "markdown",
+        content: formattedReasoning,
+      },
+    ],
+  };
+
+  // Get sequence for this operation
+  const sequence = getNextCardSequence(cardId);
+
+  try {
+    const resp = await client.cardkit.v1.cardElement.create({
+      path: {
+        card_id: cardId,
+      },
+      data: {
+        element: JSON.stringify(thinkingElement),
+        sequence: sequence,
+      },
+    });
+
+    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    if (!isSuccess) {
+      console.error("Failed to add thinking panel to card:", resp);
+      return null; // Non-critical, don't throw
+    }
+
+    console.log(`✅ [Card] Added thinking panel: cardId=${cardId}, elementId=${elementId}, reasoningLength=${reasoning.length}`);
+    return elementId;
+  } catch (error) {
+    console.error("Failed to add thinking panel (non-critical):", error);
+    return null;
+  }
+}
+
+/**
  * Add an image element to an existing card
  * Creates a new image element and adds it to the card body
  */

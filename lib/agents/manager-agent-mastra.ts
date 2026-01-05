@@ -176,12 +176,13 @@ function getQueryText(messages: CoreMessage[]): string {
  */
 
 /**
- * Manager agent result - can be string or structured with confirmation data
+ * Manager agent result - can be string or structured with confirmation data and reasoning
  */
 export interface ManagerAgentResult {
   text: string;
   needsConfirmation?: boolean;
   confirmationData?: string;
+  reasoning?: string; // Thinking traces from reasoning models
 }
 
 export async function managerAgent(
@@ -338,43 +339,96 @@ export async function managerAgent(
             memory: memoryConfig,
           });
           
-          let accumulatedText = "";
+          // Use fullStream to separate reasoning from text
+          // Strategy: Strip <think>...</think> tags in real-time
+          let rawText = "";
+          let displayText = "";
+          let accumulatedReasoning = "";
+          let inThinkBlock = false;
           let lastUpdateLength = 0;
           let lastUpdateTime = Date.now();
           
-          for await (const textDelta of result.textStream) {
-            accumulatedText += textDelta;
-            const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-            const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
-            
-            const shouldUpdate = updateStatus && (
-              accumulatedText.length % 50 === 0 ||
-              timeSinceLastUpdate >= 200 ||
-              charsSinceLastUpdate >= 30
-            );
-            
-            if (shouldUpdate) {
-              updateStatus(accumulatedText);
-              lastUpdateLength = accumulatedText.length;
-              lastUpdateTime = Date.now();
+          for await (const chunk of result.fullStream) {
+            if (chunk.type === "text-delta") {
+              // Mastra chunks have payload property
+              const textDelta = (chunk as any).payload?.text || (chunk as any).textDelta || "";
+              rawText += textDelta;
+              
+              // Real-time thinking tag stripping
+              const thinkPattern = /<think>([\s\S]*?)<\/think>/gi;
+              let match;
+              while ((match = thinkPattern.exec(rawText)) !== null) {
+                const thinkContent = match[1].trim();
+                if (thinkContent && !accumulatedReasoning.includes(thinkContent)) {
+                  accumulatedReasoning += (accumulatedReasoning ? "\n\n" : "") + thinkContent;
+                }
+              }
+              
+              // Remove complete think blocks from display
+              displayText = rawText.replace(thinkPattern, "").trim();
+              
+              // Check if we're in an incomplete think block
+              const openThinkCount = (rawText.match(/<think>/gi) || []).length;
+              const closeThinkCount = (rawText.match(/<\/think>/gi) || []).length;
+              inThinkBlock = openThinkCount > closeThinkCount;
+              
+              // Update card with appropriate content
+              if (inThinkBlock) {
+                // Show thinking indicator while model is thinking
+                if (updateStatus) {
+                  updateStatus("🧠 *Thinking...*");
+                }
+              } else if (displayText.length > 0) {
+                const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+                const charsSinceLastUpdate = displayText.length - lastUpdateLength;
+                
+                const shouldUpdate = updateStatus && (
+                  displayText.length % 50 === 0 ||
+                  timeSinceLastUpdate >= 200 ||
+                  charsSinceLastUpdate >= 30
+                );
+                
+                if (shouldUpdate) {
+                  updateStatus(displayText);
+                  lastUpdateLength = displayText.length;
+                  lastUpdateTime = Date.now();
+                }
+              }
+            } else if (chunk.type === "reasoning-delta") {
+              // Capture reasoning/thinking traces from dedicated chunks
+              const reasoningText = (chunk as any).payload?.text || (chunk as any).textDelta || "";
+              if (reasoningText) {
+                accumulatedReasoning += reasoningText;
+              }
             }
           }
           
+          // Final cleanup
+          const finalText = displayText || rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+          
           // Send final update
-          if (updateStatus && accumulatedText.length > lastUpdateLength) {
-            updateStatus(accumulatedText);
+          if (updateStatus && finalText.length > 0) {
+            updateStatus(finalText);
           }
           
           const duration = Date.now() - startTime;
-          devtoolsTracker.trackResponse(routingDecision.agentName, accumulatedText, duration, {
+          devtoolsTracker.trackResponse(routingDecision.agentName, finalText, duration, {
             skillRoute: true,
             skillInjection: true,
           });
           healthMonitor.trackAgentCall(routingDecision.agentName, duration, true);
           
           // Memory is automatically saved by Mastra when memoryConfig is provided
-          console.log(`[Manager] ${routingDecision.category} response complete (length=${accumulatedText.length})`);
-          return accumulatedText;
+          console.log(`[Manager] ${routingDecision.category} response complete (length=${finalText.length}, reasoning=${accumulatedReasoning.length})`);
+          
+          // Return structured result if reasoning is present
+          if (accumulatedReasoning.length > 0) {
+            return {
+              text: finalText,
+              reasoning: accumulatedReasoning,
+            };
+          }
+          return finalText;
         }
       }
     } catch (error) {
@@ -490,11 +544,74 @@ export async function managerAgent(
       memory: memoryConfig,
     });
 
-    let text = "";
-    for await (const chunk of stream.textStream) {
-      text += chunk;
-      accumulatedText.push(chunk);
-      await updateCardBatched(text);
+    // Use fullStream to separate reasoning from text
+    // This supports thinking models like MiniMax M2.1
+    // 
+    // Strategy: MiniMax M2.1 embeds thinking in <think>...</think> tags within text-delta
+    // We accumulate raw text, strip thinking in real-time, and only stream clean text
+    let rawText = "";
+    let displayText = "";  // Text shown to user (thinking stripped)
+    let reasoning = "";
+    let inThinkBlock = false;
+    let currentThinkContent = "";
+    let chunkTypesDebug: Set<string> = new Set();
+    
+    for await (const chunk of stream.fullStream) {
+      chunkTypesDebug.add(chunk.type);
+      
+      if (chunk.type === "text-delta") {
+        // Mastra chunks have payload property
+        const textDelta = (chunk as any).payload?.text || (chunk as any).textDelta || "";
+        rawText += textDelta;
+        
+        // Real-time thinking tag stripping
+        // Process the accumulated raw text to separate thinking from display
+        let processText = rawText;
+        
+        // Check for complete <think>...</think> blocks
+        const thinkPattern = /<think>([\s\S]*?)<\/think>/gi;
+        let match;
+        while ((match = thinkPattern.exec(processText)) !== null) {
+          const thinkContent = match[1].trim();
+          if (thinkContent && !reasoning.includes(thinkContent)) {
+            reasoning += (reasoning ? "\n\n" : "") + thinkContent;
+          }
+        }
+        
+        // Remove complete think blocks from display
+        displayText = processText.replace(thinkPattern, "").trim();
+        
+        // Check if we're in an incomplete think block (opened but not closed)
+        const openThinkCount = (processText.match(/<think>/gi) || []).length;
+        const closeThinkCount = (processText.match(/<\/think>/gi) || []).length;
+        inThinkBlock = openThinkCount > closeThinkCount;
+        
+        // Update card with appropriate content
+        if (inThinkBlock) {
+          // Show thinking indicator while model is thinking
+          await updateCardBatched("🧠 *Thinking...*");
+        } else if (displayText.length > 0) {
+          accumulatedText.push(textDelta);
+          await updateCardBatched(displayText);
+        }
+      } else if (chunk.type === "reasoning-delta") {
+        // Capture reasoning/thinking traces from dedicated reasoning chunks
+        const reasoningText = (chunk as any).payload?.text || (chunk as any).textDelta || "";
+        if (reasoningText) {
+          reasoning += reasoningText;
+        }
+      }
+      // Ignore other chunk types (tool-call, tool-result, finish, etc.)
+    }
+    
+    console.log(`[Manager] Stream chunk types seen: ${Array.from(chunkTypesDebug).join(", ")}`);
+    
+    // Final cleanup: ensure all thinking is extracted
+    const text = displayText || rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    
+    // Final update with clean text
+    if (updateStatus && text.length > 0) {
+      updateStatus(text);
     }
     
     // Memory is automatically saved by Mastra when memoryConfig is provided
@@ -504,8 +621,16 @@ export async function managerAgent(
     healthMonitor.trackAgentCall("manager", duration, true);
 
     console.log(
-      `[Manager] Response complete (length=${text.length}, duration=${duration}ms)`
+      `[Manager] Response complete (length=${text.length}, reasoning=${reasoning.length}, duration=${duration}ms)`
     );
+    
+    // Return structured result if reasoning is present
+    if (reasoning.length > 0) {
+      return {
+        text,
+        reasoning,
+      };
+    }
     return text;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
