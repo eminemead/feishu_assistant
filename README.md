@@ -1,19 +1,20 @@
-# AI SDK Feishu/Lark Agent
+# Feishu AI Assistant
 
-An AI-powered chatbot for Feishu/Lark powered by the [AI SDK by Vercel](https://sdk.vercel.ai/docs) and built with [Hono](https://hono.dev/).
+An AI-powered multi-agent chatbot for Feishu/Lark built with [Mastra](https://mastra.ai) and [Hono](https://hono.dev/).
 
 ## Features
 
 - Integrates with [Feishu/Lark Open Platform](https://open.larksuite.com) for seamless communication
-- Use any LLM with the AI SDK ([easily switch between providers](https://sdk.vercel.ai/providers/ai-sdk-providers))
+- Multi-agent orchestration powered by Mastra framework
 - Works with direct messages and group mentions
-- Maintains conversation context within threads
+- Persistent conversation memory via Supabase
 - Built-in tools for enhanced capabilities:
   - Real-time weather lookup
   - Web search (powered by [Exa](https://exa.ai))
+  - Document RAG with pgvector
 - Streaming responses via Feishu interactive cards
-- Easily extensible architecture to add custom tools (e.g., knowledge search)
-- Multi-agent system with specialist agents for different domains (OKR, P&L, Alignment, DPA PM)
+- Observability via Arize Phoenix
+- Multi-agent system with specialist agents for different domains (OKR, P&L, Alignment, DPA MoM)
 
 ## Documentation
 
@@ -258,23 +259,24 @@ See `lib/agents/README.md` for detailed documentation on the agent architecture.
 
 ### Extending with New Tools
 
-The chatbot is built with an extensible architecture using the [AI SDK's tool system](https://sdk.vercel.ai/docs/ai-sdk-core/tools-and-tool-calling). Tools are defined within specialist agents and automatically made available through the manager agent.
+Tools are defined within specialist agents using Mastra's `createTool()` and automatically made available through the manager agent.
 
 To add a new tool:
 1. Create or update a specialist agent in `lib/agents/`
-2. Define the tool using the `tool()` function with `zodSchema()` wrapper
-3. Register the tool in the agent's `getTools()` method
+2. Define the tool using Mastra's `createTool()` with Zod schema
+3. Register the tool in the agent configuration
 
-See `lib/agents/README.md` for examples and detailed instructions.
+See `lib/agents/README.md` for examples.
 
 ## Architecture
 
 - **Hono** - Fast web framework for the backend
 - **Feishu Node SDK** - Official SDK for Feishu/Lark Open Platform
-- **Vercel AI SDK v5** - Unified interface for LLM providers
-- **@ai-sdk-tools/agents** - Multi-agent orchestration with automatic handoffs and routing
+- **Mastra** - Multi-agent orchestration framework with memory & observability
+- **Supabase** - Persistent memory storage (PostgreSQL + pgvector)
+- **Arize Phoenix** - Observability & tracing for LLM calls
 - **Streaming Cards** - Real-time response updates via Feishu interactive cards
-- **Multi-Agent System** - Manager agent orchestrates specialist agents (OKR Reviewer, Alignment, P&L, DPA PM)
+- **Multi-Agent System** - Manager agent orchestrates specialist agents (OKR, Alignment, P&L, DPA MoM)
 - **DuckDB** - Database for OKR metrics storage and analysis
 
 ## Troubleshooting
