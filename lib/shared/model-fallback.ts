@@ -83,6 +83,18 @@ export const FREE_MODELS_WITH_TOOLS = [
 ] as const;
 
 /**
+ * NVIDIA API Model Configuration (Direct API - Free)
+ * 
+ * Uses NVIDIA's integrate.api.nvidia.com endpoint directly.
+ * This is OpenAI-compatible and free to use.
+ */
+export const NVIDIA_MODEL_CONFIG = {
+  url: process.env.NVIDIA_URL || "https://integrate.api.nvidia.com/v1",
+  id: "minimaxai/minimax-m2.1",
+  apiKey: process.env.NVIDIA_API_TOKEN,
+} as const;
+
+/**
  * Available models in fallback order (deprecated - kept for backward compatibility)
  * @deprecated Use getAutoRouterModel() instead
  */
