@@ -5,7 +5,7 @@
  * Uses artifacts for structured, validated data with progress tracking
  */
 
-import { tool, zodSchema } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
 import { analyzeHasMetricPercentage } from "./okr-reviewer-agent";
 import { generateOKRHeatmap } from "../visualization/okr-heatmap";
@@ -18,25 +18,23 @@ import { devtoolsTracker } from "../devtools-integration";
  * Base tool that generates OKR analysis with optional visualization
  * Uses artifacts for type-safe data structures and progress tracking
  */
-const okrVisualizationToolBase = tool({
+const okrVisualizationToolBase = (tool as any)({
     description:
         "Analyze manager OKR metrics and optionally generate a heatmap visualization. Returns analysis data and image_key for visualization if requested. Progress updates are streamed during generation.",
-    parameters: zodSchema(
-        z.object({
-            period: z
-                .string()
-                .describe(
-                    "The period to analyze (e.g., '10 月', '11 月', '9 月'). Defaults to current month if not specified."
-                ),
-            generateVisualization: z
-                .boolean()
-                .optional()
-                .default(false)
-                .describe(
-                    "Whether to generate a heatmap visualization. If true, returns image_key that can be used to display the image in Feishu. Progress updates will be streamed during generation."
-                ),
-        })
-    ),
+    parameters: z.object({
+        period: z
+            .string()
+            .describe(
+                "The period to analyze (e.g., '10 月', '11 月', '9 月'). Defaults to current month if not specified."
+            ),
+        generateVisualization: z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe(
+                "Whether to generate a heatmap visualization. If true, returns image_key that can be used to display the image in Feishu. Progress updates will be streamed during generation."
+            ),
+    }),
     execute: async ({
         period,
         generateVisualization = false,

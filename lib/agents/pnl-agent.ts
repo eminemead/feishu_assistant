@@ -16,6 +16,7 @@ import { CoreMessage } from "ai";
 import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 
 /**
  * Get query text from messages
@@ -42,9 +43,18 @@ function initializeAgent(): void {
 
   isInitializing = true;
 
+  // Create native Mastra memory for this agent
+  const agentMemory = createAgentMemory({
+    lastMessages: 20,
+    enableWorkingMemory: true,
+    enableSemanticRecall: false,
+  });
+
   // Create agent with Mastra framework
   pnlAgentInstance = new Agent({
+    id: "pnl_agent",
     name: "pnl_agent",
+    memory: agentMemory || undefined,
     instructions: `You are a Feishu/Lark AI assistant specialized in Profit & Loss (P&L) analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责损益(P&L)分析的Feishu/Lark AI助手。大多数用户查询将是中文。
@@ -86,12 +96,12 @@ export async function pnlAgent(
   const startTime = Date.now();
   console.log(`[PnL] Received query: "${query}"`);
 
-  // Set up memory scoping
-  const conversationId = getConversationId(chatId, rootId);
-  const userScopeId = getUserScopeId(userId);
+  // Set up memory scoping using Mastra-native helpers
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
 
   console.log(
-    `[PnL] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[PnL] Memory context: thread=${memoryThread}, resource=${memoryResource}`
   );
 
   // Batch updates to avoid spamming Feishu
@@ -135,8 +145,19 @@ export async function pnlAgent(
      // Track agent call for devtools monitoring
      devtoolsTracker.trackAgentCall("pnl", query);
 
+     // Build memory config for agent calls (native Mastra pattern)
+     const memoryConfig = memoryResource && memoryThread ? {
+       resource: memoryResource,
+       thread: {
+         id: memoryThread,
+         metadata: { chatId, rootId, userId },
+       },
+     } : undefined;
+
      // MASTRA STREAMING: Call P&L agent with streaming
-     const stream = await pnlAgentInstance!.stream(messages);
+     const stream = await pnlAgentInstance!.stream(messages, {
+       memory: memoryConfig,
+     });
 
     let text = "";
     for await (const chunk of stream.textStream) {

@@ -16,6 +16,7 @@ import { CoreMessage } from "ai";
 import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 
 /**
  * Get query text from messages
@@ -44,6 +45,7 @@ function initializeAgent(): void {
 
   // Create agent with Mastra framework
   pnlAgentInstance = new Agent({
+    id: "pnl_agent",
     name: "pnl_agent",
     instructions: `You are a Feishu/Lark AI assistant specialized in Profit & Loss (P&L) analysis. Most user queries will be in Chinese (中文).
 
@@ -86,11 +88,11 @@ export async function pnlAgent(
   console.log(`[PnL] Received query: "${query}"`);
 
   // Set up memory scoping
-  const conversationId = getConversationId(chatId, rootId);
-  const userScopeId = getUserScopeId(userId);
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
 
   console.log(
-    `[PnL] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[PnL] Memory context: memoryThread=${memoryThread}, memoryResource=${memoryResource}`
   );
 
   // Batch updates to avoid spamming Feishu

@@ -18,6 +18,7 @@ import { getDpaMomAgent } from "./agents/dpa-mom-agent";
 import { okrAnalysisWorkflow } from "./workflows/okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./workflows/document-tracking-workflow";
 import { initializeWorkflows } from "./workflows";
+import { getSharedStorage } from "./memory-factory";
 
 // Environment configuration
 const PHOENIX_ENDPOINT = process.env.PHOENIX_ENDPOINT || "http://localhost:6006/v1/traces";
@@ -48,10 +49,9 @@ const observability = new Observability({
     arize: {
       serviceName: PHOENIX_PROJECT_NAME,
       exporters: [phoenixExporter],
-      logLevel: LOG_LEVEL as "debug" | "info" | "warn" | "error",
     },
   },
-});
+} as any);
 
 /**
  * Initialize Mastra instance with observability enabled and register all
@@ -74,15 +74,23 @@ const registeredWorkflows = {
   documentTracking: documentTrackingWorkflow,
 };
 
+// Initialize shared storage for Mastra memory (Supabase PostgreSQL)
+const storage = getSharedStorage();
+if (storage) {
+  console.log('✅ [Mastra] Storage configured for memory persistence');
+} else {
+  console.warn('⚠️ [Mastra] No storage configured - memory will not persist');
+}
+
 export const mastra = new Mastra({
-  name: "feishu-assistant",
   agents: registeredAgents,
   workflows: registeredWorkflows,
   observability,
+  storage: storage || undefined,
   server: {
     port: Number(process.env.PORT) || 3000,
   },
-});
+} as any);
 
 // Initialize workflow registry for skill-based routing
 initializeWorkflows();

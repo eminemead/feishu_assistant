@@ -15,7 +15,8 @@
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import { devtoolsTracker } from "../devtools-integration";
-import { getMemoryThread, getMemoryResource, createMastraMemory } from "../memory-mastra";
+import { getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
+import { createAgentMemory } from "../memory-factory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
 import {
   isRateLimitError,
@@ -35,8 +36,6 @@ import { routeQuery, shouldUseWorkflow, getRoutingSummary } from "../routing/que
 import { getSkillRegistry } from "../skills/skill-registry";
 import { injectSkillsIntoInstructions, injectSkillsIntoMessages } from "../skills/skill-injector";
 import { executeSkillWorkflow } from "../workflows";
-import { initializeMemoryContext, loadMemoryHistory, saveMessagesToMemory, getWorkingMemory, updateWorkingMemory, buildSystemMessageWithMemory } from "../memory-middleware";
-import { extractAndSaveWorkingMemory } from "../working-memory-extractor";
 import * as path from "path";
 
 // Web search tool temporarily disabled - will be replaced with Brave Search API
@@ -48,7 +47,6 @@ let currentModelTier: "primary" | "fallback" = "primary";
 // Lazy-initialized agent
 let managerAgentInstance: Agent | null = null;
 let isInitializing: boolean = false;
-let mastraMemoryInstance: any = null;
 let skillRegistryInitialized: boolean = false;
 
 /**
@@ -93,13 +91,24 @@ function initializeAgent() {
     console.log(`✅ [Manager] Internal fallback model available: ${getInternalModelInfo()}`);
   }
   
+  // Create native Mastra memory for this agent
+  const agentMemory = createAgentMemory({
+    lastMessages: 20,
+    enableWorkingMemory: true,
+    enableSemanticRecall: false, // Will enable in Phase 2 after PgVector setup
+  });
+
   managerAgentInstance = new Agent({
+    id: "manager",
     name: "Manager",
     instructions: getManagerInstructions(),
     
     // Single model - Mastra Agent doesn't support model arrays
     // Primary: nvidia/nemotron-3-nano-30b-a3b:free
     model: model,
+
+    // Native Mastra memory - makes memory visible in Studio
+    memory: agentMemory || undefined,
 
     // Tools - web search temporarily disabled (will be replaced with Brave Search API)
     tools: {
@@ -190,67 +199,26 @@ export async function managerAgent(
   const startTime = Date.now();
   console.log(`[Manager] Received query: "${query}"`);
 
-  // Initialize Mastra Memory for this agent call
-  let mastraMemory = null;
-  let memoryThread: string | undefined;
-  let memoryResource: string | undefined;
+  // Set up memory context using Mastra-native pattern
+  // Memory is attached to the agent at construction; we just need resource/thread IDs
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  
+  // Build memory config for agent calls (native Mastra pattern)
+  const memoryConfig = memoryResource && memoryThread ? {
+    resource: memoryResource,
+    thread: {
+      id: memoryThread,
+      metadata: { chatId, rootId, userId },
+      title: `Feishu Chat ${chatId}`,
+    },
+  } : undefined;
 
-  try {
-    if (userId) {
-      mastraMemory = await createMastraMemory(userId);
-      memoryResource = getMemoryResource(userId);
-      if (chatId && rootId) {
-        memoryThread = getMemoryThread(chatId, rootId);
-        
-        // Ensure thread exists before saving messages
-        if (mastraMemory && memoryThread && memoryResource) {
-          try {
-            const existingThread = await mastraMemory.getThreadById({ threadId: memoryThread });
-            if (!existingThread) {
-              // Thread doesn't exist - create it
-              await mastraMemory.saveThread({
-                thread: {
-                  id: memoryThread,
-                  resourceId: memoryResource,
-                  title: `Feishu Chat ${chatId}`,
-                  metadata: { chatId, rootId },
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                },
-              });
-              console.log(`[Manager] Created memory thread: ${memoryThread}`);
-            }
-          } catch (error) {
-            console.warn(`[Manager] Failed to ensure thread exists:`, error);
-          }
-        }
-      }
-      
-      if (mastraMemory) {
-        console.log(`✅ [Manager] Mastra Memory initialized with 3-layer architecture`);
-        console.log(`   Resource (user): ${memoryResource}, Thread: ${memoryThread || 'not set'}`);
-      }
-    }
-  } catch (error) {
-    console.warn(`⚠️ [Manager] Mastra Memory initialization failed:`, error);
-    // Continue without memory - fallback to non-persistent context
-  }
-
-  // Legacy memory system removed - using Mastra Memory only
-
-  // Initialize memory context for working memory access
-  let memoryContext = null;
-  if (userId && chatId && rootId) {
-    memoryContext = await initializeMemoryContext(userId, chatId, rootId);
-  }
-
-  // Load working memory (Layer 1) - user facts and preferences
-  let workingMemory = null;
-  if (memoryContext) {
-    workingMemory = await getWorkingMemory(memoryContext);
-    if (workingMemory) {
-      console.log(`[Manager] Loaded working memory:`, workingMemory);
-    }
+  if (memoryConfig) {
+    console.log(`✅ [Manager] Memory context ready (native Mastra pattern)`);
+    console.log(`   Resource: ${memoryResource}, Thread: ${memoryThread}`);
+  } else {
+    console.log(`[Manager] No memory context (missing userId, chatId, or rootId)`);
   }
 
   // Use skill-based routing for declarative classification
@@ -292,40 +260,8 @@ export async function managerAgent(
       );
       healthMonitor.trackAgentCall(routingDecision.workflowId!, duration, result.success);
 
-      // Save workflow response to memory
-      if (mastraMemory && memoryThread && memoryResource) {
-        try {
-          const timestamp = new Date();
-          const userMessageId = `msg-${memoryThread}-wf-user-${timestamp.getTime()}`;
-          const assistantMessageId = `msg-${memoryThread}-wf-assistant-${timestamp.getTime()}`;
-          
-          await mastraMemory.saveMessages({
-            messages: [
-              {
-                id: userMessageId,
-                threadId: memoryThread,
-                resourceId: memoryResource,
-                role: "user" as const,
-                content: { content: query },
-                createdAt: timestamp,
-              },
-              {
-                id: assistantMessageId,
-                threadId: memoryThread,
-                resourceId: memoryResource,
-                role: "assistant" as const,
-                content: { content: result.response },
-                createdAt: timestamp,
-              },
-            ],
-            format: 'v2',
-          });
-          console.log(`[Workflow] Saved response to memory`);
-        } catch (error) {
-          console.warn("[Workflow] Failed to save response to memory:", error);
-        }
-      }
-
+      // NOTE: Workflow responses are not automatically saved to agent memory
+      // because workflows execute independently. Memory is handled by the workflow itself.
       console.log(`[Workflow] ${routingDecision.workflowId} complete (length=${result.response.length}, durationMs=${result.durationMs})`);
       
       // Return structured result if confirmation is needed
@@ -342,11 +278,7 @@ export async function managerAgent(
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(`[Manager] Workflow ${routingDecision.workflowId} failed:`, errorMsg);
-      healthMonitor.trackError(
-        "workflow_execution",
-        error instanceof Error ? error : new Error(errorMsg),
-        { workflowRoute: true, workflowId: routingDecision.workflowId }
-      );
+      healthMonitor.trackError("OTHER", `Workflow ${routingDecision.workflowId} failed: ${errorMsg}`);
       // Fall through to skill/manager if workflow fails
     }
   }
@@ -401,8 +333,10 @@ export async function managerAgent(
           }
         }
           
-          // Use manager agent with skill-injected messages
-          const result = await managerAgentInstance!.stream(enhancedMessages);
+          // Use manager agent with skill-injected messages and native memory
+          const result = await managerAgentInstance!.stream(enhancedMessages, {
+            memory: memoryConfig,
+          });
           
           let accumulatedText = "";
           let lastUpdateLength = 0;
@@ -438,41 +372,7 @@ export async function managerAgent(
           });
           healthMonitor.trackAgentCall(routingDecision.agentName, duration, true);
           
-          // Save to memory
-          if (mastraMemory && memoryThread && memoryResource) {
-            try {
-              const timestamp = new Date();
-              const userMessageId = `msg-${memoryThread}-${routingDecision.category}-user-${timestamp.getTime()}`;
-              const assistantMessageId = `msg-${memoryThread}-${routingDecision.category}-assistant-${timestamp.getTime()}`;
-              
-              await mastraMemory.saveMessages({
-                messages: [
-                  {
-                    id: userMessageId,
-                    threadId: memoryThread,
-                    resourceId: memoryResource,
-                    role: "user" as const,
-                    content: { content: query },
-                    createdAt: timestamp,
-                  },
-                  {
-                    id: assistantMessageId,
-                    threadId: memoryThread,
-                    resourceId: memoryResource,
-                    role: "assistant" as const,
-                    content: { content: accumulatedText },
-                    createdAt: timestamp,
-                  },
-                ],
-                format: 'v2',
-              });
-              
-              console.log(`[Manager] Saved ${routingDecision.category} response to memory`);
-            } catch (error) {
-              console.warn(`[Manager] Failed to save ${routingDecision.category} response to memory:`, error);
-            }
-          }
-          
+          // Memory is automatically saved by Mastra when memoryConfig is provided
           console.log(`[Manager] ${routingDecision.category} response complete (length=${accumulatedText.length})`);
           return accumulatedText;
         }
@@ -489,237 +389,8 @@ export async function managerAgent(
     }
   }
 
-  // Legacy alignment agent routing - DISABLED (now handled by skill injection)
-  if (false && routingDecision.category === "alignment") {
-    console.log(
-      `[Manager] Workflow routing: Alignment Agent (confidence: ${routingDecision.confidence.toFixed(2)})`
-    );
-    devtoolsTracker.trackAgentCall("Manager", query, {
-      workflowRoute: "alignment_agent",
-      confidence: routingDecision.confidence,
-    });
-    try {
-      // Lazy import to avoid circular dependency with observability-config
-      const { mastra } = await import("../observability-config");
-      const alignmentAgent = mastra.getAgent("alignment");
-      const executionContext: any = {
-        _memoryAddition: "",
-      };
-
-      if (chatId && rootId) {
-        const conversationId = `feishu:${chatId}:${rootId}`;
-        const userScopeId = userId
-          ? `user:${userId}`
-          : `user:${chatId}`;
-        executionContext.chatId = conversationId;
-        executionContext.userId = userScopeId;
-        if (userId) {
-          executionContext.feishuUserId = userId;
-        }
-      }
-
-      const result = await alignmentAgent.stream({
-        messages,
-        executionContext,
-      });
-
-      let accumulatedText = "";
-      let lastUpdateLength = 0;
-      let lastUpdateTime = Date.now();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:363',message:'Starting alignment agent stream',data:{agent:'alignment_agent'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      for await (const textDelta of result.textStream) {
-        accumulatedText += textDelta;
-        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
-        // Stream updates with improved batching
-        const shouldUpdate = updateStatus && (
-          accumulatedText.length % 50 === 0 ||
-          timeSinceLastUpdate >= 200 ||
-          charsSinceLastUpdate >= 30
-        );
-        if (shouldUpdate) {
-          updateStatus(accumulatedText);
-          lastUpdateLength = accumulatedText.length;
-          lastUpdateTime = Date.now();
-        }
-      }
-      // Send final update if there's remaining text
-      if (updateStatus && accumulatedText.length > lastUpdateLength) {
-        updateStatus(accumulatedText);
-      }
-
-      const duration = Date.now() - startTime;
-      devtoolsTracker.trackResponse("alignment_agent", accumulatedText, duration,
-        { manualRoute: true }
-      );
-      healthMonitor.trackAgentCall("alignment_agent", duration, true);
-
-      // Save routed response to memory
-      if (mastraMemory && memoryThread && memoryResource) {
-        try {
-          const timestamp = new Date();
-          const userMessageId = `msg-${memoryThread}-alignment-user-${timestamp.getTime()}`;
-          const assistantMessageId = `msg-${memoryThread}-alignment-assistant-${timestamp.getTime()}`;
-          
-          const routedMessages = [
-            {
-              id: userMessageId,
-              threadId: memoryThread,
-              resourceId: memoryResource,
-              role: "user" as const,
-              content: { content: query },
-              createdAt: timestamp,
-            },
-            {
-              id: assistantMessageId,
-              threadId: memoryThread,
-              resourceId: memoryResource,
-              role: "assistant" as const,
-              content: { content: accumulatedText },
-              createdAt: timestamp,
-            },
-          ];
-          
-          await mastraMemory.saveMessages({
-            messages: routedMessages,
-            format: 'v2',
-          });
-          
-          console.log(`[Alignment] Saved response to memory`);
-        } catch (error) {
-          console.warn("[Alignment Routing] Failed to save response to memory:", error);
-        }
-      }
-
-      console.log(
-        `[Alignment] Response complete (length=${accumulatedText.length})`
-      );
-      return accumulatedText;
-    } catch (error) {
-      console.error(`[Manager] Error routing to Alignment Agent:`, error);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      devtoolsTracker.trackError(
-        "alignment_agent",
-        error instanceof Error ? error : new Error(errorMsg),
-        { manualRoute: true }
-      );
-    }
-  }
-
-  // P&L Agent routing - DISABLED (not active yet)
-  // TODO: Re-enable when pnl agent is ready
-  if (false && routingDecision.category === "pnl") {
-    console.log(`[Manager] Workflow routing: P&L Agent (confidence: ${routingDecision.confidence.toFixed(2)})`);
-    devtoolsTracker.trackAgentCall("Manager", query, {
-      workflowRoute: "pnl_agent",
-      confidence: routingDecision.confidence,
-    });
-    try {
-      // Lazy import to avoid circular dependency with observability-config
-      const { mastra } = await import("../observability-config");
-      const pnlAgent = mastra.getAgent("pnl");
-      const executionContext: any = {
-        _memoryAddition: "",
-      };
-
-      if (chatId && rootId) {
-        const conversationId = `feishu:${chatId}:${rootId}`;
-        const userScopeId = userId
-          ? `user:${userId}`
-          : `user:${chatId}`;
-        executionContext.chatId = conversationId;
-        executionContext.userId = userScopeId;
-        if (userId) {
-          executionContext.feishuUserId = userId;
-        }
-      }
-
-      const result = await pnlAgent.stream({ messages, executionContext });
-
-      let accumulatedText = "";
-      let lastUpdateLength = 0;
-      let lastUpdateTime = Date.now();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'manager-agent-mastra.ts:459',message:'Starting PnL agent stream',data:{agent:'pnl_agent'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      for await (const textDelta of result.textStream) {
-        accumulatedText += textDelta;
-        const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-        const charsSinceLastUpdate = accumulatedText.length - lastUpdateLength;
-        // Stream updates with improved batching
-        const shouldUpdate = updateStatus && (
-          accumulatedText.length % 50 === 0 ||
-          timeSinceLastUpdate >= 200 ||
-          charsSinceLastUpdate >= 30
-        );
-        if (shouldUpdate) {
-          updateStatus(accumulatedText);
-          lastUpdateLength = accumulatedText.length;
-          lastUpdateTime = Date.now();
-        }
-      }
-      // Send final update if there's remaining text
-      if (updateStatus && accumulatedText.length > lastUpdateLength) {
-        updateStatus(accumulatedText);
-      }
-
-      const duration = Date.now() - startTime;
-      devtoolsTracker.trackResponse("pnl_agent", accumulatedText, duration, {
-       manualRoute: true,
-      });
-      healthMonitor.trackAgentCall("pnl_agent", duration, true);
-
-      // Save routed response to memory
-      if (mastraMemory && memoryThread && memoryResource) {
-       try {
-         const timestamp = new Date();
-         const userMessageId = `msg-${memoryThread}-pnl-user-${timestamp.getTime()}`;
-         const assistantMessageId = `msg-${memoryThread}-pnl-assistant-${timestamp.getTime()}`;
-         
-         const routedMessages = [
-           {
-             id: userMessageId,
-             threadId: memoryThread,
-             resourceId: memoryResource,
-             role: "user" as const,
-             content: { content: query },
-             createdAt: timestamp,
-           },
-           {
-             id: assistantMessageId,
-             threadId: memoryThread,
-             resourceId: memoryResource,
-             role: "assistant" as const,
-             content: { content: accumulatedText },
-             createdAt: timestamp,
-           },
-         ];
-         
-         await mastraMemory.saveMessages({
-           messages: routedMessages,
-           format: 'v2',
-         });
-         
-         console.log(`[P&L] Saved response to memory`);
-        } catch (error) {
-          console.warn("[PnL Routing] Failed to save response to memory:", error);
-        }
-       }
-
-      console.log(`[P&L] Response complete (length=${accumulatedText.length})`);
-      return accumulatedText;
-    } catch (error) {
-      console.error(`[Manager] Error routing to P&L Agent:`, error);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      devtoolsTracker.trackError(
-        "pnl_agent",
-        error instanceof Error ? error : new Error(errorMsg),
-        { manualRoute: true }
-      );
-    }
-  }
+  // NOTE: Legacy alignment and P&L agent routing removed in Phase 2 memory refactor
+  // These are now handled by skill injection above
 
   // No specialist matched - use manager agent for general guidance (web search disabled)
   console.log(
@@ -808,53 +479,16 @@ export async function managerAgent(
       // Continue without skills
     }
     
-    // Load conversation history from Mastra Memory before calling agent
-    // Use messagesWithSkills (which may have skill context prepended)
-    let messagesWithHistory = [...messagesWithSkills];
+    // MASTRA NATIVE MEMORY: Pass messages and memoryConfig to agent
+    // Mastra automatically handles:
+    // - Loading conversation history from the thread
+    // - Saving user/assistant messages after the call
+    // - Working memory (when configured)
+    // - Semantic recall (when enabled)
     
-    if (mastraMemory && memoryResource && memoryThread) {
-      try {
-        console.log(`[Manager] Loading conversation history from Mastra Memory...`);
-        const historyMessages = await loadMemoryHistory(memoryContext!);
-        
-        if (historyMessages.length > 0) {
-          console.log(`[Manager] Loaded ${historyMessages.length} messages from memory`);
-          // Prepend history to current messages
-          messagesWithHistory = [...historyMessages, ...messagesWithSkills];
-        }
-      } catch (error) {
-        console.warn(`[Manager] Failed to load memory history:`, error);
-        // Continue without history
-      }
-    }
-    
-    // ENHANCE MESSAGES WITH WORKING MEMORY (Layer 1)
-    if (workingMemory) {
-      console.log(`[Manager] Enhancing messages with working memory:`, workingMemory);
-      // Add working memory as system message at the beginning
-      const workingMemoryContext = buildSystemMessageWithMemory("", workingMemory);
-      const systemMessage: CoreMessage = {
-        role: "system",
-        content: workingMemoryContext.trim(),
-      };
-      messagesWithHistory = [systemMessage, ...messagesWithHistory];
-    }
-    
-    // MASTRA STREAMING: Call manager agent with streaming
-    // NOTE: Do NOT pass memory instance in executionContext - it causes model resolution issues
-    // Memory operations are handled manually before/after streaming
-    const executionContext: any = {};
-    if (memoryThread && memoryResource) {
-      executionContext.threadId = memoryThread;
-      executionContext.resourceId = memoryResource;
-      // DO NOT pass executionContext.memory - causes "Invalid model configuration" error
-      console.log(`[Manager] Executing agent with thread/resource context`);
-      console.log(`   Resource: ${memoryResource}, Thread: ${memoryThread}`);
-    } else {
-      console.log(`[Manager] Executing agent without memory context`);
-    }
-    
-    const stream = await managerAgentInstance!.stream(messagesWithHistory, executionContext);
+    const stream = await managerAgentInstance!.stream(messagesWithSkills, {
+      memory: memoryConfig,
+    });
 
     let text = "";
     for await (const chunk of stream.textStream) {
@@ -863,47 +497,7 @@ export async function managerAgent(
       await updateCardBatched(text);
     }
     
-    // Save both user message and response to Mastra Memory for future conversations
-    if (memoryContext && mastraMemory) {
-      try {
-        const timestamp = new Date();
-        const userMessageId = `msg-${memoryThread}-user-${timestamp.getTime()}`;
-        const assistantMessageId = `msg-${memoryThread}-assistant-${timestamp.getTime()}`;
-        
-        const messagesToSave = [
-          {
-            id: userMessageId,
-            threadId: memoryThread,
-            resourceId: memoryResource,
-            role: "user" as const,
-            content: { content: query },
-            createdAt: timestamp,
-          },
-          {
-            id: assistantMessageId,
-            threadId: memoryThread,
-            resourceId: memoryResource,
-            role: "assistant" as const,
-            content: { content: text },
-            createdAt: timestamp,
-          },
-        ];
-        
-        const savedMessages = await mastraMemory.saveMessages({
-          messages: messagesToSave,
-          format: 'v2', // Use v2 format for structured message storage
-        });
-        
-        console.log(`   ✅ Saved ${savedMessages.length} messages to Mastra Memory`);
-        console.log(`   Thread: ${memoryThread}, Resource: ${memoryResource}`);
-        
-        // Extract and save working memory facts from response
-        await extractAndSaveWorkingMemory(text, memoryContext);
-      } catch (error) {
-        console.warn(`[Manager] Failed to save to memory:`, error);
-        // Continue - memory persistence failure shouldn't break the response
-      }
-    }
+    // Memory is automatically saved by Mastra when memoryConfig is provided
 
     const duration = Date.now() - startTime;
     devtoolsTracker.trackResponse("manager", text, duration);

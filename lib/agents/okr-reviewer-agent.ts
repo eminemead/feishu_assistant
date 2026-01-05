@@ -24,6 +24,7 @@ import { getUserDataScope } from "../auth/user-data-scope";
 import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
 import { devtoolsTracker } from "../devtools-integration";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
@@ -260,9 +261,18 @@ function initializeAgent(): void {
 
   isInitializing = true;
 
+  // Create native Mastra memory for this agent
+  const agentMemory = createAgentMemory({
+    lastMessages: 20,
+    enableWorkingMemory: true,
+    enableSemanticRecall: false,
+  });
+
   // Create agent with Mastra framework
   okrReviewerAgentInstance = new Agent({
+    id: "okr_reviewer",
     name: "okr_reviewer",
+    memory: agentMemory || undefined,
     instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责OKR（目标和关键结果）评审和分析的Feishu/Lark AI助手。大多数用户查询将是中文。
@@ -341,12 +351,12 @@ export async function okrReviewerAgent(
   const startTime = Date.now();
   console.log(`[OKR] Received query: "${query}"`);
 
-  // Set up memory scoping
-  const conversationId = getConversationId(chatId, rootId);
-  const userScopeId = getUserScopeId(userId);
+  // Set up memory scoping using Mastra-native helpers
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
 
   console.log(
-    `[OKR] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[OKR] Memory context: thread=${memoryThread}, resource=${memoryResource}`
   );
 
   // Batch updates to avoid spamming Feishu
@@ -390,8 +400,19 @@ export async function okrReviewerAgent(
      // Track agent call for devtools monitoring
      devtoolsTracker.trackAgentCall("okr_reviewer", query);
 
+     // Build memory config for agent calls (native Mastra pattern)
+     const memoryConfig = memoryResource && memoryThread ? {
+       resource: memoryResource,
+       thread: {
+         id: memoryThread,
+         metadata: { chatId, rootId, userId },
+       },
+     } : undefined;
+
      // MASTRA STREAMING: Call OKR reviewer agent with streaming
-     const stream = await okrReviewerAgentInstance!.stream(messages);
+     const stream = await okrReviewerAgentInstance!.stream(messages, {
+       memory: memoryConfig,
+     });
 
     let text = "";
     for await (const chunk of stream.textStream) {

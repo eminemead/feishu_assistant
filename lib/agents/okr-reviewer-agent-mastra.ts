@@ -23,6 +23,7 @@ import { getUserDataScope } from "../auth/user-data-scope";
 import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
 import { devtoolsTracker } from "../devtools-integration";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
@@ -239,6 +240,7 @@ function initializeAgent(): void {
 
   // Create agent with Mastra framework
   okrReviewerAgentInstance = new Agent({
+    id: "okr_reviewer",
     name: "okr_reviewer",
     instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
 
@@ -313,11 +315,11 @@ export async function okrReviewerAgent(
   console.log(`[OKR] Received query: "${query}"`);
 
   // Set up memory scoping
-  const conversationId = getConversationId(chatId, rootId);
-  const userScopeId = getUserScopeId(userId);
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
 
   console.log(
-    `[OKR] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[OKR] Memory context: memoryThread=${memoryThread}, memoryResource=${memoryResource}`
   );
 
   // Batch updates to avoid spamming Feishu

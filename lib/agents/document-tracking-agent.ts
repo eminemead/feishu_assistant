@@ -75,14 +75,14 @@ export interface ChangeDetectionResult {
  * Create tool for executing document tracking commands
  */
 function createDocumentCommandTool() {
-  return tool({
+  return (tool as any)({
     description: "Execute document tracking commands like watch, check, unwatch, etc.",
     parameters: z.object({
       command: z.enum(["watch", "check", "unwatch", "watched", "tracking:status", "tracking:help"]),
       documentInput: z.string().optional().describe("Document URL, token, or search term"),
       groupId: z.string().optional().describe("Optional group/chat ID to notify"),
     }),
-    execute: async (params) => {
+    execute: async (params: { command: string; documentInput?: string; groupId?: string }) => {
       // Parse command and execute
       const { command, documentInput = "", groupId } = params;
       
@@ -130,6 +130,7 @@ function createDocumentCommandTool() {
  */
 export function getDocumentTrackingAgent(): Agent {
    return new Agent({
+     id: "document_tracking",
      name: "DocumentTracking",
      // Use native Mastra model router with free models only
      model: getMastraModel(),

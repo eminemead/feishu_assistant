@@ -27,6 +27,7 @@ import {
   createFeishuChatHistoryTool, 
   createFeishuDocsTool 
 } from "../tools";
+import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 
 /**
  * Get query text from messages
@@ -58,9 +59,18 @@ function initializeAgent(): void {
   const feishuChatHistoryTool = createFeishuChatHistoryTool(true);
   const feishuDocsTool = createFeishuDocsTool(true);
 
+  // Create native Mastra memory for this agent
+  const agentMemory = createAgentMemory({
+    lastMessages: 20,
+    enableWorkingMemory: true,
+    enableSemanticRecall: false,
+  });
+
   // Create agent with Mastra framework
   dpaMomAgentInstance = new Agent({
+    id: "dpa_mom",
     name: "dpa_mom",
+    memory: agentMemory || undefined,
     instructions: `You are dpa_mom, the loving and caring chief-of-staff and executive assistant to Ian (the dad) for the DPA (Data Product & Analytics) team. Most user queries will be in Chinese (中文).
 
 你是dpa_mom，是Ian（爸爸）的贴心首席幕僚和执行助理，负责照顾DPA（数据产品与分析）团队的每一位成员。大多数用户查询将是中文。
@@ -133,12 +143,12 @@ export async function dpaMomAgent(
   const startTime = Date.now();
   console.log(`[DPA Mom] Received query: "${query}"`);
 
-  // Set up memory scoping
-  const conversationId = getConversationId(chatId, rootId);
-  const userScopeId = getUserScopeId(userId);
+  // Set up memory scoping using Mastra-native helpers
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
 
   console.log(
-    `[DPA Mom] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[DPA Mom] Memory context: thread=${memoryThread}, resource=${memoryResource}`
   );
 
   // Batch updates to avoid spamming Feishu
@@ -182,8 +192,19 @@ export async function dpaMomAgent(
      // Track agent call for devtools monitoring
      devtoolsTracker.trackAgentCall("dpa_mom", query);
 
+     // Build memory config for agent calls (native Mastra pattern)
+     const memoryConfig = memoryResource && memoryThread ? {
+       resource: memoryResource,
+       thread: {
+         id: memoryThread,
+         metadata: { chatId, rootId, userId },
+       },
+     } : undefined;
+
      // MASTRA STREAMING: Call DPA Mom agent with streaming
-     const stream = await dpaMomAgentInstance!.stream(messages);
+     const stream = await dpaMomAgentInstance!.stream(messages, {
+       memory: memoryConfig,
+     });
 
     let text = "";
     for await (const chunk of stream.textStream) {

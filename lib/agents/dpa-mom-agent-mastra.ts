@@ -22,6 +22,7 @@ import { CoreMessage } from "ai";
 import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 import { 
   createGitLabCliTool, 
   createFeishuChatHistoryTool, 
@@ -60,6 +61,7 @@ function initializeAgent(): void {
 
   // Create agent with Mastra framework
   dpaMomAgentInstance = new Agent({
+    id: "dpa_mom",
     name: "dpa_mom",
     instructions: `You are dpa_mom, the loving and caring chief-of-staff and executive assistant to Ian (the dad) for the DPA (Data Product & Analytics) team. Most user queries will be in Chinese (中文).
 
@@ -133,11 +135,11 @@ export async function dpaMomAgent(
   console.log(`[DPA Mom] Received query: "${query}"`);
 
   // Set up memory scoping
-  const conversationId = getConversationId(chatId, rootId);
-  const userScopeId = getUserScopeId(userId);
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
 
   console.log(
-    `[DPA Mom] Memory context: conversationId=${conversationId}, userId=${userScopeId}`
+    `[DPA Mom] Memory context: memoryThread=${memoryThread}, memoryResource=${memoryResource}`
   );
 
   // Batch updates to avoid spamming Feishu
