@@ -26,6 +26,8 @@ export interface SkillRoutingRule {
   enabled: boolean;
   /** Execution type */
   type: SkillExecutionType;
+  /** Workflow ID when type="workflow" */
+  workflowId?: string;
 }
 
 /**

@@ -345,6 +345,11 @@ const executeGitLabCreateStep = createStep({
   * Topics: product names (ONVO, ES8, ET7), teams, features
   * Categories: bug, feature, task, analysis, data-quality
   * Domains: CAC, LTV, funnel, conversion, retention
+- assignee: GitLab username to assign the issue to. Look for:
+  * "assign to xxx", "assignee: xxx", "for xxx", "@xxx"
+  * Chinese: "指派给 xxx", "负责人: xxx", "分配给 xxx"
+  * Extract the username only (e.g., "xiaofei.yin"), NOT the @mention syntax
+  * If not specified, return "none" (will default to requester)
 
 Request: "${query}"
 
@@ -354,7 +359,8 @@ DESCRIPTION: <description>
 PROJECT: <project>
 PRIORITY: <1-4 or "none">
 DUE_DATE: <YYYY-MM-DD or "none">
-LABELS: <comma-separated labels or "none">`;
+LABELS: <comma-separated labels or "none">
+ASSIGNEE: <username or "none">`;
 
     const { text } = await generateText({
       model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
@@ -363,12 +369,14 @@ LABELS: <comma-separated labels or "none">`;
     });
     
     // Parse response
+    console.log(`[DPA Workflow] LLM parse response:\n${text}`);
     const titleMatch = text.match(/TITLE:\s*(.+)/i);
     const descMatch = text.match(/DESCRIPTION:\s*(.+)/i);
     const projectMatch = text.match(/PROJECT:\s*(.+)/i);
     const priorityMatch = text.match(/PRIORITY:\s*(.+)/i);
     const dueDateMatch = text.match(/DUE_DATE:\s*(.+)/i);
     const labelsMatch = text.match(/LABELS:\s*(.+)/i);
+    const assigneeMatch = text.match(/ASSIGNEE:\s*(.+)/i);
     
     const title = titleMatch?.[1]?.trim() || "New Issue";
     // Append doc summaries to description if available
@@ -388,6 +396,11 @@ LABELS: <comma-separated labels or "none">`;
     const labelsRaw = labelsMatch?.[1]?.trim();
     const labels = labelsRaw && labelsRaw.toLowerCase() !== "none" ? labelsRaw : undefined;
     
+    // Parse explicit assignee (if manager assigning to someone else)
+    const assigneeRaw = assigneeMatch?.[1]?.trim();
+    const explicitAssignee = assigneeRaw && assigneeRaw.toLowerCase() !== "none" ? assigneeRaw : undefined;
+    console.log(`[DPA Workflow] Assignee extraction: raw="${assigneeRaw}", explicit="${explicitAssignee}"`);
+    
     // Build labels array (include priority as label)
     const allLabels: string[] = [];
     if (priority) {
@@ -397,20 +410,25 @@ LABELS: <comma-separated labels or "none">`;
       allLabels.push(...labels.split(',').map(l => l.trim()).filter(Boolean));
     }
     
-    // Map Feishu user to GitLab username for attribution
-    const gitlabUsername = userId ? feishuIdToEmpAccount(userId) : null;
+    // Map Feishu user to GitLab username for attribution (requester)
+    const requesterUsername = userId ? feishuIdToEmpAccount(userId) : null;
+    // Map explicit assignee (might be Feishu user_id like "_user_1") to GitLab username
+    const mappedAssignee = explicitAssignee ? feishuIdToEmpAccount(explicitAssignee) : null;
+    // Use mapped assignee if provided, otherwise default to requester
+    const gitlabUsername = mappedAssignee || requesterUsername;
+    console.log(`[DPA Workflow] Assignee decision: explicit="${explicitAssignee}", mapped="${mappedAssignee}", requester="${requesterUsername}", final="${gitlabUsername}"`);
     const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
-    // Append requester attribution to description
-    const requesterInfo = gitlabUsername 
-      ? `\n\n---\n📋 *Created via Feishu Bot*\n**Requester**: @${gitlabUsername}\n**Created at**: ${createdAt}`
+    // Append requester attribution to description (always show who requested, even if assigned to someone else)
+    const requesterInfo = requesterUsername 
+      ? `\n\n---\n📋 *Created via Feishu Bot*\n**Requester**: @${requesterUsername}\n**Created at**: ${createdAt}`
       : `\n\n---\n📋 *Created via Feishu Bot*\n**Created at**: ${createdAt}`;
     const enrichedDescription = description + requesterInfo;
     
-    // Build glab command with assignee (if we can map the user)
+    // Build glab command with assignee (explicit or requester)
     let glabCommand = `issue create -R ${project} -t "${title}" -d "${enrichedDescription}"`;
     if (gitlabUsername) {
-      glabCommand += ` -a "${gitlabUsername}"`; // Auto-assign to requester
+      glabCommand += ` -a "${gitlabUsername}"`;
     }
     if (allLabels.length > 0) {
       glabCommand += ` -l "${allLabels.join(',')}"`;
@@ -422,7 +440,11 @@ LABELS: <comma-separated labels or "none">`;
     // Build concise preview - only essential info
     let preview = `📋 **Issue Preview**\n\n**Title**: ${title}\n**Project**: ${project}`;
     if (gitlabUsername) {
-      preview += `\n**Assignee**: @${gitlabUsername}`;
+      // Show who's assigning to whom when different
+      const assignmentNote = explicitAssignee && requesterUsername && explicitAssignee !== requesterUsername
+        ? ` (by @${requesterUsername})`
+        : '';
+      preview += `\n**Assignee**: @${gitlabUsername}${assignmentNote}`;
     }
     if (dueDate) {
       preview += ` | **DDL**: ${dueDate}`;

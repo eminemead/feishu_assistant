@@ -70,6 +70,8 @@ export async function loadSkill(skillPath: string): Promise<Skill> {
       // Workflow support
       type: parsed.type,  // "workflow" | "skill" | undefined
       workflowId: parsed.workflowId,  // ID of workflow to execute
+      // Routing rules (for agent-routing skill)
+      routing_rules: parsed.routing_rules,
     };
     
     // Validate required fields

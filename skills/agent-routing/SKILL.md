@@ -6,7 +6,7 @@ tags: ["routing", "classification", "orchestration", "workflow"]
 keywords: ["route", "classify", "agent", "specialist", "workflow"]
 routing_rules:
   dpa_assistant:
-    keywords: ["dpa", "data team", "dpa_mom", "gitlab", "glab", "创建issue", "提issue", "建issue"]
+    keywords: ["dpa", "data team", "dpa_mom", "gitlab", "glab", "create issue", "new issue", "创建issue", "提issue", "建issue", "报bug", "new bug"]
     priority: 1
     enabled: true
     type: "workflow"

@@ -411,6 +411,33 @@ eventDispatcher.register({
         const mentions = (message as any).mentions || [];
         console.log(`🔍 [WebSocket] Mentions array:`, JSON.stringify(mentions, null, 2));
         
+        // Resolve mention placeholders (_user_1, _user_2, etc.) to actual user IDs
+        // This is critical for workflows that need to parse @mentions (e.g., assignee in GitLab issues)
+        if (mentions.length > 0) {
+          for (const mention of mentions) {
+            const mentionKey = mention.key; // e.g., "@_user_1" or "_user_1"
+            if (!mentionKey) continue;
+            
+            // Get the actual user ID (prefer user_id for GitLab mapping, then open_id)
+            const actualUserId = mention.id?.user_id || mention.id?.open_id || mention.id?.union_id;
+            if (!actualUserId) continue;
+            
+            // Replace both "@_user_X" and "_user_X" patterns in the message text
+            // Feishu may use either format depending on message type
+            const patterns = [
+              mentionKey,                           // e.g., "@_user_1"
+              mentionKey.replace(/^@/, ''),         // e.g., "_user_1"
+            ];
+            
+            for (const pattern of patterns) {
+              if (messageText.includes(pattern)) {
+                console.log(`🔄 [WebSocket] Resolving mention: ${pattern} → ${actualUserId} (${mention.name || 'unknown'})`);
+                messageText = messageText.split(pattern).join(actualUserId);
+              }
+            }
+          }
+        }
+        
         // Extract mentioned user ID from mentions array
         // Skip bot mention and find actual user mention
         // PRIORITY: user_id > open_id (user_id maps to GitLab username like "xiaofei.yin")
