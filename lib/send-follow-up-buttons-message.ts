@@ -52,33 +52,34 @@ export async function sendFollowupButtonsMessage(
 
     console.log(`🔘 [FollowupButtons] Sending ${followups.length} buttons in separate message...`);
 
-    // Create card with button components (NOT action elements)
-    // Feishu Card JSON 2.0 no longer supports "action" tag
-    // Instead, use "button" components directly in elements array
+    // Card JSON 2.0: Buttons go directly in elements array (NO "action" wrapper)
+    // Each button uses "behaviors" with type: "callback" for server callbacks
     // See: https://open.feishu.cn/document/feishu-cards/card-json-v2-components/interactive-components/button
     
-    // Encode context in action_id so we can extract it from the callback
-    // Format: chatId|rootId|followup (encode context needed for response generation)
+    // Encode context for callback handler to extract chatId/rootId
     const contextPrefix = `${conversationId}|${rootId}`;
     
+    // Create button elements directly (Card JSON 2.0 format)
     const buttonElements = followups.map((followup, index) => {
       const isFirst = index === 0;
-      // Include context in action_id so callback handler can extract it
-      const actionId = `${contextPrefix}|${index}`;
-      // Use custom value if provided, otherwise fall back to text
-      const buttonValue = followup.value || followup.text;
+      // Encode context in value: "contextPrefix::buttonText"
+      const buttonText = followup.value || followup.text;
       return {
         tag: "button",
         text: {
-          content: followup.text,
           tag: "plain_text",
+          content: followup.text,
         },
         type: isFirst ? "primary" : "default",
+        size: "medium",
         behaviors: [
           {
             type: "callback",
-            action_id: actionId,  // Context encoded in action_id
-            value: buttonValue,   // What gets sent when user clicks
+            value: {
+              text: buttonText,
+              context: contextPrefix,
+              index: index,
+            },
           },
         ],
       };

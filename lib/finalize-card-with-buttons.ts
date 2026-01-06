@@ -113,7 +113,13 @@ export async function finalizeCardWithFollowups(
     if (config?.confirmationData && config?.conversationId && config?.rootId) {
       console.log(`🔘 [CardSuggestions] Sending confirmation buttons...`);
       
-      // Disable streaming mode first
+      // Update card content with final preview BEFORE disabling streaming
+      if (finalContent && elementId) {
+        console.log(`🔄 [CardSuggestions] Updating card with final preview: ${finalContent.length} chars`);
+        await updateCardElement(cardId, elementId, finalContent);
+      }
+      
+      // Disable streaming mode
       await finalizeCardSettings(cardId, finalContent, feishuClient);
       
       // Send confirmation buttons

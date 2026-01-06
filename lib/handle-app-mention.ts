@@ -141,17 +141,27 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         console.log(`[FeishuMention] Generating response...`);
         const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
         
-        // Handle structured result (with reasoning) or plain string
+        // Handle structured result (with reasoning and confirmation) or plain string
         let result: string;
         let reasoning: string | undefined;
+        let needsConfirmation = false;
+        let confirmationData: string | undefined;
         
         if (typeof rawResult === "string") {
             result = rawResult;
         } else {
             result = rawResult.text;
             reasoning = rawResult.reasoning;
+            needsConfirmation = rawResult.needsConfirmation || false;
+            confirmationData = rawResult.confirmationData;
         }
-        console.log(`[FeishuMention] Response generated (length=${result?.length || 0}, reasoning=${reasoning?.length || 0}): "${result?.substring(0, 50) || 'N/A'}..."`);
+        console.log(`[FeishuMention] Response generated:`);
+        console.log(`  - length=${result?.length || 0}`);
+        console.log(`  - reasoning=${reasoning?.length || 0}`);
+        console.log(`  - needsConfirmation=${needsConfirmation}`);
+        console.log(`  - hasConfirmationData=${!!confirmationData}`);
+        console.log(`  - confirmationDataLength=${confirmationData?.length || 0}`);
+        console.log(`  - result preview: "${result?.substring(0, 100) || 'N/A'}..."`);
 
         // Append thinking as markdown section if reasoning is present
         if (reasoning && reasoning.length > 0) {
@@ -168,12 +178,13 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             card.elementId,
             result,
             cleanText,  // context for question generation
-            3,          // max followups
+            needsConfirmation ? 0 : 3,  // No followups if confirmation needed
             {
                 conversationId: chatId,
                 rootId: messageId,
                 threadId: rootId,
-                sendButtonsAsSeperateMessage: true
+                sendButtonsAsSeperateMessage: true,
+                confirmationData: needsConfirmation ? confirmationData : undefined,
             }
         );
         console.log(`[FeishuMention] Card finalized with suggestions${finalizeResult.buttonMessageId ? ` (buttons: ${finalizeResult.buttonMessageId})` : ''}`);

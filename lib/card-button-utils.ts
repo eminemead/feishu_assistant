@@ -152,13 +152,48 @@ export function createSimpleButtonCard(
 
 /**
  * Extract button value from card action callback
+ * Handles string values in format "chatId|rootId::buttonText" or plain strings
  */
 export function extractButtonValue(actionValue: any): string | null {
   if (typeof actionValue === "string") {
+    // Check for context-encoded format: "chatId|rootId::buttonText"
+    if (actionValue.includes("::")) {
+      const parts = actionValue.split("::");
+      return parts.slice(1).join("::"); // Return everything after first ::
+    }
     return actionValue;
   }
   if (actionValue && typeof actionValue === "object") {
-    return actionValue.value || actionValue.text || null;
+    // Legacy object fallback
+    return actionValue.text || actionValue.value || null;
+  }
+  return null;
+}
+
+/**
+ * Extract context (chatId, rootId) from card action value string
+ * Format: "chatId|rootId::buttonText"
+ */
+export function extractButtonContext(actionValue: any): { chatId: string; rootId: string } | null {
+  if (typeof actionValue === "string" && actionValue.includes("::")) {
+    const contextPart = actionValue.split("::")[0]; // Get "chatId|rootId"
+    const parts = contextPart.split("|");
+    if (parts.length >= 2) {
+      return {
+        chatId: parts[0],
+        rootId: parts[1],
+      };
+    }
+  }
+  // Legacy object format fallback
+  if (actionValue && typeof actionValue === "object" && actionValue.context) {
+    const parts = actionValue.context.split("|");
+    if (parts.length >= 2) {
+      return {
+        chatId: parts[0],
+        rootId: parts[1],
+      };
+    }
   }
   return null;
 }

@@ -5,7 +5,7 @@
 
 import { handleNewMessage } from "./handle-messages";
 import { handleNewAppMention } from "./handle-app-mention";
-import { extractButtonValue } from "./card-button-utils";
+import { extractButtonValue, extractButtonContext } from "./card-button-utils";
 import { CardActionCallback, CardActionResponse } from "./handle-card-action";
 
 export interface ButtonFollowupContext {
@@ -106,11 +106,10 @@ export function extractButtonFollowupContext(
 ): ButtonFollowupContext | null {
   try {
     const actionValue = payload.event?.action?.value;
-    const actionId = payload.event?.action?.action_id;
     const operatorId = payload.event?.operator?.operator_id;
     const eventId = payload.header?.event_id;
 
-    // Extract button value
+    // Extract button value (the text to use as new query)
     const buttonValue = extractButtonValue(actionValue);
     if (!buttonValue) {
       console.warn(
@@ -119,19 +118,17 @@ export function extractButtonFollowupContext(
       return null;
     }
 
-    // Try to extract context from action_id (format: chatId|rootId|index)
+    // Extract context from value string (format: "chatId|rootId::buttonText")
     let extractedChatId = chatId;
     let extractedRootId = chatId;
     
-    if (actionId && typeof actionId === "string") {
-      const parts = actionId.split("|");
-      if (parts.length >= 2) {
-        extractedChatId = parts[0];
-        extractedRootId = parts[1];
-        console.log(
-          `✅ [ButtonFollowup] Extracted context from action_id: chatId=${extractedChatId}, rootId=${extractedRootId}`
-        );
-      }
+    const contextFromValue = extractButtonContext(actionValue);
+    if (contextFromValue) {
+      extractedChatId = contextFromValue.chatId;
+      extractedRootId = contextFromValue.rootId;
+      console.log(
+        `✅ [ButtonFollowup] Extracted context from value: chatId=${extractedChatId}, rootId=${extractedRootId}`
+      );
     }
 
     return {

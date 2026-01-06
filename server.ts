@@ -157,12 +157,39 @@ const eventDispatcher = new lark.EventDispatcher({
       console.log("🔘 [CardAction] Card action trigger received");
       console.log("🔘 [CardAction] Action data:", JSON.stringify(data, null, 2));
       
+      // Deduplicate card actions to prevent double processing
+      // Use event_id (unique per event) or token as fallback
+      const eventId = (data as any).event_id;
+      const token = (data as any).token;
+      const dedupKey = eventId ? `card:${eventId}` : (token ? `card:${token}` : null);
+      
+      if (dedupKey && processedEvents.has(dedupKey)) {
+        console.log(`⚠️ [CardAction] Duplicate card action ignored: ${dedupKey}`);
+        return;
+      }
+      if (dedupKey) {
+        processedEvents.set(dedupKey, Date.now());
+        cleanupProcessedEvents();
+      }
+      
       const botUserId = await getBotId();
-      const actionValue = (data as any).action?.value;
+      const operatorId = (data as any).operator?.user_id || (data as any).operator?.open_id || "";
+      const rawActionValue = (data as any).action?.value;
+      
+      // Handle both string (legacy) and object (CardKit 2.0 with behaviors) formats
+      // Object format: { context: "chatId|rootId", index: 0, text: "button text" }
+      let actionValue: string | undefined;
+      if (typeof rawActionValue === "string") {
+        actionValue = rawActionValue;
+      } else if (rawActionValue && typeof rawActionValue === "object") {
+        // Extract text from object value (CardKit 2.0 callback format)
+        actionValue = rawActionValue.text || rawActionValue.value;
+        console.log(`🔘 [CardAction] Extracted text from object value: "${actionValue?.substring(0, 50)}..."`);
+      }
 
-      if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
+      if (actionValue && actionValue.trim() && botUserId) {
         console.log(
-          `🔘 [CardAction] Button clicked: "${actionValue}"`
+          `🔘 [CardAction] Button clicked: "${actionValue.substring(0, 100)}..."`
         );
 
         // Extract context from Feishu callback data (not action_id)
@@ -182,7 +209,7 @@ const eventDispatcher = new lark.EventDispatcher({
             messageId: "",
             rootId,
             botUserId,
-            userId: (data as any).operator?.open_id || (data as any).operator?.user_id || "",
+            userId: operatorId,
             buttonValue: actionValue,
             isMention: false,
           })
@@ -197,6 +224,8 @@ const eventDispatcher = new lark.EventDispatcher({
             `⚠️ [CardAction] Missing context: chatId=${chatId}, rootId=${rootId}`
           );
         }
+      } else {
+        console.warn(`⚠️ [CardAction] No actionValue extracted from:`, rawActionValue);
       }
     } catch (error) {
       console.error("❌ [CardAction] Error handling card action:", error);
@@ -214,13 +243,37 @@ eventDispatcher.register({
     // Handle card.action.trigger_v1 from WebSocket in catch-all as fallback
     if (eventType === "card.action.trigger_v1") {
         try {
-          console.log("🔘 [WebSocket] Card action trigger received via WebSocket");
+          console.log("🔘 [WebSocket] Card action trigger_v1 received via WebSocket");
+          
+          // Deduplicate card actions to prevent double processing
+          const eventId = (data as any).event_id;
+          const token = (data as any).token;
+          const dedupKey = eventId ? `card:${eventId}` : (token ? `card:${token}` : null);
+          
+          if (dedupKey && processedEvents.has(dedupKey)) {
+            console.log(`⚠️ [CardAction] Duplicate card action (v1) ignored: ${dedupKey}`);
+            return;
+          }
+          if (dedupKey) {
+            processedEvents.set(dedupKey, Date.now());
+            cleanupProcessedEvents();
+          }
+          
           const botUserId = await getBotId();
-          const actionValue = (data as any).action?.value;
+          const operatorId = (data as any).operator?.user_id || (data as any).operator?.open_id || "";
+          const rawActionValue = (data as any).action?.value;
+          
+          // Handle both string (legacy) and object (CardKit 2.0) formats
+          let actionValue: string | undefined;
+          if (typeof rawActionValue === "string") {
+            actionValue = rawActionValue;
+          } else if (rawActionValue && typeof rawActionValue === "object") {
+            actionValue = rawActionValue.text || rawActionValue.value;
+          }
 
-          if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
+          if (actionValue && actionValue.trim() && botUserId) {
             console.log(
-              `🔘 [CardAction] Button clicked via WebSocket: "${actionValue}"`
+              `🔘 [CardAction] Button clicked via WebSocket: "${actionValue.substring(0, 100)}..."`
             );
 
             // Extract context from Feishu callback (Feishu provides context directly)
@@ -239,7 +292,7 @@ eventDispatcher.register({
                 messageId: rootId,
                 rootId,
                 botUserId,
-                userId: (data as any).operator?.open_id || (data as any).operator?.user_id || "",
+                userId: operatorId,
                 buttonValue: actionValue,
                 isMention: false,
               })
@@ -360,6 +413,7 @@ eventDispatcher.register({
         
         // Extract mentioned user ID from mentions array
         // Skip bot mention and find actual user mention
+        // PRIORITY: user_id > open_id (user_id maps to GitLab username like "xiaofei.yin")
         if (mentions.length > 0 && message.chat_type === "group") {
           // Find first user mention (skip bot mention)
           const userMention = mentions.find(mention => {
@@ -369,8 +423,9 @@ eventDispatcher.register({
           });
 
           if (userMention) {
-            mentionedUserId = userMention.id?.open_id ||
-                             userMention.id?.user_id ||
+            // Prefer user_id (maps to GitLab username) over open_id
+            mentionedUserId = userMention.id?.user_id ||
+                             userMention.id?.open_id ||
                              userMention.id?.union_id ||
                              null;
 
@@ -447,9 +502,11 @@ eventDispatcher.register({
       // Handle group message with mention
       if (isMention) {
         console.log(`👥 [WebSocket] Processing group mention: "${messageText.substring(0, 50)}..."`);
-        // Use mentioned user's ID for memory context (if available), otherwise fall back to sender
-        const contextUserId = mentionedUserId || userId || chatId;
-        console.log(`💾 [WebSocket] Using user ID for memory context: ${contextUserId}${mentionedUserId ? ` (from mention)` : ` (sender)`}`);
+        // Use SENDER's user_id for context (needed for GitLab assignee, RLS, etc.)
+        // sender's user_id (like "xiaofei.yin") maps to GitLab username
+        // mentionedUserId might be someone else entirely (not the requester)
+        const contextUserId = userId || chatId;
+        console.log(`💾 [WebSocket] Using sender user ID for context: ${contextUserId}`);
         
         await handleNewAppMention({
           chatId,
@@ -918,6 +975,20 @@ app.post("/webhook/card", async (c) => {
       console.warn("⚠️ [CardAction] Invalid or unparseable card action payload");
       return c.json({ error: "Invalid payload" }, 400);
     }
+
+    // Deduplicate card actions to prevent double processing (webhook + WebSocket)
+    const actionToken = cardActionPayload.event?.action?.action_token;
+    const actionTime = cardActionPayload.event?.action?.action_time;
+    const operatorId = cardActionPayload.event?.operator?.operator_id || "";
+    const dedupKey = actionToken ? `card:${actionToken}` : `card:${actionTime}:${operatorId}`;
+    
+    if (processedEvents.has(dedupKey)) {
+      console.log(`⚠️ [CardAction] Duplicate card webhook action ignored: ${dedupKey}`);
+      // Still return success to Feishu to avoid retries
+      return c.json({ toast: { type: "success", content: "Processing..." } }, 200);
+    }
+    processedEvents.set(dedupKey, Date.now());
+    cleanupProcessedEvents();
 
     // Get bot ID for button followup routing
     const botUserId = await getBotId();

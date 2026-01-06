@@ -55,6 +55,8 @@ export interface WorkflowExecutionResult {
   needsConfirmation?: boolean;
   /** JSON data for confirmation button (passed to callback) */
   confirmationData?: string;
+  /** Whether workflow should be skipped (handled by agent instead) */
+  skipWorkflow?: boolean;
 }
 
 /**
@@ -79,7 +81,8 @@ export async function executeSkillWorkflow(
   const startTime = Date.now();
   const registry = getWorkflowRegistry();
   
-  console.log(`[Workflow] Executing workflow: ${workflowId}`);
+  console.log(`[Workflow] Executing workflow: ${workflowId}, query: "${options.query?.substring(0, 100)}..."`);
+  console.log(`[Workflow] Options:`, { userId: options.userId, chatId: options.chatId, rootId: options.rootId });
   
   // Check if workflow exists
   const registration = registry.get(workflowId);
@@ -132,27 +135,87 @@ export async function executeSkillWorkflow(
       response = result;
     } else if (result && typeof result === "object") {
       const resultObj = result as Record<string, unknown>;
+      
+      // DEBUG: Log raw Mastra result structure
+      console.log(`[Workflow] DEBUG Raw result keys:`, Object.keys(resultObj));
+      console.log(`[Workflow] DEBUG Result structure:`, JSON.stringify(resultObj, null, 2).substring(0, 2000));
+      
+      // Mastra workflows return { status, steps: { "step-id": { status, output: {...} } } }
+      // Step results have output nested inside .output property
+      let outputData: Record<string, unknown> | undefined;
+      
+      if ("steps" in resultObj && typeof resultObj.steps === "object") {
+        const steps = resultObj.steps as Record<string, unknown>;
+        // Look for format-response step (DPA workflow) or any step with response
+        const formatStep = steps["format-response"] as Record<string, unknown> | undefined;
+        if (formatStep) {
+          // Mastra step results wrap actual data in .output property
+          outputData = (formatStep.output as Record<string, unknown>) || formatStep;
+          console.log(`[Workflow] Extracted format-response step:`, {
+            hasOutput: "output" in formatStep,
+            keys: Object.keys(outputData || {}),
+            needsConfirmation: outputData?.needsConfirmation,
+            hasConfirmationData: !!outputData?.confirmationData,
+          });
+        } else {
+          // Fallback: find any step with a 'response' field
+          for (const [stepId, stepResult] of Object.entries(steps)) {
+            if (stepResult && typeof stepResult === "object") {
+              const stepObj = stepResult as Record<string, unknown>;
+              // Check .output first, then step itself
+              const stepOutput = (stepObj.output as Record<string, unknown>) || stepObj;
+              if ("response" in stepOutput) {
+                outputData = stepOutput;
+                console.log(`[Workflow] Found response in step ${stepId}`);
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // Use extracted output or fall back to top-level result
+      const dataSource = outputData || resultObj;
+      
       // Handle different workflow output formats
-      if ("response" in resultObj) {
-        response = String(resultObj.response);
-      } else if ("message" in resultObj) {
-        response = String(resultObj.message);
-      } else if ("text" in resultObj) {
-        response = String(resultObj.text);
+      if ("response" in dataSource) {
+        response = String(dataSource.response);
+      } else if ("message" in dataSource) {
+        response = String(dataSource.message);
+      } else if ("text" in dataSource) {
+        response = String(dataSource.text);
       } else {
         response = JSON.stringify(result, null, 2);
       }
       
       // Extract artifacts if present
-      if ("artifacts" in resultObj && Array.isArray(resultObj.artifacts)) {
-        artifacts = resultObj.artifacts;
+      if ("artifacts" in dataSource && Array.isArray(dataSource.artifacts)) {
+        artifacts = dataSource.artifacts;
       }
       
       // Extract confirmation data if present
-      if ("needsConfirmation" in resultObj && resultObj.needsConfirmation) {
+      if ("needsConfirmation" in dataSource && dataSource.needsConfirmation) {
         needsConfirmation = true;
-        confirmationData = resultObj.confirmationData as string | undefined;
+        confirmationData = dataSource.confirmationData as string | undefined;
         console.log(`[Workflow] Workflow requires confirmation`);
+      }
+      
+      // Check for skip workflow signal (general_chat should be handled by agent)
+      // Skip signal can be in outputData (from step output) or resultObj (top-level)
+      const hasSkipSignal = 
+        (outputData && "skipWorkflow" in outputData && outputData.skipWorkflow) ||
+        ("skipWorkflow" in resultObj && resultObj.skipWorkflow);
+      
+      if (hasSkipSignal) {
+        console.log(`[Workflow] Skip signal detected, returning to manager for agent handling`);
+        return {
+          response: "",
+          success: false,
+          error: "SKIP_WORKFLOW",
+          durationMs: Date.now() - startTime,
+          workflowId,
+          skipWorkflow: true,
+        };
       }
     } else {
       response = String(result);

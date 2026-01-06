@@ -125,9 +125,22 @@ Do not include any other text.`;
       
       console.log(`[DPA Workflow] Classified intent: ${intent}`);
     } catch (error: any) {
-      // If LLM fails, fallback to general_chat which handles conversation gracefully
-      console.error(`[DPA Workflow] Intent classification failed: ${error.message}. Falling back to general_chat.`);
+      // If LLM fails, fallback to general_chat which will be handled by manager
+      console.error(`[DPA Workflow] Intent classification failed: ${error.message}. Returning to manager.`);
       intent = "general_chat";
+    }
+    
+    // EARLY RETURN: general_chat should NOT go through workflow
+    // Return special signal so manager handles it with agent instead
+    if (intent === "general_chat") {
+      console.log(`[DPA Workflow] general_chat detected, returning to manager for agent handling`);
+      return {
+        intent,
+        params: { __skipWorkflow: "true" },
+        query,
+        chatId,
+        userId,
+      };
     }
     
     // Extract params based on intent
@@ -294,20 +307,39 @@ const executeGitLabCreateStep = createStep({
       
       // Calculate dates for due date parsing
       const today = new Date();
-      const dayOfWeek = today.getDay();
+      const todayStr = today.toISOString().split('T')[0];
+      const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      
+      // Calculate common relative dates
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      
+      // End of this week (Friday)
+      const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7;
+      const thisFriday = new Date(today);
+      thisFriday.setDate(today.getDate() + daysUntilFriday);
+      const thisFridayStr = thisFriday.toISOString().split('T')[0];
+      
+      // Next Wednesday
       const daysUntilNextWednesday = (3 - dayOfWeek + 7) % 7 || 7;
       const nextWednesday = new Date(today);
       nextWednesday.setDate(today.getDate() + daysUntilNextWednesday);
       const nextWedStr = nextWednesday.toISOString().split('T')[0];
     
       const parsePrompt = `Parse this GitLab issue creation request and extract:
-- title: Issue title (required)
+- title: Issue title (required). Clean up any @mentions or formatting.
 - description: Issue description (expand on the title with context)
 - project: GitLab project path. Look for explicit mentions like "in dpa/xxx", "项目 xxx". 
-  Common DPA projects: dpa/dagster (data pipelines), dpa/analytics (analysis/reports), dpa/dbt (data models).
-  If not specified, infer from context or default to "dpa/dagster".
+  Common DPA projects: dpa/dpa-mom/da/task (default for DA tasks), dpa/dagster (data pipelines), dpa/analytics (analysis/reports), dpa/dbt (data models), dpa/feishu-assistant (bot/automation).
+  If not specified, default to "dpa/dpa-mom/da/task".
 - priority: Priority level 1-4 (1=critical, 2=high, 3=medium, 4=low). Look for "priority X", "P1", "urgent", "critical", etc.
-- due_date: Due date in YYYY-MM-DD format. Parse "ddl", "deadline", "due", "next wednesday" (=${nextWedStr}), "tomorrow", etc.
+- due_date: Due date in YYYY-MM-DD format. Today is ${todayStr}. Parse these:
+  * "today" = ${todayStr}
+  * "tomorrow" = ${tomorrowStr}
+  * "this week", "end of week", "eow" = ${thisFridayStr} (Friday)
+  * "next wednesday", "wed" = ${nextWedStr}
+  * Explicit dates like "Jan 10", "1/10", "2025-01-10"
 - labels: Extract tags/labels from the request. Look for:
   * Explicit: "tag:", "label:", "#tag"
   * Topics: product names (ONVO, ES8, ET7), teams, features
@@ -342,7 +374,7 @@ LABELS: <comma-separated labels or "none">`;
     // Append doc summaries to description if available
     const baseDescription = descMatch?.[1]?.trim() || query;
     const description = docSummaries ? baseDescription + docSummaries : baseDescription;
-    const project = projectMatch?.[1]?.trim() || "dpa/dagster";
+    const project = projectMatch?.[1]?.trim() || "dpa/dpa-mom/da/task";
     
     // Parse priority (1-4)
     const priorityRaw = priorityMatch?.[1]?.trim();
@@ -387,22 +419,14 @@ LABELS: <comma-separated labels or "none">`;
       glabCommand += ` --due-date ${dueDate}`;
     }
     
-    // Build preview instead of executing immediately
+    // Build concise preview - only essential info
     let preview = `📋 **Issue Preview**\n\n**Title**: ${title}\n**Project**: ${project}`;
     if (gitlabUsername) {
       preview += `\n**Assignee**: @${gitlabUsername}`;
     }
-    if (priority) {
-      preview += `\n**Priority**: P${priority}`;
-    }
     if (dueDate) {
-      preview += `\n**Due Date**: ${dueDate}`;
+      preview += ` | **DDL**: ${dueDate}`;
     }
-    if (allLabels.length > 0) {
-      preview += `\n**Labels**: ${allLabels.join(', ')}`;
-    }
-    preview += `\n\n**Description**:\n${description}`;
-    preview += `\n\n---\n*Click ✅ Confirm to create this issue, or ❌ Cancel to abort.*`;
     
     // Encode issue data for confirmation button
     const confirmationData = JSON.stringify({
@@ -659,11 +683,12 @@ const executeGeneralChatStep = createStep({
     
     console.log(`[DPA Workflow] Executing general chat`);
     
-    // Create inline agent for conversational response
-    // Uses free model: nvidia/nemotron-3-nano-30b-a3b:free
-    const dpaMomAgent = new Agent({
-      name: "dpa_mom_chat",
-      instructions: `You are dpa_mom, the loving chief-of-staff for the DPA (Data Product & Analytics) team.
+    try {
+      // Create inline agent for conversational response
+      // Uses free model: nvidia/nemotron-3-nano-30b-a3b:free
+      const dpaMomAgent = new Agent({
+        name: "dpa_mom_chat",
+        instructions: `You are dpa_mom, the loving chief-of-staff for the DPA (Data Product & Analytics) team.
 
 你是dpa_mom，DPA团队的贴心首席幕僚。
 
@@ -677,19 +702,20 @@ GUIDELINES:
 - Be helpful, concise, and friendly
 - Format responses in Markdown
 - Do not tag users (@)`,
-      model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free (OpenRouter free tier)
-    });
-    
-    try {
+        model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free (OpenRouter free tier)
+      });
+      
       const result = await dpaMomAgent.generate(query);
+      console.log(`[DPA Workflow] General chat completed, length=${result.text?.length || 0}`);
       return {
-        result: result.text,
-        intent: "general_chat" as const,
+        result: result.text || "Hi! How can I help you today?",
+        intent: "general_chat" as Intent,
       };
     } catch (error: any) {
+      console.error(`[DPA Workflow] General chat error:`, error?.message || error);
       return {
-        result: `抱歉，我遇到了一些问题：${error.message}`,
-        intent: "general_chat" as const,
+        result: `抱歉，我遇到了一些问题：${error?.message || "Unknown error"}`,
+        intent: "general_chat" as Intent,
       };
     }
   }
@@ -707,15 +733,27 @@ const formatResponseStep = createStep({
     intent: IntentEnum,
     needsConfirmation: z.boolean().optional(),
     confirmationData: z.string().optional(),
+    skipWorkflow: z.boolean().optional(),
   }),
   outputSchema: z.object({
     response: z.string(),
     intent: z.string(),
     needsConfirmation: z.boolean().optional(),
     confirmationData: z.string().optional(),
+    skipWorkflow: z.boolean().optional(),
   }),
   execute: async ({ inputData }) => {
-    const { result, intent, needsConfirmation, confirmationData } = inputData;
+    const { result, intent, needsConfirmation, confirmationData, skipWorkflow } = inputData;
+    
+    // Pass through skip signal
+    if (skipWorkflow) {
+      console.log(`[DPA Workflow] Passing through skip signal to manager`);
+      return {
+        response: "__SKIP_WORKFLOW__",
+        intent: "general_chat",
+        skipWorkflow: true,
+      };
+    }
     
     console.log(`[DPA Workflow] Formatting response for intent: ${intent}, needsConfirmation: ${needsConfirmation}`);
     
@@ -767,11 +805,47 @@ export const dpaAssistantWorkflow = createWorkflow({
       async ({ inputData }) => inputData?.intent === "doc_read",
       executeDocReadStep
     ],
-    [
-      async ({ inputData }) => inputData?.intent === "general_chat",
-      executeGeneralChatStep
-    ],
+    // NOTE: general_chat is NOT handled by workflow - falls back to agent
   ])
+  // After branch, outputs are keyed by step ID - normalize them
+  .map(async ({ inputData, getStepResult }) => {
+    // Check if workflow should be skipped (general_chat intent)
+    const classifyResult = getStepResult("classify-intent") as any;
+    if (classifyResult?.params?.__skipWorkflow === "true") {
+      console.log(`[DPA Workflow] Skip signal detected, returning to manager`);
+      return {
+        result: "__SKIP_WORKFLOW__",
+        intent: "general_chat" as Intent,
+        skipWorkflow: true,
+      };
+    }
+    
+    // Get result from whichever branch executed
+    const gitlabCreate = getStepResult("execute-gitlab-create");
+    const gitlabList = getStepResult("execute-gitlab-list");
+    const chatSearch = getStepResult("execute-chat-search");
+    const docRead = getStepResult("execute-doc-read");
+    
+    // Return the result from whichever branch executed
+    const branchResult = gitlabCreate || gitlabList || chatSearch || docRead;
+    
+    if (branchResult) {
+      return {
+        result: branchResult.result || "No response",
+        intent: branchResult.intent || "general_chat",
+        needsConfirmation: (branchResult as any).needsConfirmation,
+        confirmationData: (branchResult as any).confirmationData,
+      };
+    }
+    
+    // No branch executed - this shouldn't happen if routing is correct
+    console.warn(`[DPA Workflow] No branch executed, returning skip signal`);
+    return {
+      result: "__SKIP_WORKFLOW__",
+      intent: "general_chat" as Intent,
+      skipWorkflow: true,
+    };
+  })
   .then(formatResponseStep)
   .commit();
 

@@ -18,6 +18,7 @@ import { devtoolsTracker } from "../devtools-integration";
 import { getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 import { createAgentMemory } from "../memory-factory";
 import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { dpaMomAgent } from "./dpa-mom-agent";
 import {
   isRateLimitError,
   isModelRateLimited,
@@ -252,30 +253,59 @@ export async function managerAgent(
         onUpdate: updateStatus,
       });
 
-      const duration = Date.now() - startTime;
-      devtoolsTracker.trackResponse(
-        routingDecision.workflowId!,
-        result.response,
-        duration,
-        { workflowRoute: true, success: result.success }
-      );
-      healthMonitor.trackAgentCall(routingDecision.workflowId!, duration, result.success);
+      // Check for skip signal - workflow wants manager/agent to handle instead
+      if (result.skipWorkflow) {
+        console.log(`[Manager] Workflow returned skip signal, falling back to DPA Mom agent`);
+        
+        // Use DPA Mom agent for conversational queries
+        try {
+          const dpaMomResponse = await dpaMomAgent(
+            messages,
+            updateStatus,
+            chatId,
+            rootId,
+            userId
+          );
+          
+          const duration = Date.now() - startTime;
+          devtoolsTracker.trackResponse("dpa_mom", dpaMomResponse, duration, {
+            workflowSkip: true,
+          });
+          healthMonitor.trackAgentCall("dpa_mom", duration, true);
+          
+          console.log(`[Manager] DPA Mom agent response (length=${dpaMomResponse.length}, duration=${duration}ms)`);
+          return dpaMomResponse;
+        } catch (error) {
+          console.error(`[Manager] DPA Mom agent failed:`, error);
+          // Fall through to general manager handling
+        }
+      } else {
+        const duration = Date.now() - startTime;
+        devtoolsTracker.trackResponse(
+          routingDecision.workflowId!,
+          result.response,
+          duration,
+          { workflowRoute: true, success: result.success }
+        );
+        healthMonitor.trackAgentCall(routingDecision.workflowId!, duration, result.success);
 
-      // NOTE: Workflow responses are not automatically saved to agent memory
-      // because workflows execute independently. Memory is handled by the workflow itself.
-      console.log(`[Workflow] ${routingDecision.workflowId} complete (length=${result.response.length}, durationMs=${result.durationMs})`);
-      
-      // Return structured result if confirmation is needed
-      if (result.needsConfirmation && result.confirmationData) {
-        console.log(`[Workflow] Returning confirmation request`);
-        return {
-          text: result.response,
-          needsConfirmation: true,
-          confirmationData: result.confirmationData,
-        };
+        // NOTE: Workflow responses are not automatically saved to agent memory
+        // because workflows execute independently. Memory is handled by the workflow itself.
+        console.log(`[Workflow] ${routingDecision.workflowId} complete (length=${result.response.length}, durationMs=${result.durationMs})`);
+        
+        // Return structured result if confirmation is needed
+        console.log(`[Workflow] Result check - needsConfirmation: ${result.needsConfirmation}, hasConfirmationData: ${!!result.confirmationData}`);
+        if (result.needsConfirmation && result.confirmationData) {
+          console.log(`[Workflow] Returning confirmation request with data length: ${result.confirmationData.length}`);
+          return {
+            text: result.response,
+            needsConfirmation: true,
+            confirmationData: result.confirmationData,
+          };
+        }
+        
+        return result.response;
       }
-      
-      return result.response;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(`[Manager] Workflow ${routingDecision.workflowId} failed:`, errorMsg);
