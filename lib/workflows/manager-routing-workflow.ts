@@ -226,11 +226,14 @@ export async function getRoutingDecision(params: {
   shouldUseWorkflow: boolean;
 }> {
   try {
-    const result = await managerRoutingWorkflow.run({
-      query: params.query,
-      messages: params.messages,
-      executionContext: params.executionContext,
-    });
+    const run = await managerRoutingWorkflow.createRun();
+    const result = await run.start({
+      inputData: {
+        query: params.query,
+        messages: params.messages,
+        executionContext: params.executionContext,
+      },
+    }) as any;
 
     return {
       category: result.category,

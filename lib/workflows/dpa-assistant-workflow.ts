@@ -793,10 +793,13 @@ export async function runDpaAssistantWorkflow(
   chatId?: string,
   userId?: string
 ): Promise<DpaWorkflowResult> {
-  const result = await dpaAssistantWorkflow.run({
-    query,
-    chatId,
-    userId,
+  const run = await dpaAssistantWorkflow.createRun();
+  const result = await run.start({
+    inputData: {
+      query,
+      chatId,
+      userId,
+    },
   });
   
   // Extract response from workflow result

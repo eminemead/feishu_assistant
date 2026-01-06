@@ -12,11 +12,10 @@
 import { z } from "zod";
 
 // Import Workflow type from Mastra
-// Note: We use a flexible type here since Workflow has complex generics
-type WorkflowLike = {
-  id: string;
-  run: (input: Record<string, unknown>) => Promise<unknown>;
-};
+// Note: Mastra workflows use createRun() + start() pattern
+// We use a flexible type to accommodate Mastra's complex generic types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WorkflowLike = any;
 
 /**
  * Workflow execution context passed to steps

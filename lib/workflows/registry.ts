@@ -85,7 +85,8 @@ class WorkflowRegistry {
     const startTime = Date.now();
     
     try {
-      const result = await registration.workflow.run(input as Record<string, unknown>);
+      const run = await registration.workflow.createRun();
+      const result = await run.start({ inputData: input as Record<string, unknown> });
       const durationMs = Date.now() - startTime;
       
       console.log(`[WorkflowRegistry] Workflow ${workflowId} completed in ${durationMs}ms`);
@@ -115,7 +116,8 @@ class WorkflowRegistry {
     
     if (!registration.metadata.supportsStreaming) {
       // For non-streaming workflows, execute normally and yield final result
-      const result = await registration.workflow.run(input as Record<string, unknown>);
+      const run = await registration.workflow.createRun();
+      const result = await run.start({ inputData: input as Record<string, unknown> });
       yield { type: "done", data: result };
       return;
     }
@@ -126,7 +128,8 @@ class WorkflowRegistry {
     
     // Execute workflow and yield result
     // TODO: Implement proper streaming when integrated with createRun
-    const result = await registration.workflow.run(input as Record<string, unknown>);
+    const run = await registration.workflow.createRun();
+    const result = await run.start({ inputData: input as Record<string, unknown> });
     yield { type: "done", data: result };
   }
 

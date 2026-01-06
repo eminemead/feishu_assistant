@@ -304,10 +304,13 @@ export async function runDocumentTrackingWorkflow(params: {
   chatId: string;
   userId: string;
 }) {
-  return documentTrackingWorkflow.run({
-    docToken: params.docToken,
-    docType: params.docType || "doc",
-    chatId: params.chatId,
-    userId: params.userId,
+  const run = await documentTrackingWorkflow.createRun();
+  return run.start({
+    inputData: {
+      docToken: params.docToken,
+      docType: params.docType || "doc",
+      chatId: params.chatId,
+      userId: params.userId,
+    },
   });
 }

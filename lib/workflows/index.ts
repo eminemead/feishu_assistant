@@ -62,6 +62,7 @@ export function initializeWorkflows(): void {
   }
 
   // Register OKR Analysis Workflow
+  // Note: Cast to any to work around Mastra's complex generic types
   registerWorkflow(
     {
       id: "okr-analysis",
@@ -71,7 +72,7 @@ export function initializeWorkflows(): void {
       supportsStreaming: true,
       estimatedDurationSec: 10,
     },
-    okrAnalysisWorkflow
+    okrAnalysisWorkflow as any
   );
 
   // Register Document Tracking Workflow
@@ -84,7 +85,7 @@ export function initializeWorkflows(): void {
       supportsStreaming: false,
       estimatedDurationSec: 3,
     },
-    documentTrackingWorkflow
+    documentTrackingWorkflow as any
   );
 
   // Register DPA Assistant Workflow
@@ -97,7 +98,7 @@ export function initializeWorkflows(): void {
       supportsStreaming: false,
       estimatedDurationSec: 5,
     },
-    dpaAssistantWorkflow
+    dpaAssistantWorkflow as any
   );
 
   registry.setInitialized();

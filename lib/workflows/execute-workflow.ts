@@ -118,8 +118,9 @@ export async function executeSkillWorkflow(
       options.onUpdate(`⏳ 正在执行工作流: ${registration.metadata.name}...`);
     }
     
-    // Execute workflow
-    const result = await registration.workflow.run(input as Record<string, unknown>);
+    // Execute workflow using createRun + start pattern
+    const run = await registration.workflow.createRun();
+    const result = await run.start({ inputData: input as Record<string, unknown> });
     
     // Extract response from result
     let response: string;
