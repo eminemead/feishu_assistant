@@ -6,7 +6,7 @@ tags: ["routing", "classification", "orchestration", "workflow"]
 keywords: ["route", "classify", "agent", "specialist", "workflow"]
 routing_rules:
   dpa_assistant:
-    keywords: ["dpa", "data team", "ae", "da", "dpa_mom", "mom", "ma", "gitlab", "glab", "issue", "mr"]
+    keywords: ["dpa", "data team", "dpa_mom", "gitlab", "glab", "创建issue", "提issue", "建issue"]
     priority: 1
     enabled: true
     type: "workflow"
@@ -51,7 +51,7 @@ Skills inject instructions into manager agent:
 ## Routing Rules
 
 ### DPA Assistant (Priority 1 - Highest)
-- **Keywords**: dpa, data team, ae, da, dpa_mom, mom, ma, gitlab, glab, issue, mr
+- **Keywords**: dpa, data team, dpa_mom, gitlab, glab, 创建issue, 提issue, 建issue
 - **Status**: Active
 - **Type**: Workflow (deterministic, intent-based)
 - **Workflow**: `dpa-assistant`
@@ -109,9 +109,9 @@ When multiple rules match, priority determines the winner:
 
 **Example 1**: DPA Query
 ```
-Query: "Create a GitLab issue for the login bug"
-→ Matches: ["gitlab", "issue"]
-→ Score: 2/12 = 0.167
+Query: "帮我在gitlab上创建issue"
+→ Matches: ["gitlab", "创建issue"]
+→ Score: 2/8 = 0.25
 → Route: dpa-assistant (workflow)
 → Intent: gitlab_create
 → Execution: glab issue create
