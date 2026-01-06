@@ -32,15 +32,15 @@ import {
   getCachedNotificationResponse,
   storeNotificationResponse,
 } from "./lib/notification-idempotency";
+import { logger } from "./lib/logger";
 
 // Global error handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ [Process] Unhandled Promise Rejection:', reason);
-  console.error('   Promise:', promise);
+  logger.fail('Process', 'Unhandled Promise Rejection', { reason, promise: String(promise) });
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('❌ [Process] Uncaught Exception:', error);
+  logger.fail('Process', 'Uncaught Exception', error);
   // Don't exit immediately - log and continue
 });
 

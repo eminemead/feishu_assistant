@@ -8,6 +8,7 @@ import {
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { handleDocumentCommand } from "./handle-doc-commands";
 import { devtoolsTracker } from "./devtools-integration";
+import { logger } from "./logger";
 
 /**
  * Format thinking/reasoning content as a collapsible-like section in markdown
@@ -42,7 +43,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
   const { chatId, messageId, rootId, messageText, botUserId, userId } = data;
   const startTime = Date.now();
 
-  console.log(`Handling new message: ${chatId} ${rootId}`);
+  logger.info(`Handling new message: ${chatId} ${rootId}`);
 
   // Remove bot mention from message text if present
   let cleanText = messageText.replace(
@@ -61,7 +62,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
   // Document commands should be intercepted and handled directly
   const isDocCommand = /^(watch|check|unwatch|watched|tracking:\w+)\s+/i.test(cleanText);
   if (isDocCommand) {
-    console.log(`[DocCommand] Intercepted document command: "${cleanText.substring(0, 50)}..."`);
+    logger.info(`[DocCommand] Intercepted document command: "${cleanText.substring(0, 50)}..."`);
     devtoolsTracker.trackAgentCall("DocumentTracking", cleanText, {
       messageId,
       rootId,
@@ -83,7 +84,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
     });
 
     if (handled) {
-      console.log(`[DocCommand] Command handled successfully`);
+      logger.success("DocCommand", "Command handled successfully");
       await updateCardElement(card.cardId, card.elementId, "✅ Command executed");
       const duration = Date.now() - startTime;
       devtoolsTracker.trackResponse("DocumentTracking", "Command executed", duration, {
@@ -93,7 +94,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
       });
       return; // Early exit - don't call generateResponse
     }
-    console.log(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
+    logger.info(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
   }
 
   // Create streaming card - reply in thread if this is a thread message
@@ -126,7 +127,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
       // Always add current message to thread context
       // This ensures button followups and new messages aren't lost
       if (threadMessages.length === 0) {
-        console.warn(`⚠️ Thread fetch returned empty, using current message as fallback`);
+        logger.warn(`Thread fetch returned empty, using current message as fallback`);
         messages = [{ role: "user" as const, content: cleanText }];
       } else {
         // Append current message to thread history
@@ -174,13 +175,13 @@ export async function handleNewMessage(data: FeishuMessageData) {
       }
     } catch (e) {
       // Parsing failed, continue without image
-      console.log("Could not extract image_key from result");
+      logger.debug("Could not extract image_key from result");
     }
 
     // Append thinking as collapsed section in markdown if reasoning is present
     // Note: Feishu collapsible_panel doesn't work with streaming cards, so we use markdown formatting
     if (reasoning && reasoning.length > 0) {
-      console.log(`[Card] Appending thinking section with ${reasoning.length} chars of reasoning`);
+      logger.debug(`[Card] Appending thinking section with ${reasoning.length} chars of reasoning`);
       // Format thinking as a dimmed/quoted section that users can scroll to see
       const thinkingSection = formatThinkingSection(reasoning);
       result = result + thinkingSection;
@@ -211,7 +212,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
       messageId
     });
     } catch (error) {
-    console.error("Error generating response:", error);
+    logger.error("Error generating response:", error);
 
     // Track error
     devtoolsTracker.trackError(

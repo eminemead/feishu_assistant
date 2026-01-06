@@ -14,6 +14,7 @@ import { Memory } from '@mastra/memory';
 import { PostgresStore, PgVector } from '@mastra/pg';
 import { getInternalEmbedding } from './shared/internal-embedding';
 import { openai } from '@ai-sdk/openai';
+import { logger } from './logger';
 
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL;
 
@@ -30,7 +31,7 @@ export function getSharedStorage(): PostgresStore | null {
   }
 
   if (!SUPABASE_DATABASE_URL) {
-    console.warn('⚠️ [MemoryFactory] SUPABASE_DATABASE_URL not configured');
+    logger.warn('[MemoryFactory] SUPABASE_DATABASE_URL not configured');
     return null;
   }
 
@@ -39,10 +40,10 @@ export function getSharedStorage(): PostgresStore | null {
       id: "feishu-assistant-pg",
       connectionString: SUPABASE_DATABASE_URL,
     });
-    console.log('✅ [MemoryFactory] Shared PostgresStore initialized');
+    logger.success('MemoryFactory', 'Shared PostgresStore initialized');
     return sharedStorage;
   } catch (error) {
-    console.error('❌ [MemoryFactory] Failed to initialize PostgresStore:', error);
+    logger.fail('MemoryFactory', 'Failed to initialize PostgresStore', error);
     return null;
   }
 }
@@ -56,7 +57,7 @@ export function getSharedVector(): PgVector | null {
   }
 
   if (!SUPABASE_DATABASE_URL) {
-    console.warn('⚠️ [MemoryFactory] SUPABASE_DATABASE_URL not configured for vector');
+    logger.warn('[MemoryFactory] SUPABASE_DATABASE_URL not configured for vector');
     return null;
   }
 
@@ -65,10 +66,10 @@ export function getSharedVector(): PgVector | null {
       id: "feishu-assistant-vector",
       connectionString: SUPABASE_DATABASE_URL,
     });
-    console.log('✅ [MemoryFactory] Shared PgVector initialized');
+    logger.success('MemoryFactory', 'Shared PgVector initialized');
     return sharedVector;
   } catch (error) {
-    console.error('❌ [MemoryFactory] Failed to initialize PgVector:', error);
+    logger.fail('MemoryFactory', 'Failed to initialize PgVector', error);
     return null;
   }
 }
@@ -93,7 +94,7 @@ export function createAgentMemory(options?: {
   const storage = getSharedStorage();
   
   if (!storage) {
-    console.warn('⚠️ [MemoryFactory] Cannot create memory - storage unavailable');
+    logger.warn('[MemoryFactory] Cannot create memory - storage unavailable');
     return null;
   }
 
@@ -118,7 +119,7 @@ export function createAgentMemory(options?: {
     if (enableSemanticRecall) {
       const vector = getSharedVector();
       if (!vector) {
-        console.warn('⚠️ [MemoryFactory] Semantic recall requested but PgVector unavailable, falling back to disabled');
+        logger.warn('[MemoryFactory] Semantic recall requested but PgVector unavailable, falling back to disabled');
       } else {
         // Get embedder - prefer internal, fallback to OpenAI
         const embedder = getInternalEmbedding() || openai.embedding("text-embedding-3-small");
@@ -129,14 +130,14 @@ export function createAgentMemory(options?: {
           topK: 10,
           messageRange: 5,
         };
-        console.log('✅ [MemoryFactory] Semantic recall enabled with PgVector');
+        logger.success('MemoryFactory', 'Semantic recall enabled with PgVector');
       }
     }
 
     const memory = new Memory(memoryConfig);
     return memory;
   } catch (error) {
-    console.error('❌ [MemoryFactory] Failed to create memory:', error);
+    logger.fail('MemoryFactory', 'Failed to create memory', error);
     return null;
   }
 }
