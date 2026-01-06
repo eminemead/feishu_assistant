@@ -95,7 +95,7 @@ function initializeAgent() {
   const agentMemory = createAgentMemory({
     lastMessages: 20,
     enableWorkingMemory: true,
-    enableSemanticRecall: false, // Will enable in Phase 2 after PgVector setup
+    enableSemanticRecall: true,
   });
 
   managerAgentInstance = new Agent({

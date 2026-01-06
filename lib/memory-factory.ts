@@ -11,12 +11,14 @@
  */
 
 import { Memory } from '@mastra/memory';
-import { PostgresStore } from '@mastra/pg';
+import { PostgresStore, PgVector } from '@mastra/pg';
 import { getInternalEmbedding } from './shared/internal-embedding';
+import { openai } from '@ai-sdk/openai';
 
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL;
 
 let sharedStorage: PostgresStore | null = null;
+let sharedVector: PgVector | null = null;
 
 /**
  * Get or create the shared PostgresStore instance
@@ -41,6 +43,32 @@ export function getSharedStorage(): PostgresStore | null {
     return sharedStorage;
   } catch (error) {
     console.error('❌ [MemoryFactory] Failed to initialize PostgresStore:', error);
+    return null;
+  }
+}
+
+/**
+ * Get or create the shared PgVector instance for semantic recall
+ */
+export function getSharedVector(): PgVector | null {
+  if (sharedVector) {
+    return sharedVector;
+  }
+
+  if (!SUPABASE_DATABASE_URL) {
+    console.warn('⚠️ [MemoryFactory] SUPABASE_DATABASE_URL not configured for vector');
+    return null;
+  }
+
+  try {
+    sharedVector = new PgVector({
+      id: "feishu-assistant-vector",
+      connectionString: SUPABASE_DATABASE_URL,
+    });
+    console.log('✅ [MemoryFactory] Shared PgVector initialized');
+    return sharedVector;
+  } catch (error) {
+    console.error('❌ [MemoryFactory] Failed to initialize PgVector:', error);
     return null;
   }
 }
@@ -71,32 +99,41 @@ export function createAgentMemory(options?: {
 
   const {
     lastMessages = 20,
-    enableSemanticRecall = false, // Disabled until PgVector is configured
+    enableSemanticRecall = true, // Enabled by default with PgVector + NIO embedding
     enableWorkingMemory = true,
   } = options || {};
 
   try {
-    const memory = new Memory({
-      storage: storage as any,
+    // Build memory config based on options
+    const memoryConfig: any = {
+      storage: storage,
       options: {
         lastMessages,
-        workingMemory: enableWorkingMemory ? {
-          enabled: true,
-        } : undefined,
-        semanticRecall: enableSemanticRecall ? {
-          enabled: true,
-          maxResults: 10,
-          scope: "resource",
-          messageRange: 2,
-        } : {
-          enabled: false,
-        },
-        embedder: enableSemanticRecall 
-          ? (getInternalEmbedding() || "openai/text-embedding-3-small")
-          : undefined,
+        workingMemory: enableWorkingMemory ? { enabled: true } : undefined,
+        semanticRecall: false, // disabled by default
       },
-    } as any);
+    };
 
+    // Only configure semantic recall when explicitly enabled
+    if (enableSemanticRecall) {
+      const vector = getSharedVector();
+      if (!vector) {
+        console.warn('⚠️ [MemoryFactory] Semantic recall requested but PgVector unavailable, falling back to disabled');
+      } else {
+        // Get embedder - prefer internal, fallback to OpenAI
+        const embedder = getInternalEmbedding() || openai.embedding("text-embedding-3-small");
+        
+        memoryConfig.vector = vector;
+        memoryConfig.embedder = embedder;
+        memoryConfig.options.semanticRecall = {
+          topK: 10,
+          messageRange: 5,
+        };
+        console.log('✅ [MemoryFactory] Semantic recall enabled with PgVector');
+      }
+    }
+
+    const memory = new Memory(memoryConfig);
     return memory;
   } catch (error) {
     console.error('❌ [MemoryFactory] Failed to create memory:', error);

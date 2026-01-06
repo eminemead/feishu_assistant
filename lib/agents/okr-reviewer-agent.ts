@@ -265,7 +265,7 @@ function initializeAgent(): void {
   const agentMemory = createAgentMemory({
     lastMessages: 20,
     enableWorkingMemory: true,
-    enableSemanticRecall: false,
+    enableSemanticRecall: true,
   });
 
   // Create agent with Mastra framework
