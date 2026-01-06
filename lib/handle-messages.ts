@@ -121,7 +121,17 @@ export async function handleNewMessage(data: FeishuMessageData) {
     let messages;
     if (rootId !== messageId) {
       // This is a thread reply, get thread history
-      messages = await getThread(chatId, rootId, botUserId);
+      const threadMessages = await getThread(chatId, rootId, botUserId);
+      
+      // Always add current message to thread context
+      // This ensures button followups and new messages aren't lost
+      if (threadMessages.length === 0) {
+        console.warn(`⚠️ Thread fetch returned empty, using current message as fallback`);
+        messages = [{ role: "user" as const, content: cleanText }];
+      } else {
+        // Append current message to thread history
+        messages = [...threadMessages, { role: "user" as const, content: cleanText }];
+      }
     } else {
       // New conversation
       messages = [{ role: "user" as const, content: cleanText }];
