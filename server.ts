@@ -46,8 +46,27 @@ process.on('uncaughtException', (error) => {
 
 const app = new Hono<{ Bindings: HonoBindings; Variables: HonoVariables }>();
 
-// Track processed events to prevent duplicates
-const processedEvents = new Set<string>();
+// Track processed events to prevent duplicates (with TTL for memory management)
+const processedEvents = new Map<string, number>(); // key -> timestamp
+const PROCESSED_EVENT_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
+const PROCESSED_EVENT_MAX_SIZE = 2000;
+
+const cleanupProcessedEvents = () => {
+  const now = Date.now();
+  for (const [key, timestamp] of processedEvents) {
+    if (now - timestamp > PROCESSED_EVENT_TTL_MS) {
+      processedEvents.delete(key);
+    }
+  }
+  // Also enforce max size (remove oldest if over limit)
+  if (processedEvents.size > PROCESSED_EVENT_MAX_SIZE) {
+    const entries = [...processedEvents.entries()].sort((a, b) => a[1] - b[1]);
+    const toRemove = entries.slice(0, processedEvents.size - PROCESSED_EVENT_MAX_SIZE);
+    for (const [key] of toRemove) {
+      processedEvents.delete(key);
+    }
+  }
+};
 
 // Determine if we're using Subscription Mode (WebSocket) or Webhook Mode
 // Subscription Mode doesn't require encryptKey/verificationToken
@@ -285,30 +304,31 @@ eventDispatcher.register({
           return;
         }
 
-        // Deduplicate events by event_id
+        // Deduplicate events by event_id, falling back to message_id
         const eventId = (data as any).event_id || (data as any).event?.event_id;
-        if (eventId && processedEvents.has(eventId)) {
-          console.log(`⚠️ [WebSocket] Duplicate event ignored: ${eventId}`);
+        const message = data.message;
+        const messageId = message?.message_id;
+        const dedupKey = eventId || (messageId ? `msg:${messageId}` : null);
+        
+        if (!dedupKey) {
+          console.warn(`⚠️ [WebSocket] No event_id or message_id for deduplication, processing anyway`);
+        } else if (processedEvents.has(dedupKey)) {
+          console.log(`⚠️ [WebSocket] Duplicate event ignored: ${dedupKey}`);
           return;
+        } else {
+          processedEvents.set(dedupKey, Date.now());
+          cleanupProcessedEvents();
         }
-        if (eventId) {
-          processedEvents.add(eventId);
-          // Clean up old event IDs (keep last 1000)
-          if (processedEvents.size > 1000) {
-            const firstId = processedEvents.values().next().value as string;
-            if (firstId) {
-              processedEvents.delete(firstId);
-            }
-          }
+        
+        if (!eventId) {
+          console.warn(`⚠️ [WebSocket] Missing event_id, using message_id fallback: ${messageId}`);
         }
 
         console.log("📨 [WebSocket] Event received: im.message.receive_v1");
       console.log("📨 [WebSocket] Event data:", JSON.stringify(data, null, 2));
       const botUserId = await getBotId();
       console.log(`🤖 [WebSocket] Bot User ID: ${botUserId}`);
-      const message = data.message;
       const chatId = message.chat_id;
-      const messageId = message.message_id;
       const rootId = message.root_id || messageId;
       const content = message.content;
       // @ts-ignore - sender may exist in subscription mode data structure
