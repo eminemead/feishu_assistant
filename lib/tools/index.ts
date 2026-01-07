@@ -23,3 +23,6 @@ export { createFeishuChatHistoryTool } from "./feishu-chat-history-tool";
 export { createFeishuDocsTool } from "./feishu-docs-tool";
 export { createExecuteSqlTool } from "./execute-sql-tool";
 
+// Visualization tools
+export { visualizationTool, quickBarChart, quickPieChart, quickLineChart } from "./visualization-tool";
+
