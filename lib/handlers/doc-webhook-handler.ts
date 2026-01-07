@@ -170,7 +170,7 @@ async function notifyDocChange(
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0);
+    const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0);
     if (!isSuccess) {
       console.error("Failed to send notification:", resp);
     } else {

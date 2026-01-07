@@ -305,7 +305,7 @@ async function downloadDocContent(client: any, docToken: string): Promise<string
     });
 
     const isSuccess =
-      typeof resp.success === "function" ? resp.success() : resp.code === 0;
+      resp.code === 0 ? resp.code === 0 || resp.code === undefined : resp.code === 0;
 
     if (isSuccess && resp.data?.content) {
       console.log(
@@ -326,7 +326,7 @@ async function downloadDocContent(client: any, docToken: string): Promise<string
     });
 
     const richSuccess =
-      typeof resp.success === "function" ? resp.success() : resp.code === 0;
+      resp.code === 0 ? resp.code === 0 || resp.code === undefined : resp.code === 0;
 
     if (richSuccess && resp.data?.document) {
       const document = resp.data.document;

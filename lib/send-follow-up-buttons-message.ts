@@ -111,9 +111,7 @@ export async function sendFollowupButtonsMessage(
         },
       });
       
-      const isCardSuccess = typeof cardCreateResp.success === 'function' 
-        ? cardCreateResp.success() 
-        : (cardCreateResp.code === 0 || cardCreateResp.code === undefined);
+      const isCardSuccess = cardCreateResp.code === 0 || cardCreateResp.code === undefined;
       
       if (isCardSuccess && cardCreateResp.data?.card_id) {
         cardEntityId = cardCreateResp.data.card_id;
@@ -314,24 +312,29 @@ export async function sendFollowupButtonsMessageWithCategories(
       },
     };
 
-    const response = await sendCardMessage(
-      conversationId,
-      JSON.stringify(cardData),
-      rootId,
-      threadId
-    );
-
-    if (!response?.message_id) {
+    // Create card first
+    const cardCreateResp = await feishuClient.cardkit.v1.card.create({
+      data: {
+        type: "card_json",
+        data: JSON.stringify(cardData),
+      },
+    });
+    
+    const isCardSuccess = cardCreateResp.code === 0 || cardCreateResp.code === undefined;
+    if (!isCardSuccess || !cardCreateResp.data?.card_id) {
       return {
         success: false,
-        error: "No message_id in response",
+        error: "Failed to create card",
       };
     }
+    
+    // Send the card
+    const messageId = await sendCardMessage(conversationId, "chat_id", cardCreateResp.data.card_id);
 
-    console.log(`✅ [FollowupButtons] Sent categorized buttons: ${response.message_id}`);
+    console.log(`✅ [FollowupButtons] Sent categorized buttons: ${messageId}`);
     return {
       success: true,
-      messageId: response.message_id,
+      messageId: messageId,
     };
   } catch (error) {
     console.error(`❌ [FollowupButtons] Failed to send categorized buttons:`, error);

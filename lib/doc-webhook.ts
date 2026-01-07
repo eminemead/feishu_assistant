@@ -110,7 +110,7 @@ export async function registerDocWebhook(
       url: `/open-apis/drive/v1/files/${docToken}/subscribe?file_type=${fileType}`,
     }) as any;
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0);
+    const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0);
     if (!isSuccess) {
       throw new Error(`Failed to register webhook: ${JSON.stringify(resp)}`);
     }
@@ -142,7 +142,7 @@ export async function deregisterDocWebhook(docToken: string, docType: string): P
       url: `/open-apis/drive/v1/files/${docToken}/delete_subscribe?file_type=${fileType}`,
     }) as any;
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0);
+    const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0);
     if (!isSuccess) {
       throw new Error(`Failed to deregister webhook: ${JSON.stringify(resp)}`);
     }

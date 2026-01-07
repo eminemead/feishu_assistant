@@ -162,13 +162,13 @@ export async function isThreadBotRelevant(
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-    if (!isSuccess || !resp.data?.item) {
+    const isSuccess = resp.code === 0 || resp.code === undefined;
+    // SDK may return data.items array or data directly
+    const rootMessage = (resp.data as any)?.items?.[0] || resp.data;
+    if (!isSuccess || !rootMessage) {
       console.warn(`⚠️ [ThreadValidation] Failed to fetch root message ${rootId}, assuming not bot-relevant`);
       return false;
     }
-
-    const rootMessage = resp.data.item;
     
     // Check if root is from bot (sender.sender_type === 'app')
     const isBotMessage = rootMessage.sender?.sender_type === "app";
@@ -272,7 +272,7 @@ export async function getThread(
     }
   }
 
-  if (!resp || !resp.success() || !resp.data?.items) {
+  if (!resp || !(resp.code === 0 || resp.code === undefined) || !resp.data?.items) {
     console.warn("⚠️ No items in thread response, proceeding with empty context");
     return [];
   }
@@ -392,8 +392,8 @@ export async function createStreamingCard(
   });
 
   // Handle different response structures
-  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-  const responseData = resp.data || resp;
+  const isSuccess = resp.code === 0 || resp.code === undefined;
+  const responseData = resp.data;
 
   if (!isSuccess || !responseData?.card_id) {
     console.error("Failed to create streaming card. Response:", JSON.stringify(resp, null, 2));
@@ -401,7 +401,7 @@ export async function createStreamingCard(
   }
 
   // card_entity_id might not be in the response, use card_id as fallback
-  const cardEntityId = responseData.card_entity_id || responseData.card_id;
+  const cardEntityId = (responseData as any)?.card_entity_id || responseData?.card_id;
   
   console.log(`✅ [Card] Created streaming card: cardId=${responseData.card_id}, elementId=${elementId}`);
 
@@ -457,7 +457,7 @@ export async function updateCardElement(
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    const isSuccess = resp.code === 0 || resp.code === undefined;
     if (!isSuccess) {
       console.error("Failed to update card element:", resp);
       throw new Error(`Failed to update card element: ${JSON.stringify(resp)}`);
@@ -483,7 +483,7 @@ export async function updateCardElement(
         },
       });
       
-      const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+      const isSuccess = resp.code === 0 || resp.code === undefined;
       if (!isSuccess) {
         console.error("Failed to update card element on retry:", resp);
         throw new Error(`Failed to update card element on retry: ${JSON.stringify(resp)}`);
@@ -565,12 +565,13 @@ export async function addThinkingPanelToCard(
         card_id: cardId,
       },
       data: {
-        element: JSON.stringify(thinkingElement),
+        type: "append",
+        elements: JSON.stringify(thinkingElement),
         sequence: sequence,
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    const isSuccess = resp.code === 0 || resp.code === undefined;
     if (!isSuccess) {
       console.error("Failed to add thinking panel to card:", resp);
       return null; // Non-critical, don't throw
@@ -627,12 +628,13 @@ export async function addImageElementToCard(
       card_id: cardId,
     },
     data: {
-      element: JSON.stringify(imageElement),
+      type: "append",
+      elements: JSON.stringify(imageElement),
       sequence: sequence,
     },
   });
 
-  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+  const isSuccess = resp.code === 0 || resp.code === undefined;
   if (!isSuccess) {
     console.error("Failed to add image element to card:", resp);
     throw new Error("Failed to add image element to card");
@@ -682,7 +684,7 @@ export async function finalizeCard(
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    const isSuccess = resp.code === 0 || resp.code === undefined;
     if (!isSuccess) {
       console.error("Failed to finalize card:", resp);
     }
@@ -728,8 +730,8 @@ export async function sendCardMessage(
     },
   });
 
-  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-  const responseData = resp.data || resp;
+  const isSuccess = resp.code === 0 || resp.code === undefined;
+  const responseData = resp.data;
   
   if (!isSuccess || !responseData?.message_id) {
     console.error("Failed to send card message. Response:", JSON.stringify(resp, null, 2));
@@ -763,8 +765,8 @@ export async function replyCardMessageInThread(
     },
   });
 
-  const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-  const responseData = resp.data || resp;
+  const isSuccess = resp.code === 0 || resp.code === undefined;
+  const responseData = resp.data;
 
   if (!isSuccess || !responseData?.message_id) {
     console.error("Failed to reply card message in thread. Response:", JSON.stringify(resp, null, 2));

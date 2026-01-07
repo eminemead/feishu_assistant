@@ -63,14 +63,13 @@ export async function addDirectButtonsToCard(
     let resp = await client.cardkit.v1.cardElement.create({
       path: { card_id: cardId },
       data: {
-        element: JSON.stringify(buttonRowElement),
+        type: "append",
+        elements: JSON.stringify(buttonRowElement),
         sequence: sequence,
       },
     });
 
-    let isSuccess = typeof resp.success === "function"
-      ? resp.success()
-      : resp.code === 0 || resp.code === undefined;
+    let isSuccess = resp.code === 0 || resp.code === undefined;
 
     if (isSuccess) {
       console.log(`✅ [DirectButtons] SUCCESS with div container!`);
@@ -99,14 +98,13 @@ export async function addDirectButtonsToCard(
       resp = await client.cardkit.v1.cardElement.create({
         path: { card_id: cardId },
         data: {
-          element: JSON.stringify(buttonElement),
+          type: "append",
+          elements: JSON.stringify(buttonElement),
           sequence: nextSeq + i,
         },
       });
 
-      isSuccess = typeof resp.success === "function"
-        ? resp.success()
-        : resp.code === 0 || resp.code === undefined;
+      isSuccess = resp.code === 0 || resp.code === undefined;
 
       if (!isSuccess) {
         console.log(`⚠️ [DirectButtons] Individual button ${i + 1} failed: ${resp.msg}`);

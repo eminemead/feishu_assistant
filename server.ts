@@ -51,14 +51,25 @@ const processedEvents = new Map<string, number>(); // key -> timestamp
 const PROCESSED_EVENT_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
 const PROCESSED_EVENT_MAX_SIZE = 2000;
 
+let lastCleanupAt = Date.now();
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Only cleanup every 5 min, not per event
+
 const cleanupProcessedEvents = () => {
   const now = Date.now();
+  // Skip if recently cleaned to avoid O(n log n) sort spam
+  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS && processedEvents.size < PROCESSED_EVENT_MAX_SIZE) {
+    return;
+  }
+  lastCleanupAt = now;
+  
+  // Fast path: only expire old entries (O(n))
   for (const [key, timestamp] of processedEvents) {
     if (now - timestamp > PROCESSED_EVENT_TTL_MS) {
       processedEvents.delete(key);
     }
   }
-  // Also enforce max size (remove oldest if over limit)
+  
+  // Expensive cleanup: only if over size limit
   if (processedEvents.size > PROCESSED_EVENT_MAX_SIZE) {
     const entries = [...processedEvents.entries()].sort((a, b) => a[1] - b[1]);
     const toRemove = entries.slice(0, processedEvents.size - PROCESSED_EVENT_MAX_SIZE);
@@ -123,11 +134,11 @@ const startWebSocket = async (reason: string): Promise<boolean> => {
 };
 
 const restartWebSocket = async (reason: string): Promise<boolean> => {
-  if (!useSubscriptionMode) return;
+  if (!useSubscriptionMode) return false;
   healthMonitor.markWebSocketRestart(reason);
   healthMonitor.incrementWebSocketReconnectAttempt();
   try {
-    await wsClient?.stop?.();
+    await (wsClient as any)?.stop?.();
   } catch (error) {
     healthMonitor.setWebSocketError(`stop failed: ${formatError(error)}`);
   }
@@ -237,8 +248,8 @@ const eventDispatcher = new lark.EventDispatcher({
 eventDispatcher.register({
   "*": async (data: any, eventType: string) => {
     recordWsEvent();
+    // Log event type only, not full data (performance: avoid expensive JSON.stringify at scale)
     console.log(`🔔 [WebSocket] Received event type: ${eventType}`);
-    console.log(`🔔 [WebSocket] Event data:`, JSON.stringify(data, null, 2));
 
     // Handle card.action.trigger_v1 from WebSocket in catch-all as fallback
     if (eventType === "card.action.trigger_v1") {
@@ -333,7 +344,7 @@ eventDispatcher.register({
         schema: "2.0",
         header: { event_type: "task.task.updated_v1" },
         event: { task_guid: taskGuid, event_key: eventKey, obj_type: 1 },
-      };
+      } as any;
       
       const result = await handleTaskUpdatedEvent(event);
       console.log(`📋 [WebSocket] Task sync result: ${result.message}`);
@@ -443,7 +454,7 @@ eventDispatcher.register({
         // PRIORITY: user_id > open_id (user_id maps to GitLab username like "xiaofei.yin")
         if (mentions.length > 0 && message.chat_type === "group") {
           // Find first user mention (skip bot mention)
-          const userMention = mentions.find(mention => {
+          const userMention = mentions.find((mention: any) => {
             const mentionId = mention.id?.open_id || mention.id?.user_id;
             // Skip if it's the bot itself
             return mentionId && mentionId !== botUserId;
@@ -468,7 +479,7 @@ eventDispatcher.register({
         // In Subscription Mode, check if BOT is in mentions array
         if (message.chat_type === "group") {
           // Look for bot in mentions array (by open_id, user_id, or app_id)
-          const botMentioned = mentions.some(mention => {
+          const botMentioned = mentions.some((mention: any) => {
             const mentionOpenId = mention.id?.open_id;
             const mentionUserId = mention.id?.user_id;
             const mentionAppId = mention.id?.app_id;
@@ -711,10 +722,7 @@ app.post("/internal/notify/feishu/v1", async (c) => {
             },
           });
 
-          const isSuccess =
-            typeof resp.success === "function"
-              ? resp.success()
-              : resp.code === 0 || resp.code === undefined;
+          const isSuccess = resp.code === 0 || resp.code === undefined;
           if (!isSuccess || !resp.data?.message_id) {
             throw new Error("FEISHU_ERROR: failed to send text message");
           }
@@ -761,10 +769,7 @@ app.post("/internal/notify/feishu/v1", async (c) => {
             },
           });
 
-          const isSuccess =
-            typeof resp.success === "function"
-              ? resp.success()
-              : resp.code === 0 || resp.code === undefined;
+          const isSuccess = resp.code === 0 || resp.code === undefined;
           if (!isSuccess || !resp.data?.message_id) {
             throw new Error("FEISHU_ERROR: failed to send markdown message");
           }
@@ -832,7 +837,7 @@ app.post("/internal/notify/feishu/v1", async (c) => {
       message,
     });
 
-    return c.json(errorBody, statusCode);
+    return c.json(errorBody, statusCode as 400 | 401 | 403 | 500);
   }
 });
 
@@ -915,7 +920,7 @@ app.post("/webhook/docs/change", async (c) => {
     });
 
     const result = await handleDocChangeWebhook(webRequest, rawBody);
-    return c.json({ ok: true }, result.status);
+    return c.json({ ok: true }, result.status as 200 | 400 | 500);
   } catch (error) {
     console.error("❌ [DocWebhook] Error processing webhook:", error);
     return c.json({ error: "Internal server error" }, 500);
@@ -965,7 +970,7 @@ app.post("/webhook/dagster", async (c) => {
     });
 
     const result = await handleDagsterWebhook(webRequest, rawBody);
-    return c.json(result.body, result.status);
+    return c.json(result.body, result.status as 200 | 400 | 500);
   } catch (error) {
     console.error("❌ [DagsterWebhook] Error processing webhook:", error);
     return c.json({ error: "Internal server error" }, 500);
@@ -1004,8 +1009,9 @@ app.post("/webhook/card", async (c) => {
     }
 
     // Deduplicate card actions to prevent double processing (webhook + WebSocket)
-    const actionToken = cardActionPayload.event?.action?.action_token;
-    const actionTime = cardActionPayload.event?.action?.action_time;
+    const action = cardActionPayload.event?.action as any;
+    const actionToken = action?.action_token;
+    const actionTime = action?.action_time;
     const operatorId = cardActionPayload.event?.operator?.operator_id || "";
     const dedupKey = actionToken ? `card:${actionToken}` : `card:${actionTime}:${operatorId}`;
     

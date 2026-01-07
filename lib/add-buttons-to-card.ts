@@ -55,14 +55,13 @@ export async function addButtonsToCard(
         card_id: cardId,
       },
       data: {
-        element: JSON.stringify(actionElement),
+        type: "append",
+        elements: JSON.stringify(actionElement),
         sequence: sequence,
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' 
-      ? resp.success() 
-      : (resp.code === 0 || resp.code === undefined);
+    const isSuccess = resp.code === 0 || resp.code === undefined;
 
     if (!isSuccess) {
       console.error("❌ [Buttons] Failed to add buttons:", resp);

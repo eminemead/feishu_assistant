@@ -105,7 +105,7 @@ export async function testStreamingCardWithV3Schema(
       },
     });
 
-    const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+    const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
     const responseData = resp.data || resp;
 
     if (!isSuccess || !responseData?.card_id) {
@@ -203,7 +203,7 @@ export async function testStreamingCardV3Hybrid(): Promise<{
           },
         });
 
-        const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+        const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
         if (isSuccess && resp.data?.card_id) {
           console.log(`✅ [CardKitV3] Variation ${variation.name} works!`);
           results.push(`${variation.name}: ✅`);

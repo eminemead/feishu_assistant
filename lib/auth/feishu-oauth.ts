@@ -106,7 +106,7 @@ export async function exchangeCodeForToken(
       }),
     });
 
-    const data = await response.json();
+    const data = await response.json() as { code: number; msg?: string; message?: string; data?: { access_token: string; refresh_token: string; expires_in: number; token_type?: string; scope?: string } };
 
     if (data.code !== 0 || !data.data?.access_token) {
       console.error("[OAuth] Token exchange failed:", data);
@@ -223,7 +223,7 @@ async function refreshUserToken(
       }),
     });
 
-    const data = await response.json();
+    const data = await response.json() as { code: number; msg?: string; data?: { access_token: string; refresh_token?: string; expires_in: number; token_type?: string; scope?: string } };
 
     if (data.code !== 0 || !data.data?.access_token) {
       console.error("[OAuth] Token refresh failed:", data);

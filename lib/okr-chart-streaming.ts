@@ -96,7 +96,7 @@ export async function streamOKRCompanyAnalysis(
   if (chartData.length > 0) {
     response += `### Company Performance\n\n`;
     
-    const barChart = await chartGenerationTool.execute({
+    const barChart = await (chartGenerationTool.execute as any)({
       chartType: 'vega-lite',
       subType: 'bar',
       title: `Has Metric Percentage by Company (${analysis.period})`,
@@ -109,13 +109,13 @@ export async function streamOKRCompanyAnalysis(
         yLabel: 'Has Metric %',
         orientation: 'vertical'
       }
-    } as ChartRequest);
+    } as ChartRequest) as ChartResponse;
 
     response += barChart.markdown + '\n\n';
 
     // Add insights
-    const topCompany = chartData.reduce((a, b) => a.value > b.value ? a : b);
-    const bottomCompany = chartData.reduce((a, b) => a.value < b.value ? a : b);
+    const topCompany = chartData.reduce((a: { category: string; value: number }, b: { category: string; value: number }) => a.value > b.value ? a : b);
+    const bottomCompany = chartData.reduce((a: { category: string; value: number }, b: { category: string; value: number }) => a.value < b.value ? a : b);
     
     response += `**Key Insights:**\n`;
     response += `- **Top performer**: ${topCompany.category} (${topCompany.value.toFixed(1)}%)\n`;
@@ -143,13 +143,13 @@ export async function streamOKRMetricTypeAnalysis(
   const metricData = transformToMetricTypePie(analysis);
   
   if (Object.keys(metricData).length > 0) {
-    const pieChart = await chartGenerationTool.execute({
+    const pieChart = await (chartGenerationTool.execute as any)({
       chartType: 'mermaid',
       subType: 'pie',
       title: `Metric Type Distribution (${analysis.period})`,
       description: 'Distribution of metrics by type',
       data: metricData
-    } as ChartRequest);
+    } as ChartRequest) as ChartResponse;
 
     response += pieChart.markdown + '\n\n';
 
@@ -187,7 +187,7 @@ export async function streamComprehensiveOKRAnalysis(
   const chartData = transformToBarChartData(analysis);
   
   if (chartData.length > 0) {
-    const barChart = await chartGenerationTool.execute({
+    const barChart = await (chartGenerationTool.execute as any)({
       chartType: 'vega-lite',
       subType: 'bar',
       title: `Has Metric % by Company`,
@@ -197,7 +197,7 @@ export async function streamComprehensiveOKRAnalysis(
         width: 500,
         height: 300
       }
-    } as ChartRequest);
+    } as ChartRequest) as ChartResponse;
 
     response += barChart.markdown + '\n\n';
   }
@@ -207,13 +207,13 @@ export async function streamComprehensiveOKRAnalysis(
   const metricData = transformToMetricTypePie(analysis);
   
   if (Object.keys(metricData).length > 0) {
-    const pieChart = await chartGenerationTool.execute({
+    const pieChart = await (chartGenerationTool.execute as any)({
       chartType: 'mermaid',
       subType: 'pie',
       title: `Metrics by Type`,
       description: 'What types of metrics are being tracked',
       data: metricData
-    } as ChartRequest);
+    } as ChartRequest) as ChartResponse;
 
     response += pieChart.markdown + '\n\n';
   }

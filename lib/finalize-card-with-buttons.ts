@@ -273,8 +273,8 @@ async function finalizeCardSettings(
     });
 
     const isSuccess =
-      typeof resp.success === "function"
-        ? resp.success()
+      resp.code === 0
+        ? resp.code === 0 || resp.code === undefined
         : resp.code === 0 || resp.code === undefined;
 
     if (!isSuccess) {

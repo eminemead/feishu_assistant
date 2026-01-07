@@ -7,7 +7,14 @@
  * Uses Observable Plot.js (ojs) as default - powerful, declarative, and clean!
  */
 
-// Canvas imports removed - using Observable Plot.js instead
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as os from "os";
+import { promisify } from "util";
+import { exec } from "child_process";
+import { createCanvas } from "canvas";
+
+const execAsync = promisify(exec);
 
 interface OKRAnalysisResult {
   period: string;

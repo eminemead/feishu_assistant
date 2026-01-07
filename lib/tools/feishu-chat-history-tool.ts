@@ -55,7 +55,7 @@ export function createFeishuChatHistoryTool(enableDevtoolsTracking: boolean = tr
               params,
             });
             
-            const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+            const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
             
             if (!isSuccess || !resp.data?.items) {
               return {
@@ -127,7 +127,7 @@ export function createFeishuChatHistoryTool(enableDevtoolsTracking: boolean = tr
           
           const resp = await client.im.message.list({ params });
           
-          const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+          const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
           
           if (!isSuccess || !resp.data?.items) {
             return {

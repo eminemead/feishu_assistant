@@ -160,7 +160,7 @@ export async function getDocMetadata(
 
       // Check response success
       const isSuccess =
-        typeof resp?.success === "function" ? resp.success() : resp?.code === 0;
+        typeof resp?.success === "function" ? resp.code === 0 || resp.code === undefined : resp?.code === 0;
 
       if (!isSuccess) {
         throw new Error(

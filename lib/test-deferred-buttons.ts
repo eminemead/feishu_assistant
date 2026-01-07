@@ -74,8 +74,8 @@ export async function testAddButtonsAfterStreamingDisabled(
       },
     });
 
-    const isSuccess = typeof resp.success === "function"
-      ? resp.success()
+    const isSuccess = resp.code === 0
+      ? resp.code === 0 || resp.code === undefined
       : resp.code === 0 || resp.code === undefined;
 
     if (isSuccess) {
@@ -156,8 +156,8 @@ export async function testAddButtonsViaCardUpdate(
       data: JSON.stringify(updateData),
     });
 
-    const isSuccess = typeof resp.success === "function"
-      ? resp.success()
+    const isSuccess = resp.code === 0
+      ? resp.code === 0 || resp.code === undefined
       : resp.code === 0 || resp.code === undefined;
 
     if (isSuccess) {

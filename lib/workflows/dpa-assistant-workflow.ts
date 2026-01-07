@@ -198,7 +198,7 @@ const executeGitLabCreateStep = createStep({
         const issueData = JSON.parse(query.slice(CONFIRM_PREFIX.length));
         const { title, description, project, assignee, dueDate, glabCommand } = issueData;
         
-        const result = await gitlabTool.execute({ command: glabCommand });
+        const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
         
         if (result.success) {
           let successMsg = `✅ **Issue Created!**\n\n**Title**: ${title}\n**Project**: ${project}`;
@@ -518,7 +518,7 @@ const executeGitLabListStep = createStep({
     }
     
     try {
-      const result = await gitlabTool.execute({ command: glabCommand });
+      const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
       
       if (result.success) {
         const itemType = isMR ? "Merge Requests" : "Issues";
@@ -572,10 +572,10 @@ const executeChatSearchStep = createStep({
     }
     
     try {
-      const result = await chatHistoryTool.execute({ 
+      const result = await (chatHistoryTool.execute as any)({ 
         chatId, 
         limit: 50 
-      });
+      }) as { success: boolean; messages?: any[]; messageCount?: number; error?: string };
       
       if (result.success && result.messages) {
         // Filter messages based on query keywords
@@ -648,11 +648,11 @@ const executeDocReadStep = createStep({
     }
     
     try {
-      const result = await docsTool.execute({ 
+      const result = await (docsTool.execute as any)({ 
         docToken: docUrl,
         docType: "doc",
         action: "read"
-      });
+      }) as { success: boolean; content?: string; title?: string; error?: string };
       
       if (result.success) {
         const content = result.content || "文档内容为空";

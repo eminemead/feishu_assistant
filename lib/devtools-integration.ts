@@ -476,8 +476,8 @@ class DevtoolsTracker {
             };
             if (event.usage) {
                 logData.tokens = {
-                    input: event.usage.promptTokens,
-                    output: event.usage.completionTokens,
+                    input: event.usage.inputTokens,
+                    output: event.usage.outputTokens,
                     total: event.usage.totalTokens,
                 };
             }
@@ -497,8 +497,8 @@ class DevtoolsTracker {
         };
 
         const modelPricing = pricing[model || 'default'] || pricing['default'];
-        const inputCost = (usage.promptTokens || 0) * (modelPricing.input / 1_000_000);
-        const outputCost = (usage.completionTokens || 0) * (modelPricing.output / 1_000_000);
+        const inputCost = (usage.inputTokens || 0) * (modelPricing.input / 1_000_000);
+        const outputCost = (usage.outputTokens || 0) * (modelPricing.output / 1_000_000);
 
         return Math.round((inputCost + outputCost) * 10000) / 10000; // Round to 4 decimals
     }

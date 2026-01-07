@@ -120,7 +120,7 @@ class DocumentPersistence {
           last_modified_time: metadata?.lastModifiedTime,
           created_by_user_id: userId, // In production, use actual requester
           notes,
-        })
+        } as any)
         .select()
         .single();
 
@@ -151,9 +151,9 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { error } = await supabase
+      const { error } = await supabase!
         .from("document_tracking")
-        .update({ is_active: false })
+        .update({ is_active: false } as any)
         .match({ user_id: userId, doc_token: docToken });
 
       if (error) {
@@ -192,7 +192,7 @@ class DocumentPersistence {
           last_modified_user: update.lastModifiedUser,
           last_modified_time: update.lastModifiedTime,
           last_notification_sent_at: update.lastNotificationSentAt?.toISOString(),
-        })
+        } as any)
         .match({ user_id: userId, doc_token: docToken })
         .select()
         .single();
@@ -325,7 +325,7 @@ class DocumentPersistence {
           notification_message_id: change.notificationMessageId,
           error_message: change.errorMessage,
           metadata: change.metadata,
-        })
+        } as any)
         .select()
         .single();
 

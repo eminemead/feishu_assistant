@@ -188,7 +188,7 @@ class DocumentSnapshotService {
             original_size: contentBytes.length,
             compressed_size: compressedContent.length,
           },
-        })
+        } as any)
         .select()
         .single();
 
@@ -273,13 +273,14 @@ class DocumentSnapshotService {
         throw new Error(`Failed to fetch snapshot content: ${error.message}`);
       }
 
-      if (!data || !data.content_compressed) {
+      const snapshotData = data as any;
+      if (!snapshotData || !snapshotData.content_compressed) {
         return null;
       }
 
       // Decompress content
       const decompressed = await promisify(require("zlib").gunzip)(
-        Buffer.from(data.content_compressed)
+        Buffer.from(snapshotData.content_compressed)
       );
       return decompressed.toString("utf-8");
     } catch (error) {
@@ -449,7 +450,7 @@ class DocumentSnapshotService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { error } = await supabase!
         .from("document_snapshots")
         .select("COUNT(*)")
         .limit(1);

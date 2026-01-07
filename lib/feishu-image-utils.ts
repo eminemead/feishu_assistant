@@ -32,7 +32,8 @@ export async function uploadImageToFeishu(
     },
   });
 
-  if (!resp.success() || !resp.data?.image_key) {
+  const isSuccess = resp.code === 0 || resp.code === undefined;
+  if (!isSuccess || !resp.data?.image_key) {
     // Fallback: Try alternative API paths if first fails
     // This needs to be verified against actual SDK documentation
     throw new Error(`Failed to upload image: ${JSON.stringify(resp)}. Please verify the correct API path in @larksuiteoapi/node-sdk documentation.`);
@@ -67,7 +68,8 @@ export async function sendImageMessage(
     },
   });
 
-  if (!resp.success() || !resp.data?.message_id) {
+  const isSuccess = resp.code === 0 || resp.code === undefined;
+  if (!isSuccess || !resp.data?.message_id) {
     throw new Error("Failed to send image message");
   }
 
@@ -113,11 +115,13 @@ export async function addImageToCard(
         element_id: elementId,
       },
       data: {
-        content: JSON.stringify(imageElement),
+        element: JSON.stringify(imageElement),
+        sequence: 1,
       },
     });
 
-    if (!resp.success()) {
+    const isSuccess = resp.code === 0 || resp.code === undefined;
+    if (!isSuccess) {
       throw new Error("Failed to add image to card");
     }
   } else {
@@ -186,13 +190,16 @@ export async function createCardWithImage(
     },
   });
 
-  if (!resp.success() || !resp.data?.card_entity_id || !resp.data?.card_id) {
+  const isCardSuccess = resp.code === 0 || resp.code === undefined;
+  if (!isCardSuccess || !resp.data?.card_id) {
     throw new Error("Failed to create card with image");
   }
+  // card_entity_id might not exist, use card_id as fallback
+  const cardEntityId = (resp.data as any).card_entity_id || resp.data.card_id;
 
   return {
     cardId: resp.data.card_id,
-    cardEntityId: resp.data.card_entity_id,
+    cardEntityId: cardEntityId,
     elementId,
   };
 }

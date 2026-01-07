@@ -71,7 +71,7 @@ const generateChartsStep = createStep({
     metrics: z.any(),
     period: z.string()
   }),
-  execute: async ({ inputData, context }) => {
+  execute: async ({ inputData }) => {
     const { metrics, period } = inputData;
     
     console.log(`[OKR Workflow] Generating charts for ${metrics.total_companies} companies`);
@@ -86,7 +86,7 @@ const generateChartsStep = createStep({
       }));
       
       if (chartData.length > 0) {
-        const barChart = await chartGenerationTool.execute({
+        const barChart = await (chartGenerationTool.execute as any)({
           chartType: 'vega-lite',
           subType: 'bar',
           title: `Has Metric % by Company (${period})`,
@@ -99,7 +99,7 @@ const generateChartsStep = createStep({
             yLabel: 'Has Metric %',
             orientation: 'vertical'
           }
-        });
+        }) as ChartResponse;
         
         charts.push({
           type: 'bar',
@@ -124,13 +124,13 @@ const generateChartsStep = createStep({
     }
     
     if (Object.keys(metricCounts).length > 0) {
-      const pieChart = await chartGenerationTool.execute({
+      const pieChart = await (chartGenerationTool.execute as any)({
         chartType: 'mermaid',
         subType: 'pie',
         title: `Metric Type Distribution (${period})`,
         description: 'Distribution of metrics by type',
         data: metricCounts
-      });
+      }) as ChartResponse;
       
       charts.push({
         type: 'pie',
@@ -173,7 +173,7 @@ const analyzeStep = createStep({
     metrics: z.any(),
     period: z.string()
   }),
-  execute: async ({ inputData, mastra, context }) => {
+  execute: async ({ inputData }) => {
     const { charts, metrics, period } = inputData;
     
     console.log(`[OKR Workflow] Generating analysis with OKR Reviewer Agent`);
