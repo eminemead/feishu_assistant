@@ -80,6 +80,12 @@ export interface FinalizeCardConfig {
    * The value is JSON-encoded data to be passed to the confirmation callback
    */
   confirmationData?: string;
+  
+  /**
+   * Whether to show follow-up suggestions
+   * If false, skip suggestion generation (for deterministic workflows)
+   */
+  showFollowups?: boolean;
 }
 
 /**
@@ -110,6 +116,7 @@ export async function finalizeCardWithFollowups(
     console.log(`🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=${cardId}, contentLength=${finalContent?.length || 0}`);
 
     // Check if this is a confirmation flow (e.g., GitLab issue creation)
+    // NOTE: Must check BEFORE showFollowups, because confirmation flows also set showFollowups=false
     if (config?.confirmationData && config?.conversationId && config?.rootId) {
       console.log(`🔘 [CardSuggestions] Sending confirmation buttons...`);
       
@@ -137,6 +144,24 @@ export async function finalizeCardWithFollowups(
       }
       
       return { buttonMessageId: confirmationResult.messageId };
+    }
+
+    // Skip follow-up generation if showFollowups is explicitly false (deterministic workflows)
+    // This check comes AFTER confirmation flow, so confirmation buttons still work
+    if (config?.showFollowups === false) {
+      console.log(`🎯 [CardSuggestions] Skipping follow-ups (showFollowups=false, deterministic workflow)`);
+      
+      // Update card element with final content (in case onUpdate wasn't called or failed)
+      if (finalContent && elementId) {
+        console.log(`🔄 [CardSuggestions] Updating card element with final content (${finalContent.length} chars)`);
+        await updateCardElement(cardId, elementId, finalContent);
+      }
+      
+      // Finalize card settings (disable streaming)
+      await finalizeCardSettings(cardId, finalContent, feishuClient);
+      console.log(`✅ [CardSuggestions] Card finalized without follow-ups`);
+      
+      return { followups: [] };
     }
 
     // Step 1: Generate follow-up questions (while streaming is still active)

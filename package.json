@@ -14,7 +14,7 @@
     "build:watch": "bun tsc --watch",
     "build:clean": "rm -rf dist .tsbuildinfo && bun run build",
     "start": "bun dist/server.js",
-    "dev": "bun server.ts",
+    "dev": "bun --watch server.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",

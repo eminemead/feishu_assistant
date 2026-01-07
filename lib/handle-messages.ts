@@ -141,19 +141,22 @@ export async function handleNewMessage(data: FeishuMessageData) {
     // Generate response with streaming and memory context
     const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
     
-    // Handle structured result (with confirmation data and reasoning) or plain string
+    // Handle structured result (with confirmation data, reasoning, showFollowups) or plain string
     let result: string;
     let needsConfirmation = false;
     let confirmationData: string | undefined;
     let reasoning: string | undefined;
+    let showFollowups: boolean | undefined;
     
     if (typeof rawResult === "string") {
       result = rawResult;
+      showFollowups = true; // String response = general, show suggestions
     } else {
       result = rawResult.text;
       needsConfirmation = rawResult.needsConfirmation || false;
       confirmationData = rawResult.confirmationData;
       reasoning = rawResult.reasoning;
+      showFollowups = rawResult.showFollowups; // Propagate from manager
     }
 
     // Extract image_key from result if present
@@ -202,6 +205,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
         sendButtonsAsSeperateMessage: true,
         // Pass confirmation data for special handling
         confirmationData: needsConfirmation ? confirmationData : undefined,
+        showFollowups: showFollowups, // Propagate from manager (false for deterministic workflows)
       }
     );
 

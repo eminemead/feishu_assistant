@@ -331,8 +331,8 @@ const executeGitLabCreateStep = createStep({
 - title: Issue title (required). Clean up any @mentions or formatting.
 - description: Issue description (expand on the title with context)
 - project: GitLab project path. Look for explicit mentions like "in dpa/xxx", "项目 xxx". 
-  Common DPA projects: dpa/dpa-mom/da/task (default for DA tasks), dpa/dagster (data pipelines), dpa/analytics (analysis/reports), dpa/dbt (data models), dpa/feishu-assistant (bot/automation).
-  If not specified, default to "dpa/dpa-mom/da/task".
+  Common DPA projects: dpa/dpa-mom/task (default), dpa/dagster (data pipelines), dpa/analytics (analysis/reports), dpa/dbt (data models), dpa/feishu-assistant (bot/automation).
+  If not specified, default to "dpa/dpa-mom/task".
 - priority: Priority level 1-4 (1=critical, 2=high, 3=medium, 4=low). Look for "priority X", "P1", "urgent", "critical", etc.
 - due_date: Due date in YYYY-MM-DD format. Today is ${todayStr}. Parse these:
   * "today" = ${todayStr}
@@ -382,7 +382,7 @@ ASSIGNEE: <username or "none">`;
     // Append doc summaries to description if available
     const baseDescription = descMatch?.[1]?.trim() || query;
     const description = docSummaries ? baseDescription + docSummaries : baseDescription;
-    const project = projectMatch?.[1]?.trim() || "dpa/dpa-mom/da/task";
+    const project = projectMatch?.[1]?.trim() || "dpa/dpa-mom/task";
     
     // Parse priority (1-4)
     const priorityRaw = priorityMatch?.[1]?.trim();
@@ -763,6 +763,7 @@ const formatResponseStep = createStep({
     needsConfirmation: z.boolean().optional(),
     confirmationData: z.string().optional(),
     skipWorkflow: z.boolean().optional(),
+    showFollowups: z.boolean().optional(),
   }),
   execute: async ({ inputData }) => {
     const { result, intent, needsConfirmation, confirmationData, skipWorkflow } = inputData;
@@ -774,17 +775,20 @@ const formatResponseStep = createStep({
         response: "__SKIP_WORKFLOW__",
         intent: "general_chat",
         skipWorkflow: true,
+        showFollowups: true, // Skip workflow = manager handles = show suggestions
       };
     }
     
     console.log(`[DPA Workflow] Formatting response for intent: ${intent}, needsConfirmation: ${needsConfirmation}`);
     
     // Response is already formatted by execution steps
+    // DPA workflow = deterministic = no suggestions needed
     return {
       response: result,
       intent,
       needsConfirmation,
       confirmationData,
+      showFollowups: false, // Deterministic workflow = no suggestions
     };
   }
 });

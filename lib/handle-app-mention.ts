@@ -141,19 +141,22 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         console.log(`[FeishuMention] Generating response...`);
         const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
         
-        // Handle structured result (with reasoning and confirmation) or plain string
+        // Handle structured result (with reasoning, confirmation, showFollowups) or plain string
         let result: string;
         let reasoning: string | undefined;
         let needsConfirmation = false;
         let confirmationData: string | undefined;
+        let showFollowups: boolean | undefined;
         
         if (typeof rawResult === "string") {
             result = rawResult;
+            showFollowups = true; // String response = general, show suggestions
         } else {
             result = rawResult.text;
             reasoning = rawResult.reasoning;
             needsConfirmation = rawResult.needsConfirmation || false;
             confirmationData = rawResult.confirmationData;
+            showFollowups = rawResult.showFollowups; // Propagate from manager
         }
         console.log(`[FeishuMention] Response generated:`);
         console.log(`  - length=${result?.length || 0}`);
@@ -185,6 +188,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
                 threadId: rootId,
                 sendButtonsAsSeperateMessage: true,
                 confirmationData: needsConfirmation ? confirmationData : undefined,
+                showFollowups: showFollowups, // Propagate from manager (false for deterministic workflows)
             }
         );
         console.log(`[FeishuMention] Card finalized with suggestions${finalizeResult.buttonMessageId ? ` (buttons: ${finalizeResult.buttonMessageId})` : ''}`);

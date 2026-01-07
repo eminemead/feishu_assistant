@@ -57,6 +57,8 @@ export interface WorkflowExecutionResult {
   confirmationData?: string;
   /** Whether workflow should be skipped (handled by agent instead) */
   skipWorkflow?: boolean;
+  /** Whether to show follow-up suggestions (false for deterministic workflows) */
+  showFollowups?: boolean;
 }
 
 /**
@@ -223,10 +225,15 @@ export async function executeSkillWorkflow(
     
     const durationMs = Date.now() - startTime;
     console.log(`[Workflow] Completed ${workflowId} in ${durationMs}ms`);
+    console.log(`[Workflow] Final response (${response.length} chars): "${response.substring(0, 200)}..."`);
     
     // Send final update
     if (options.onUpdate) {
+      console.log(`[Workflow] Calling onUpdate with final response...`);
       options.onUpdate(response);
+      console.log(`[Workflow] onUpdate called successfully`);
+    } else {
+      console.warn(`[Workflow] No onUpdate callback provided, card will not be updated`);
     }
     
     return {
@@ -237,6 +244,7 @@ export async function executeSkillWorkflow(
       artifacts,
       needsConfirmation,
       confirmationData,
+      showFollowups: false, // Deterministic workflow = no suggestions needed
     };
   } catch (error) {
     const durationMs = Date.now() - startTime;

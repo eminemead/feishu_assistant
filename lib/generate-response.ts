@@ -9,6 +9,7 @@ export interface GenerateResponseResult {
   needsConfirmation?: boolean;
   confirmationData?: string;
   reasoning?: string; // Thinking traces from reasoning models
+  showFollowups?: boolean; // Controls whether to show follow-up buttons
 }
 
 /**
