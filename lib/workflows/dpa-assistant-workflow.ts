@@ -29,6 +29,7 @@ import {
   createFeishuDocsTool 
 } from "../tools";
 import { readAndSummarizeDocs, getAuthPromptIfNeeded } from "../tools/feishu-docs-user-tool";
+import { runDocumentReadWorkflow } from "./document-read-workflow";
 import { feishuIdToEmpAccount } from "../auth/feishu-account-mapping";
 import { Agent } from "@mastra/core/agent";
 import { createFeishuTask } from "../services/feishu-task-service";
@@ -146,8 +147,8 @@ Do not include any other text.`;
     // Extract params based on intent
     const params: Record<string, string> = {};
     
-    // Extract doc URL if doc_read
-    const docUrlMatch = query.match(/https?:\/\/[^\s]+feishu[^\s]+docs[^\s]+/i);
+    // Extract doc URL if doc_read (support all Feishu doc types)
+    const docUrlMatch = query.match(/https?:\/\/[^\s]*feishu\.cn\/(?:docs|docx|wiki|sheets|bitable)\/[^\s]+/i);
     if (docUrlMatch) {
       params.docUrl = docUrlMatch[0];
     }
@@ -617,10 +618,11 @@ const executeChatSearchStep = createStep({
 
 /**
  * Step: Execute Doc Read
+ * Uses document-read-workflow for fetch + persist + optional RAG embedding
  */
 const executeDocReadStep = createStep({
   id: "execute-doc-read",
-  description: "Read Feishu document",
+  description: "Read Feishu document via workflow (fetch → persist → embed)",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -633,26 +635,30 @@ const executeDocReadStep = createStep({
     intent: IntentEnum,
   }),
   execute: async ({ inputData }) => {
-    const { query, params } = inputData;
+    const { query, params, userId, chatId } = inputData;
     
-    console.log(`[DPA Workflow] Executing doc read`);
+    console.log(`[DPA Workflow] Executing doc read for user: ${userId}`);
     
-    // Extract doc URL from params or query
-    const docUrl = params?.docUrl || query.match(/https?:\/\/[^\s]+/)?.[0];
+    // Extract doc URL from params or query (support all Feishu doc URL formats)
+    const docUrlRegex = /https?:\/\/[^\s]*feishu\.cn\/(?:docs|docx|wiki|sheets|bitable)\/[^\s]+/i;
+    const docUrl = params?.docUrl || query.match(docUrlRegex)?.[0];
     
     if (!docUrl) {
       return {
-        result: "❌ 未找到文档链接\n\n请提供飞书文档链接。",
+        result: "❌ 未找到文档链接\n\n请提供飞书文档链接（支持 docs/docx/wiki/sheets/bitable）。",
         intent: "doc_read" as const,
       };
     }
     
     try {
-      const result = await (docsTool.execute as any)({ 
-        docToken: docUrl,
-        docType: "doc",
-        action: "read"
-      }) as { success: boolean; content?: string; title?: string; error?: string };
+      // Use document-read-workflow for structured fetch + persist + embed
+      const result = await runDocumentReadWorkflow({
+        docUrl,
+        userId: userId || "",
+        chatId,
+        persistToSupabase: true,  // Always persist read docs
+        embedForRag: false,       // Skip RAG embedding for now (can enable later)
+      });
       
       if (result.success) {
         const content = result.content || "文档内容为空";
@@ -663,13 +669,21 @@ const executeDocReadStep = createStep({
           ? content.substring(0, 2000) + "...\n\n(内容已截断)"
           : content;
         
+        // Add persistence status
+        const persistStatus = result.persisted ? "💾 已保存" : "";
+        
         return {
-          result: `## 📄 ${title}\n\n${displayContent}`,
+          result: `## 📄 ${title} ${persistStatus}\n\n${displayContent}`,
           intent: "doc_read" as const,
         };
       } else {
+        // Include auth prompt if needed
+        let errorMsg = `❌ 读取文档失败: ${result.error}`;
+        if (result.needsAuth && result.authUrl) {
+          errorMsg += `\n\n👉 [点击授权后重试](${result.authUrl})`;
+        }
         return {
-          result: `❌ 读取文档失败: ${result.error}`,
+          result: errorMsg,
           intent: "doc_read" as const,
         };
       }

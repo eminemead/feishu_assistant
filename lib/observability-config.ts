@@ -17,6 +17,7 @@ import { getPnlAgent } from "./agents/pnl-agent";
 import { getDpaMomAgent } from "./agents/dpa-mom-agent";
 import { okrAnalysisWorkflow } from "./workflows/okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./workflows/document-tracking-workflow";
+import { documentReadWorkflow } from "./workflows/document-read-workflow";
 import { initializeWorkflows } from "./workflows";
 import { getSharedStorage } from "./memory-factory";
 
@@ -72,6 +73,7 @@ const registeredAgents = {
 const registeredWorkflows = {
   okrAnalysis: okrAnalysisWorkflow,
   documentTracking: documentTrackingWorkflow,
+  documentRead: documentReadWorkflow,
 };
 
 // Initialize shared storage for Mastra memory (Supabase PostgreSQL)
