@@ -72,7 +72,7 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
       
       // If user has no allowed accounts, return empty result (fail-secure)
       if (scope.allowedAccounts.length === 0) {
-        console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts, returning empty result`);
+        console.warn(`⚠️ [OKR] User ${userId} has no allowed accounts (permissions not configured), returning empty result`);
         return {
           period,
           table_used: STARROCKS_OKR_METRICS_TABLE,
@@ -80,9 +80,11 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
           total_companies: 0,
           overall_average: 0,
           filtered_by_user: true,
+          error: `User "${userId}" has no data permissions configured. Contact admin to set up access.`,
           data_source: 'starrocks'
         };
       }
+      console.log(`✅ [OKR] User ${userId} has ${scope.allowedAccounts.length} allowed accounts`);
     } catch (error) {
       console.error(`❌ [OKR] Error getting user data scope:`, error);
       return {
@@ -120,6 +122,8 @@ async function analyzeHasMetricPercentageStarrocks(period: string, userId?: stri
       GROUP BY company_name, metric_type
     `);
 
+    console.log(`[OKR] StarRocks query returned ${result.length} rows for period "${period}"${userDataScope ? ` (filtered by ${userDataScope.allowedAccounts.length} accounts)` : ''}`);
+    
     return {
       period,
       table_used: STARROCKS_OKR_METRICS_TABLE,

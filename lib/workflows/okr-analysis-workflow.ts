@@ -13,7 +13,7 @@
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import { analyzeHasMetricPercentage } from "../agents/okr-reviewer-agent";
-import { chartGenerationTool } from "../tools/chart-generation-tool";
+import { chartGenerationTool, ChartResponse } from "../tools/chart-generation-tool";
 import { getOkrReviewerAgent } from "../agents/okr-reviewer-agent";
 
 /**
@@ -35,11 +35,20 @@ const queryOkrDataStep = createStep({
   execute: async ({ inputData }) => {
     const { period, userId } = inputData;
     
-    console.log(`[OKR Workflow] Querying OKR data for period: ${period}`);
+    console.log(`[OKR Workflow] Querying OKR data for period: ${period}, userId: ${userId || 'none'}`);
     const metrics = await analyzeHasMetricPercentage(period, userId);
     
-    if (metrics.error || !metrics.summary || metrics.summary.length === 0) {
-      throw new Error(`No OKR data available for period: ${period}`);
+    // Better error diagnostics
+    if (metrics.error) {
+      throw new Error(`OKR query failed for period "${period}": ${metrics.error}`);
+    }
+    
+    if (metrics.filtered_by_user && metrics.total_companies === 0) {
+      throw new Error(`No OKR data accessible for user "${userId}" in period "${period}". User may lack permissions or no matching data exists.`);
+    }
+    
+    if (!metrics.summary || metrics.summary.length === 0) {
+      throw new Error(`No OKR data found for period "${period}". Check if data exists for this period.`);
     }
     
     return {

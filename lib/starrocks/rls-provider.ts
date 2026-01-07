@@ -74,9 +74,10 @@ export async function getStarrocksUserScope(feishuUserId: string): Promise<UserD
 
   const empAccount = feishuIdToEmpAccount(feishuUserId);
   if (!empAccount) {
-    console.warn(`⚠️ [StarRocks] Unable to derive emp_ad_account from Feishu ID: ${feishuUserId}`);
+    console.warn(`⚠️ [StarRocks RLS] Unable to derive emp_ad_account from Feishu ID: ${feishuUserId}`);
     return null;
   }
+  console.log(`[StarRocks RLS] Looking up permissions for emp_ad_account: ${empAccount}`);
 
   // Query all rows for this emp_ad_account (may have multiple project_code/region_name combinations)
   const sql = `
@@ -90,9 +91,10 @@ export async function getStarrocksUserScope(feishuUserId: string): Promise<UserD
   try {
     const rows = await queryStarrocks<RlsRow>(sql, [empAccount]);
     if (!rows.length) {
-      console.log(`ℹ️ [StarRocks] No RLS rows for emp_ad_account=${empAccount}`);
+      console.log(`ℹ️ [StarRocks RLS] No RLS rows found for emp_ad_account="${empAccount}" in table ${TABLE_NAME}. User has no data access permissions.`);
       return null;
     }
+    console.log(`✅ [StarRocks RLS] Found ${rows.length} RLS rows for emp_ad_account="${empAccount}"`);
 
     // Aggregate distinct values from all rows
     const accounts = new Set<string>();
