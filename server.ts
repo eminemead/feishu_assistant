@@ -617,11 +617,23 @@ eventDispatcher.register({
 
       // Handle thread reply (if root_id exists and is different from message_id)
       if (message.root_id && message.root_id !== messageId) {
-        // Validate thread relevance before processing
-        const isRelevant = await isThreadBotRelevant(chatId, message.root_id, botUserId);
-        if (!isRelevant) {
-          console.log(`⚠️ [WebSocket] Thread reply ignored: thread ${message.root_id} is not bot-relevant`);
-          return;
+        // Check for GitLab commands that should work without bot-relevance check
+        // These enable users to interact with GitLab issues from any thread
+        const isLinkCommand = /(?:link\s*(?:to|this\s*to)?|跟踪|关联|绑定|track)\s*(?:#|issue\s*#?)?(\d+)/i.test(messageText);
+        const isSummarizeCommand = /(?:summarize|summary|status|状态|总结|进展)\s*(?:of\s*)?(?:#|issue\s*#?)?(\d+)/i.test(messageText);
+        const isCloseCommand = /(?:close|完成|关闭|done|finish|结束)\s*(?:#|issue\s*#?)?(\d+)/i.test(messageText);
+        const isGitLabCommand = isLinkCommand || isSummarizeCommand || isCloseCommand;
+        
+        if (isGitLabCommand) {
+          const cmdType = isLinkCommand ? 'link' : isSummarizeCommand ? 'summarize' : 'close';
+          console.log(`🔗 [WebSocket] GitLab ${cmdType} command detected, bypassing thread relevance check`);
+        } else {
+          // Validate thread relevance before processing (non-link commands)
+          const isRelevant = await isThreadBotRelevant(chatId, message.root_id, botUserId);
+          if (!isRelevant) {
+            console.log(`⚠️ [WebSocket] Thread reply ignored: thread ${message.root_id} is not bot-relevant`);
+            return;
+          }
         }
         
         console.log(`🧵 [WebSocket] Processing thread reply: "${messageText.substring(0, 50)}..."`);
