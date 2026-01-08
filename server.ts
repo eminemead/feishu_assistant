@@ -622,7 +622,7 @@ eventDispatcher.register({
         const isLinkCommand = /(?:link\s*(?:to|this\s*to)?|跟踪|关联|绑定|track)\s*(?:#|issue\s*#?)?(\d+)/i.test(messageText);
         const isSummarizeCommand = /(?:summarize|summary|status|状态|总结|进展)\s*(?:of\s*)?(?:#|issue\s*#?)?(\d+)/i.test(messageText);
         const isCloseCommand = /(?:close|完成|关闭|done|finish|结束)\s*(?:#|issue\s*#?)?(\d+)/i.test(messageText);
-        const isAssignCommand = /assign\s*(?:to\s*)?me|我来(?:做|负责|执行)?|安排给我|分配给我|指派给我|我负责|我接|让我来/i.test(messageText);
+        const isAssignCommand = /assign\s*(?:to\s*)?me|我来(?:做|负责|执行|吧)?|我已经|安排给我|分配给我|指派给我|我负责|我接|让我来/i.test(messageText);
         const isGitLabCommand = isLinkCommand || isSummarizeCommand || isCloseCommand || isAssignCommand;
         
         if (isGitLabCommand) {

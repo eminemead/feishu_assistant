@@ -139,7 +139,7 @@ const classifyIntentStep = createStep({
     
     // Check for self-assign keywords when linked issue exists
     // User wants to assign the linked issue to themselves
-    const assignKeywords = /assign\s*(?:to\s*)?me|我来(?:做|负责|执行)?|安排给我|分配给我|指派给我|我负责|我接|让我来/i;
+    const assignKeywords = /assign\s*(?:to\s*)?me|我来(?:做|负责|执行|吧)?|我已经|安排给我|分配给我|指派给我|我负责|我接|让我来/i;
     if (linkedIssue && assignKeywords.test(query)) {
       console.log(`[DPA Workflow] Linked issue exists and assign keywords detected, routing to gitlab_assign`);
       return {
