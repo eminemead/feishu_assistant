@@ -44,6 +44,7 @@ const IntentEnum = z.enum([
   "gitlab_create",
   "gitlab_list", 
   "gitlab_close",  // Close issue with deliverable
+  "gitlab_assign",  // Self-assign to linked issue
   "gitlab_thread_update",
   "gitlab_relink",  // Link current thread to existing issue
   "gitlab_summarize",  // Summarize issue with comments
@@ -127,6 +128,22 @@ const classifyIntentStep = createStep({
       console.log(`[DPA Workflow] Linked issue exists and update keywords detected, routing to gitlab_thread_update`);
       return {
         intent: "gitlab_thread_update" as Intent,
+        params: undefined,
+        query,
+        chatId,
+        rootId,
+        userId,
+        linkedIssue,
+      };
+    }
+    
+    // Check for self-assign keywords when linked issue exists
+    // User wants to assign the linked issue to themselves
+    const assignKeywords = /assign\s*(?:to\s*)?me|我来(?:做|负责|执行)?|安排给我|分配给我|指派给我|我负责|我接|让我来/i;
+    if (linkedIssue && assignKeywords.test(query)) {
+      console.log(`[DPA Workflow] Linked issue exists and assign keywords detected, routing to gitlab_assign`);
+      return {
+        intent: "gitlab_assign" as Intent,
         params: undefined,
         query,
         chatId,
@@ -1137,6 +1154,88 @@ const executeGitLabCloseStep = createStep({
 });
 
 /**
+ * Step: Execute GitLab Assign
+ * Self-assign user to a linked GitLab issue
+ */
+const executeGitLabAssignStep = createStep({
+  id: "execute-gitlab-assign",
+  description: "Assign user to linked GitLab issue",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+  }),
+  execute: async ({ inputData }) => {
+    const { userId, linkedIssue } = inputData;
+    
+    console.log(`[DPA Workflow] Executing GitLab assign`);
+    
+    if (!linkedIssue) {
+      return {
+        result: `## ❌ No Linked Issue\n\n---\n\nThis thread is not linked to a GitLab issue.\n\n💡 First link a thread: "link to #123"`,
+        intent: "gitlab_assign" as const,
+      };
+    }
+    
+    if (!userId) {
+      return {
+        result: `## ❌ Unknown User\n\n---\n\nCouldn't identify your user ID for assignment.`,
+        intent: "gitlab_assign" as const,
+      };
+    }
+    
+    try {
+      // Map Feishu user to GitLab username
+      const gitlabUsername = feishuIdToEmpAccount(userId);
+      
+      if (!gitlabUsername) {
+        return {
+          result: `## ❌ User Not Mapped\n\n---\n\nCouldn't map Feishu user "${userId}" to GitLab username.\n\n💡 Contact admin to add user mapping.`,
+          intent: "gitlab_assign" as const,
+        };
+      }
+      
+      console.log(`[DPA Workflow] Assigning issue #${linkedIssue.issueIid} to ${gitlabUsername}`);
+      
+      // Update issue assignee
+      const assignCommand = `issue update ${linkedIssue.issueIid} -a "${gitlabUsername}" -R ${linkedIssue.project}`;
+      const assignResult = await (gitlabTool.execute as any)({ command: assignCommand }) as { success: boolean; output?: string; error?: string };
+      
+      if (!assignResult.success) {
+        return {
+          result: `## ❌ Assignment Failed\n\n---\n\nIssue #${linkedIssue.issueIid}\n\n${assignResult.error}`,
+          intent: "gitlab_assign" as const,
+        };
+      }
+      
+      // Add comment noting the assignment
+      const assignedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const comment = `**[Self-Assigned via Feishu Bot]**\\n\\n@${gitlabUsername} assigned themselves to this issue.\\n**Time**: ${assignedAt}`;
+      const noteCommand = `issue note ${linkedIssue.issueIid} -m "${comment}" -R ${linkedIssue.project}`;
+      await (gitlabTool.execute as any)({ command: noteCommand });
+      
+      return {
+        result: `## ✅ Assigned to @${gitlabUsername}\n\n---\n\n🔗 [Issue #${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n---\n\n💡 You can now update progress by replying in this thread.`,
+        intent: "gitlab_assign" as const,
+      };
+    } catch (error: any) {
+      return {
+        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        intent: "gitlab_assign" as const,
+      };
+    }
+  }
+});
+
+/**
  * Step: Execute Chat Search
  */
 const executeChatSearchStep = createStep({
@@ -1441,6 +1540,10 @@ export const dpaAssistantWorkflow = createWorkflow({
       executeGitLabCloseStep
     ],
     [
+      async ({ inputData }) => inputData?.intent === "gitlab_assign",
+      executeGitLabAssignStep
+    ],
+    [
       async ({ inputData }) => inputData?.intent === "gitlab_thread_update",
       executeGitLabThreadUpdateStep
     ],
@@ -1479,6 +1582,7 @@ export const dpaAssistantWorkflow = createWorkflow({
     const gitlabCreate = getStepResult("execute-gitlab-create");
     const gitlabList = getStepResult("execute-gitlab-list");
     const gitlabClose = getStepResult("execute-gitlab-close");
+    const gitlabAssign = getStepResult("execute-gitlab-assign");
     const gitlabThreadUpdate = getStepResult("execute-gitlab-thread-update");
     const gitlabRelink = getStepResult("execute-gitlab-relink");
     const gitlabSummarize = getStepResult("execute-gitlab-summarize");
@@ -1486,7 +1590,7 @@ export const dpaAssistantWorkflow = createWorkflow({
     const docRead = getStepResult("execute-doc-read");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead;
+    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead;
     
     if (branchResult) {
       return {

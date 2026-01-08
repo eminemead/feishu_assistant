@@ -180,8 +180,14 @@ function compileRoutingRules(skill: Skill): CompiledRoutingRule[] {
     
     // Pre-compile regex patterns for each keyword
     const patterns = rules.keywords.map(keyword => {
-      // Word boundary matching for better precision
       const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Check if keyword contains non-ASCII (Chinese, etc.) - \b doesn't work for these
+      const hasNonAscii = /[^\x00-\x7F]/.test(keyword);
+      if (hasNonAscii) {
+        // For Chinese keywords, use simple substring match (case-insensitive)
+        return new RegExp(escaped, "i");
+      }
+      // For ASCII keywords, use word boundary matching for precision
       return new RegExp(`\\b${escaped}\\b`, "i");
     });
     
