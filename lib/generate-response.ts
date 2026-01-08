@@ -2,6 +2,18 @@ import { CoreMessage } from "ai";
 import { managerAgent, ManagerAgentResult } from "./agents/manager-agent-mastra";
 
 /**
+ * Linked GitLab issue info for thread-to-issue mapping
+ */
+export interface LinkedIssueInfo {
+  chatId: string;
+  rootId: string;
+  project: string;
+  issueIid: number;
+  issueUrl: string;
+  createdBy: string;
+}
+
+/**
  * Response from generate response, may include confirmation data and reasoning
  */
 export interface GenerateResponseResult {
@@ -10,6 +22,7 @@ export interface GenerateResponseResult {
   confirmationData?: string;
   reasoning?: string; // Thinking traces from reasoning models
   showFollowups?: boolean; // Controls whether to show follow-up buttons
+  linkedIssue?: LinkedIssueInfo; // Linked GitLab issue if thread has one
 }
 
 /**

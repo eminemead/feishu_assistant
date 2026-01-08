@@ -190,12 +190,16 @@ const eventDispatcher = new lark.EventDispatcher({
       // Handle both string (legacy) and object (CardKit 2.0 with behaviors) formats
       // Object format: { context: "chatId|rootId", index: 0, text: "button text" }
       let actionValue: string | undefined;
+      let buttonContext: string | undefined; // The chatId|rootId stored in button
+      
       if (typeof rawActionValue === "string") {
         actionValue = rawActionValue;
       } else if (rawActionValue && typeof rawActionValue === "object") {
         // Extract text from object value (CardKit 2.0 callback format)
         actionValue = rawActionValue.text || rawActionValue.value;
-        console.log(`🔘 [CardAction] Extracted text from object value: "${actionValue?.substring(0, 50)}..."`);
+        // Extract button's stored context (the correct chatId|rootId from when button was created)
+        buttonContext = rawActionValue.context;
+        console.log(`🔘 [CardAction] Extracted from object: text="${actionValue?.substring(0, 50)}...", context="${buttonContext}"`);
       }
 
       if (actionValue && actionValue.trim() && botUserId) {
@@ -203,15 +207,29 @@ const eventDispatcher = new lark.EventDispatcher({
           `🔘 [CardAction] Button clicked: "${actionValue.substring(0, 100)}..."`
         );
 
-        // Extract context from Feishu callback data (not action_id)
-        // Feishu provides context.open_chat_id and context.open_message_id directly
-        const context = (data as any).context || {};
-        const chatId = context.open_chat_id || "";
-        const rootId = context.open_message_id || "";
+        // Priority for context extraction:
+        // 1. Button's stored context (rawActionValue.context = "chatId|rootId") - most accurate
+        // 2. Feishu's callback context (context.open_chat_id, open_message_id) - fallback
+        let chatId = "";
+        let rootId = "";
+        
+        if (buttonContext && buttonContext.includes("|")) {
+          // Parse button's stored context: "chatId|rootId"
+          const parts = buttonContext.split("|");
+          chatId = parts[0];
+          rootId = parts[1];
+          console.log(`🔘 [CardAction] Using button context: chatId=${chatId}, rootId=${rootId}`);
+        } else {
+          // Fallback to Feishu's context (less accurate - open_message_id is card ID, not thread root)
+          const feishuContext = (data as any).context || {};
+          chatId = feishuContext.open_chat_id || "";
+          rootId = feishuContext.open_message_id || "";
+          console.log(`🔘 [CardAction] Using Feishu context (fallback): chatId=${chatId}, rootId=${rootId}`);
+        }
 
         if (chatId && rootId) {
           console.log(
-            `🔘 [CardAction] Extracted context: chatId=${chatId}, rootId=${rootId}`
+            `🔘 [CardAction] Final context: chatId=${chatId}, rootId=${rootId}`
           );
           
           // Process button click
@@ -276,25 +294,42 @@ eventDispatcher.register({
           
           // Handle both string (legacy) and object (CardKit 2.0) formats
           let actionValue: string | undefined;
+          let buttonContext: string | undefined; // The chatId|rootId stored in button
+          
           if (typeof rawActionValue === "string") {
             actionValue = rawActionValue;
           } else if (rawActionValue && typeof rawActionValue === "object") {
             actionValue = rawActionValue.text || rawActionValue.value;
+            // Extract button's stored context (the correct chatId|rootId)
+            buttonContext = rawActionValue.context;
           }
 
           if (actionValue && actionValue.trim() && botUserId) {
             console.log(
-              `🔘 [CardAction] Button clicked via WebSocket: "${actionValue.substring(0, 100)}..."`
+              `🔘 [CardAction] Button clicked via WebSocket: "${actionValue.substring(0, 100)}...", buttonContext="${buttonContext}"`
             );
 
-            // Extract context from Feishu callback (Feishu provides context directly)
-            const context = (data as any).context || (data as any).trigger || {};
-            const chatId = context.open_chat_id || context.chat_id || "";
-            const rootId = context.open_message_id || context.message_id || "";
+            // Priority for context extraction:
+            // 1. Button's stored context (rawActionValue.context = "chatId|rootId") - most accurate
+            // 2. Feishu's callback context - fallback
+            let chatId = "";
+            let rootId = "";
+            
+            if (buttonContext && buttonContext.includes("|")) {
+              const parts = buttonContext.split("|");
+              chatId = parts[0];
+              rootId = parts[1];
+              console.log(`🔘 [CardAction] Using button context: chatId=${chatId}, rootId=${rootId}`);
+            } else {
+              const feishuContext = (data as any).context || (data as any).trigger || {};
+              chatId = feishuContext.open_chat_id || feishuContext.chat_id || "";
+              rootId = feishuContext.open_message_id || feishuContext.message_id || "";
+              console.log(`🔘 [CardAction] Using Feishu context (fallback): chatId=${chatId}, rootId=${rootId}`);
+            }
 
             if (chatId && rootId) {
               console.log(
-                `🔘 [CardAction] Extracted context: chatId=${chatId}, rootId=${rootId}`
+                `🔘 [CardAction] Final context: chatId=${chatId}, rootId=${rootId}`
               );
 
               // Process button click as background task

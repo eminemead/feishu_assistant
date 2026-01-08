@@ -37,6 +37,7 @@ import { routeQuery, shouldUseWorkflow, getRoutingSummary } from "../routing/que
 import { getSkillRegistry } from "../skills/skill-registry";
 import { injectSkillsIntoInstructions, injectSkillsIntoMessages } from "../skills/skill-injector";
 import { executeSkillWorkflow } from "../workflows";
+import { getLinkedIssue, IssueThreadMapping } from "../services/issue-thread-mapping-service";
 import * as path from "path";
 
 // Web search tool temporarily disabled - will be replaced with Brave Search API
@@ -177,6 +178,18 @@ function getQueryText(messages: CoreMessage[]): string {
  */
 
 /**
+ * Linked issue info for thread-to-issue mapping
+ */
+export interface LinkedIssueResult {
+  chatId: string;
+  rootId: string;
+  project: string;
+  issueIid: number;
+  issueUrl: string;
+  createdBy: string;
+}
+
+/**
  * Manager agent result - can be string or structured with confirmation data and reasoning
  */
 export interface ManagerAgentResult {
@@ -185,6 +198,7 @@ export interface ManagerAgentResult {
   confirmationData?: string;
   reasoning?: string; // Thinking traces from reasoning models
   showFollowups?: boolean; // Controls whether to show follow-up buttons
+  linkedIssue?: LinkedIssueResult; // Linked GitLab issue if thread has one
 }
 
 export async function managerAgent(
@@ -224,6 +238,55 @@ export async function managerAgent(
     console.log(`[Manager] No memory context (missing userId, chatId, or rootId)`);
   }
 
+  // Check if this thread has a linked GitLab issue (for auto-syncing replies)
+  let linkedIssue: IssueThreadMapping | null = null;
+  console.log(`[Manager] Checking for linked issue: chatId="${chatId}", rootId="${rootId}"`);
+  if (chatId && rootId) {
+    linkedIssue = await getLinkedIssue(chatId, rootId);
+    if (linkedIssue) {
+      console.log(`[Manager] ✅ Thread linked to GitLab issue #${linkedIssue.issueIid} in ${linkedIssue.project}`);
+    } else {
+      console.log(`[Manager] ❌ No linked issue found for this thread`);
+    }
+  } else {
+    console.log(`[Manager] ⚠️ Missing chatId or rootId, skipping linked issue check`);
+  }
+
+  // EARLY ROUTING: If thread has linked issue AND query has update keywords, force DPA workflow
+  const threadUpdateKeywords = /补充|更新|还有|另外|also|additionally|update|add to issue|追加/i;
+  if (linkedIssue && threadUpdateKeywords.test(query)) {
+    console.log(`[Manager] 🔗 Linked issue + update keywords detected, forcing DPA workflow for gitlab_thread_update`);
+    
+    try {
+      const result = await executeSkillWorkflow("dpa-assistant", {
+        query,
+        userId,
+        chatId,
+        messageId: rootId,
+        rootId,
+        onUpdate: updateStatus,
+        linkedIssue: linkedIssue,
+      });
+      
+      const duration = Date.now() - startTime;
+      devtoolsTracker.trackResponse("dpa-assistant", result.response, duration, {
+        linkedIssueRoute: true,
+        issueIid: linkedIssue.issueIid,
+      });
+      healthMonitor.trackAgentCall("dpa-assistant", duration, result.success);
+      
+      console.log(`[Manager] DPA workflow (thread update) complete: ${result.response.substring(0, 100)}...`);
+      return {
+        text: result.response,
+        showFollowups: false,
+        linkedIssue: linkedIssue,
+      };
+    } catch (error) {
+      console.error(`[Manager] DPA workflow (thread update) failed:`, error);
+      // Fall through to normal routing
+    }
+  }
+
   // Use skill-based routing for declarative classification
   const routingDecision = await routeQuery(query);
 
@@ -245,7 +308,11 @@ export async function managerAgent(
     });
 
     try {
-      console.log(`[Manager] Executing workflow ${routingDecision.workflowId} with onUpdate=${!!updateStatus}`);
+      console.log(`[Manager] ============================================`);
+      console.log(`[Manager] Executing workflow: ${routingDecision.workflowId}`);
+      console.log(`[Manager] Context: userId="${userId}", chatId="${chatId}", rootId="${rootId}"`);
+      console.log(`[Manager] onUpdate callback: ${!!updateStatus}`);
+      console.log(`[Manager] ============================================`);
       const result = await executeSkillWorkflow(routingDecision.workflowId!, {
         query,
         userId,
@@ -253,6 +320,7 @@ export async function managerAgent(
         messageId: rootId,
         rootId,
         onUpdate: updateStatus,
+        linkedIssue: linkedIssue || undefined,
       });
 
       // Check for skip signal - workflow wants manager/agent to handle instead
@@ -304,12 +372,14 @@ export async function managerAgent(
             needsConfirmation: true,
             confirmationData: result.confirmationData,
             showFollowups: false, // Confirmation flow = no other suggestions
+            linkedIssue: linkedIssue || undefined,
           };
         }
         
         return {
           text: result.response,
           showFollowups: false, // Deterministic workflow completed = no suggestions
+          linkedIssue: linkedIssue || undefined,
         };
       }
     } catch (error) {

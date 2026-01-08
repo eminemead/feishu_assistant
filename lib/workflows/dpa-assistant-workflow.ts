@@ -34,6 +34,7 @@ import { feishuIdToEmpAccount } from "../auth/feishu-account-mapping";
 import { Agent } from "@mastra/core/agent";
 import { createFeishuTask } from "../services/feishu-task-service";
 import { getFeishuOpenId } from "../services/user-mapping-service";
+import { storeIssueThreadMapping } from "../services/issue-thread-mapping-service";
 
 // Free model instances - ONLY these models are used
 const freeModel = openrouter(FREE_MODELS[0]); // nvidia/nemotron-3-nano-30b-a3b:free
@@ -42,6 +43,7 @@ const freeModel = openrouter(FREE_MODELS[0]); // nvidia/nemotron-3-nano-30b-a3b:
 const IntentEnum = z.enum([
   "gitlab_create",
   "gitlab_list", 
+  "gitlab_thread_update",
   "chat_search",
   "doc_read",
   "general_chat"
@@ -58,25 +60,42 @@ const docsTool = createFeishuDocsTool(true);
  * Step 1: Classify Intent
  * Uses fast model to determine user intent
  */
+const linkedIssueSchema = z.object({
+  chatId: z.string(),
+  rootId: z.string(),
+  project: z.string(),
+  issueIid: z.number(),
+  issueUrl: z.string(),
+  createdBy: z.string(),
+}).optional();
+
 const classifyIntentStep = createStep({
   id: "classify-intent",
   description: "Classify user query into intent category",
   inputSchema: z.object({
     query: z.string().describe("User's original query"),
     chatId: z.string().optional().describe("Feishu chat ID"),
+    rootId: z.string().optional().describe("Root message ID for thread identification"),
     userId: z.string().optional().describe("User ID"),
+    linkedIssue: linkedIssueSchema.describe("Linked GitLab issue if thread has one"),
   }),
   outputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
     query: z.string(),
     chatId: z.string().optional(),
+    rootId: z.string().optional(),
     userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
   }),
   execute: async ({ inputData }) => {
-    const { query, chatId, userId } = inputData;
+    const { query, chatId, rootId, userId, linkedIssue } = inputData;
     
-    console.log(`[DPA Workflow] Classifying intent for: "${query.substring(0, 50)}..."`);
+    console.log(`[DPA Workflow] ============================================`);
+    console.log(`[DPA Workflow] ClassifyIntent Step`);
+    console.log(`[DPA Workflow] InputData: chatId="${chatId}", rootId="${rootId}", userId="${userId}"`);
+    console.log(`[DPA Workflow] Query preview: "${query.substring(0, 80)}..."`);
+    console.log(`[DPA Workflow] ============================================`);
     
     // EARLY RETURN: Route confirmation callbacks directly without LLM classification
     // These prefixes are used by the human-in-the-loop confirmation flow
@@ -90,7 +109,24 @@ const classifyIntentStep = createStep({
         params: undefined,
         query,
         chatId,
+        rootId,
         userId,
+        linkedIssue,
+      };
+    }
+    
+    // Check for thread update keywords when linked issue exists
+    const threadUpdateKeywords = /补充|更新|还有|另外|also|additionally|update|add to issue|追加/i;
+    if (linkedIssue && threadUpdateKeywords.test(query)) {
+      console.log(`[DPA Workflow] Linked issue exists and update keywords detected, routing to gitlab_thread_update`);
+      return {
+        intent: "gitlab_thread_update" as Intent,
+        params: undefined,
+        query,
+        chatId,
+        rootId,
+        userId,
+        linkedIssue,
       };
     }
     
@@ -140,7 +176,9 @@ Do not include any other text.`;
         params: { __skipWorkflow: "true" },
         query,
         chatId,
+        rootId,
         userId,
+        linkedIssue,
       };
     }
     
@@ -158,7 +196,9 @@ Do not include any other text.`;
       params: Object.keys(params).length > 0 ? params : undefined,
       query,
       chatId,
+      rootId,
       userId,
+      linkedIssue,
     };
   }
 });
@@ -174,7 +214,9 @@ const executeGitLabCreateStep = createStep({
     params: z.record(z.string()).optional(),
     query: z.string(),
     chatId: z.string().optional(),
+    rootId: z.string().optional(),
     userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
   }),
   outputSchema: z.object({
     result: z.string(),
@@ -184,7 +226,7 @@ const executeGitLabCreateStep = createStep({
     confirmationData: z.string().optional(), // JSON-encoded issue data for confirm button
   }),
   execute: async ({ inputData }) => {
-    const { query } = inputData;
+    const { query, chatId, rootId, userId } = inputData;
     
     console.log(`[DPA Workflow] Executing GitLab create`);
     
@@ -194,10 +236,18 @@ const executeGitLabCreateStep = createStep({
     
     if (query.startsWith(CONFIRM_PREFIX)) {
       // User confirmed - execute the issue creation
+      console.log(`[DPA Workflow] ============================================`);
       console.log(`[DPA Workflow] Confirmation received, creating issue...`);
+      console.log(`[DPA Workflow] Query length: ${query.length}`);
+      console.log(`[DPA Workflow] InputData chatId: ${chatId}, rootId: ${rootId}`);
       try {
-        const issueData = JSON.parse(query.slice(CONFIRM_PREFIX.length));
-        const { title, description, project, assignee, dueDate, glabCommand } = issueData;
+        const rawData = query.slice(CONFIRM_PREFIX.length);
+        console.log(`[DPA Workflow] Parsing confirmationData (${rawData.length} chars)...`);
+        const issueData = JSON.parse(rawData);
+        console.log(`[DPA Workflow] Parsed issueData keys: ${Object.keys(issueData).join(', ')}`);
+        const { title, description, project, assignee, dueDate, glabCommand, chatId: storedChatId, rootId: storedRootId, createdBy } = issueData;
+        console.log(`[DPA Workflow] Extracted: storedChatId="${storedChatId}", storedRootId="${storedRootId}"`);
+        console.log(`[DPA Workflow] ============================================`);
         
         const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
         
@@ -210,10 +260,48 @@ const executeGitLabCreateStep = createStep({
           
           // Extract issue IID and URL from glab output
           // glab outputs: "Creating issue in ... \n #123 Title \n https://git.nevint.com/..."
+          // Fallback: extract IID from URL if #123 format not found
           const issueIidMatch = result.output?.match(/#(\d+)/);
           const issueUrlMatch = result.output?.match(/(https?:\/\/[^\s]+)/);
-          const issueIid = issueIidMatch ? parseInt(issueIidMatch[1], 10) : null;
           const issueUrl = issueUrlMatch ? issueUrlMatch[1] : null;
+          
+          // Try to get IID from #123 format first, then from URL as fallback
+          let issueIid: number | null = issueIidMatch ? parseInt(issueIidMatch[1], 10) : null;
+          if (!issueIid && issueUrl) {
+            // Extract from URL: .../issues/123 or .../merge_requests/123
+            const urlIidMatch = issueUrl.match(/\/(?:issues|merge_requests)\/(\d+)/);
+            if (urlIidMatch) {
+              issueIid = parseInt(urlIidMatch[1], 10);
+              console.log(`[DPA Workflow] Extracted issueIid from URL: ${issueIid}`);
+            }
+          }
+          
+          // Store thread-issue mapping for auto-syncing replies
+          // Use actual rootId (thread root message ID) for accurate lookup on subsequent replies
+          const mappingRootId = storedRootId || storedChatId;
+          console.log(`[DPA Workflow] Mapping data: chatId=${storedChatId}, rootId=${storedRootId}, mappingRootId=${mappingRootId}, issueIid=${issueIid}, issueUrl=${issueUrl}`);
+          
+          if (storedChatId && mappingRootId && issueIid && issueUrl) {
+            try {
+              const mappingResult = await storeIssueThreadMapping({
+                chatId: storedChatId,
+                rootId: mappingRootId,
+                project,
+                issueIid,
+                issueUrl,
+                createdBy: createdBy || 'unknown',
+              });
+              if (mappingResult.success) {
+                console.log(`[DPA Workflow] ✅ Stored thread-issue mapping: chat=${storedChatId}, root=${mappingRootId} → #${issueIid}`);
+              } else {
+                console.error(`[DPA Workflow] ❌ Failed to store mapping: ${mappingResult.error}`);
+              }
+            } catch (mappingError: any) {
+              console.error(`[DPA Workflow] ❌ Exception storing thread mapping: ${mappingError.message}`);
+            }
+          } else {
+            console.warn(`[DPA Workflow] ⚠️ Skipping mapping storage - missing data: chatId=${!!storedChatId}, rootId=${!!mappingRootId}, issueIid=${!!issueIid}, issueUrl=${!!issueUrl}`);
+          }
           
           // Create corresponding Feishu task for the assignee
           if (assignee && issueIid) {
@@ -274,8 +362,6 @@ const executeGitLabCreateStep = createStep({
     
     // Use LLM to parse the issue creation request
     try {
-      const { userId } = inputData;
-      
       // Extract Feishu doc URLs from query
       const docUrlRegex = /https?:\/\/[^\s]*feishu\.cn\/(?:docs|docx|wiki|sheets|bitable)\/[^\s]+/gi;
       const docUrls = query.match(docUrlRegex) || [];
@@ -452,6 +538,11 @@ ASSIGNEE: <username or "none">`;
     }
     
     // Encode issue data for confirmation button
+    console.log(`[DPA Workflow] ============================================`);
+    console.log(`[DPA Workflow] Building confirmationData...`);
+    console.log(`[DPA Workflow] chatId="${chatId}", rootId="${rootId}"`);
+    console.log(`[DPA Workflow] chatId type: ${typeof chatId}, rootId type: ${typeof rootId}`);
+    console.log(`[DPA Workflow] ============================================`);
     const confirmationData = JSON.stringify({
       title,
       description: enrichedDescription, // Include attribution in stored description
@@ -461,8 +552,17 @@ ASSIGNEE: <username or "none">`;
       labels: allLabels,
       assignee: gitlabUsername,
       glabCommand,
+      // Include thread context for post-creation mapping
+      chatId,
+      rootId,  // Thread root message ID for accurate mapping
+      createdBy: userId,
     });
     
+      console.log(`[DPA Workflow] ConfirmationData JSON length: ${confirmationData.length}`);
+      // Log first part of the data for debugging (avoid logging full description)
+      const debugData = JSON.parse(confirmationData);
+      console.log(`[DPA Workflow] ConfirmationData preview: title="${debugData.title}", chatId="${debugData.chatId}", rootId="${debugData.rootId}"`);
+      
       return {
         result: preview,
         intent: "gitlab_create" as const,
@@ -491,7 +591,9 @@ const executeGitLabListStep = createStep({
     params: z.record(z.string()).optional(),
     query: z.string(),
     chatId: z.string().optional(),
+    rootId: z.string().optional(),
     userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
   }),
   outputSchema: z.object({
     result: z.string(),
@@ -544,6 +646,69 @@ const executeGitLabListStep = createStep({
 });
 
 /**
+ * Step: Execute GitLab Thread Update
+ * Adds a note/comment to linked GitLab issue
+ */
+const executeGitLabThreadUpdateStep = createStep({
+  id: "execute-gitlab-thread-update",
+  description: "Add note to linked GitLab issue from thread reply",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+  }),
+  execute: async ({ inputData }) => {
+    const { query, userId, linkedIssue } = inputData;
+    
+    console.log(`[DPA Workflow] Executing GitLab thread update`);
+    
+    if (!linkedIssue) {
+      return {
+        result: `❌ No linked GitLab issue found for this thread.`,
+        intent: "gitlab_thread_update" as const,
+      };
+    }
+    
+    try {
+      // Format the comment with user attribution
+      const userMention = userId ? `@${userId}` : "Feishu user";
+      const comment = `**[Feishu Thread Update from ${userMention}]**\n\n${query}`;
+      
+      // Escape quotes for shell command
+      const escapedComment = comment.replace(/"/g, '\\"');
+      const glabCommand = `issue note ${linkedIssue.issueIid} -m "${escapedComment}" -R ${linkedIssue.project}`;
+      
+      const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
+      
+      if (result.success) {
+        return {
+          result: `✅ **Added to GitLab Issue #${linkedIssue.issueIid}**\n\n[View Issue](${linkedIssue.issueUrl})\n\n> ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`,
+          intent: "gitlab_thread_update" as const,
+        };
+      } else {
+        return {
+          result: `❌ Failed to add note to issue #${linkedIssue.issueIid}: ${result.error}`,
+          intent: "gitlab_thread_update" as const,
+        };
+      }
+    } catch (error: any) {
+      return {
+        result: `❌ GitLab Error: ${error.message}`,
+        intent: "gitlab_thread_update" as const,
+      };
+    }
+  }
+});
+
+/**
  * Step: Execute Chat Search
  */
 const executeChatSearchStep = createStep({
@@ -554,7 +719,9 @@ const executeChatSearchStep = createStep({
     params: z.record(z.string()).optional(),
     query: z.string(),
     chatId: z.string().optional(),
+    rootId: z.string().optional(),
     userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
   }),
   outputSchema: z.object({
     result: z.string(),
@@ -628,7 +795,9 @@ const executeDocReadStep = createStep({
     params: z.record(z.string()).optional(),
     query: z.string(),
     chatId: z.string().optional(),
+    rootId: z.string().optional(),
     userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
   }),
   outputSchema: z.object({
     result: z.string(),
@@ -818,7 +987,9 @@ export const dpaAssistantWorkflow = createWorkflow({
   inputSchema: z.object({
     query: z.string().describe("User's query"),
     chatId: z.string().optional().describe("Feishu chat ID"),
+    rootId: z.string().optional().describe("Root message ID for thread identification"),
     userId: z.string().optional().describe("User ID"),
+    linkedIssue: linkedIssueSchema.describe("Linked GitLab issue if thread has one"),
   }),
   outputSchema: z.object({
     response: z.string().describe("Formatted response"),
@@ -836,6 +1007,10 @@ export const dpaAssistantWorkflow = createWorkflow({
     [
       async ({ inputData }) => inputData?.intent === "gitlab_list",
       executeGitLabListStep
+    ],
+    [
+      async ({ inputData }) => inputData?.intent === "gitlab_thread_update",
+      executeGitLabThreadUpdateStep
     ],
     [
       async ({ inputData }) => inputData?.intent === "chat_search",
@@ -863,11 +1038,12 @@ export const dpaAssistantWorkflow = createWorkflow({
     // Get result from whichever branch executed
     const gitlabCreate = getStepResult("execute-gitlab-create");
     const gitlabList = getStepResult("execute-gitlab-list");
+    const gitlabThreadUpdate = getStepResult("execute-gitlab-thread-update");
     const chatSearch = getStepResult("execute-chat-search");
     const docRead = getStepResult("execute-doc-read");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || chatSearch || docRead;
+    const branchResult = gitlabCreate || gitlabList || gitlabThreadUpdate || chatSearch || docRead;
     
     if (branchResult) {
       return {

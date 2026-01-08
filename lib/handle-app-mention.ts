@@ -176,6 +176,8 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         // Finalize card with follow-up suggestions and send buttons in separate message
         // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons
         console.log(`[FeishuMention] Finalizing card with suggestions. cardId=${card.cardId}, result length=${result?.length || 0}`);
+        // BUG FIX: Use rootId (thread root), not messageId, for button context
+        // This ensures confirmation callbacks can store the correct thread mapping
         const finalizeResult = await finalizeCardWithFollowups(
             card.cardId,
             card.elementId,
@@ -184,7 +186,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             needsConfirmation ? 0 : 3,  // No followups if confirmation needed
             {
                 conversationId: chatId,
-                rootId: messageId,
+                rootId: rootId,  // FIXED: Use thread root ID for correct mapping
                 threadId: rootId,
                 sendButtonsAsSeperateMessage: true,
                 confirmationData: needsConfirmation ? confirmationData : undefined,
@@ -238,7 +240,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             3,
             {
                 conversationId: chatId,
-                rootId: messageId,
+                rootId: rootId,  // FIXED: Use thread root ID
                 threadId: rootId,
                 sendButtonsAsSeperateMessage: true
             }

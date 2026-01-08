@@ -144,6 +144,18 @@ export interface WorkflowRunnerOptions {
 }
 
 /**
+ * Linked GitLab issue schema for thread-to-issue mapping
+ */
+export const linkedIssueSchema = z.object({
+  chatId: z.string(),
+  rootId: z.string(),
+  project: z.string(),
+  issueIid: z.number(),
+  issueUrl: z.string(),
+  createdBy: z.string(),
+}).optional();
+
+/**
  * Common workflow input schema (base for all skill workflows)
  */
 export const baseWorkflowInputSchema = z.object({
@@ -151,7 +163,9 @@ export const baseWorkflowInputSchema = z.object({
   userId: z.string().optional().describe("User ID for RLS"),
   chatId: z.string().optional().describe("Chat ID for responses"),
   messageId: z.string().optional().describe("Message ID for threading"),
+  rootId: z.string().optional().describe("Root message ID for thread identification"),
   context: z.record(z.unknown()).optional().describe("Additional context"),
+  linkedIssue: linkedIssueSchema.describe("Linked GitLab issue if thread has one"),
 });
 
 export type BaseWorkflowInput = z.infer<typeof baseWorkflowInputSchema>;

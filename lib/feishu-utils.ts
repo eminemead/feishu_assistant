@@ -141,8 +141,9 @@ export const getBotId = async (): Promise<string> => {
 /**
  * Check if a thread is bot-relevant before processing thread replies
  * A thread is bot-relevant if:
- * 1. The root message is from the bot itself (sender.sender_type === 'app'), OR
- * 2. The root message mentions the bot
+ * 1. The thread has a linked GitLab issue (created via bot), OR
+ * 2. The root message is from the bot itself (sender.sender_type === 'app'), OR
+ * 3. The root message mentions the bot
  * 
  * @param chatId - Chat ID where the thread exists
  * @param rootId - Root message ID of the thread
@@ -155,6 +156,15 @@ export async function isThreadBotRelevant(
   botUserId: string
 ): Promise<boolean> {
   try {
+    // Check if thread has a linked GitLab issue (created via this bot)
+    // Import dynamically to avoid circular dependency
+    const { getLinkedIssue } = await import("./services/issue-thread-mapping-service");
+    const linkedIssue = await getLinkedIssue(chatId, rootId);
+    if (linkedIssue) {
+      console.log(`✅ [ThreadValidation] Thread ${rootId} is bot-relevant: has linked GitLab issue #${linkedIssue.issueIid}`);
+      return true;
+    }
+    
     // Fetch root message details from Feishu API
     const resp = await client.im.message.get({
       path: {

@@ -38,9 +38,12 @@ export async function handleButtonFollowup(
       isMention,
     } = context;
 
-    console.log(
-      `🔘 [ButtonFollowup] Processing button click as new query: buttonValue="${buttonValue}", chatId=${chatId}, rootId=${rootId}`
-    );
+    console.log(`🔘 [ButtonFollowup] ============================================`);
+    console.log(`🔘 [ButtonFollowup] Processing button click as new query`);
+    console.log(`🔘 [ButtonFollowup] Context: chatId="${chatId}", rootId="${rootId}"`);
+    console.log(`🔘 [ButtonFollowup] ButtonValue length: ${buttonValue?.length || 0}`);
+    console.log(`🔘 [ButtonFollowup] ButtonValue preview: "${buttonValue?.substring(0, 100)}..."`);
+    console.log(`🔘 [ButtonFollowup] ============================================`);
 
     // Treat button click as a new user message
     // The button value becomes the new message text
@@ -108,6 +111,16 @@ export function extractButtonFollowupContext(
     const actionValue = payload.event?.action?.value;
     const operatorId = payload.event?.operator?.operator_id;
     const eventId = payload.header?.event_id;
+    
+    console.log(`🔘 [ButtonFollowup] ============================================`);
+    console.log(`🔘 [ButtonFollowup] Extracting context from card action`);
+    console.log(`🔘 [ButtonFollowup] Fallback chatId: "${chatId}"`);
+    console.log(`🔘 [ButtonFollowup] ActionValue type: ${typeof actionValue}`);
+    if (typeof actionValue === 'object' && actionValue) {
+      console.log(`🔘 [ButtonFollowup] ActionValue object keys: ${Object.keys(actionValue).join(', ')}`);
+      console.log(`🔘 [ButtonFollowup] ActionValue.context: "${actionValue.context}"`);
+    }
+    console.log(`🔘 [ButtonFollowup] ============================================`);
 
     // Extract button value (the text to use as new query)
     const buttonValue = extractButtonValue(actionValue);
@@ -119,6 +132,7 @@ export function extractButtonFollowupContext(
     }
 
     // Extract context from value string (format: "chatId|rootId::buttonText")
+    // For confirmation buttons, context should be in actionValue.context (object format)
     let extractedChatId = chatId;
     let extractedRootId = chatId;
     
@@ -127,7 +141,11 @@ export function extractButtonFollowupContext(
       extractedChatId = contextFromValue.chatId;
       extractedRootId = contextFromValue.rootId;
       console.log(
-        `✅ [ButtonFollowup] Extracted context from value: chatId=${extractedChatId}, rootId=${extractedRootId}`
+        `✅ [ButtonFollowup] Extracted context from value: chatId="${extractedChatId}", rootId="${extractedRootId}"`
+      );
+    } else {
+      console.log(
+        `⚠️ [ButtonFollowup] No context extracted from value, using fallbacks: chatId="${extractedChatId}", rootId="${extractedRootId}"`
       );
     }
 

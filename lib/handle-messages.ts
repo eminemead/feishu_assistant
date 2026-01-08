@@ -147,6 +147,7 @@ export async function handleNewMessage(data: FeishuMessageData) {
     let confirmationData: string | undefined;
     let reasoning: string | undefined;
     let showFollowups: boolean | undefined;
+    let linkedIssue: { issueIid: number; issueUrl: string; project: string } | undefined;
     
     if (typeof rawResult === "string") {
       result = rawResult;
@@ -157,6 +158,13 @@ export async function handleNewMessage(data: FeishuMessageData) {
       confirmationData = rawResult.confirmationData;
       reasoning = rawResult.reasoning;
       showFollowups = rawResult.showFollowups; // Propagate from manager
+      linkedIssue = rawResult.linkedIssue;
+    }
+    
+    // Add linkage indicator if thread has linked GitLab issue
+    if (linkedIssue && !needsConfirmation) {
+      const linkageIndicator = `🔗 *Linked to [GitLab #${linkedIssue.issueIid}](${linkedIssue.issueUrl})*\n\n---\n\n`;
+      result = linkageIndicator + result;
     }
 
     // Extract image_key from result if present

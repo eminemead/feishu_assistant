@@ -29,6 +29,15 @@ export interface ExecuteWorkflowOptions {
   onUpdate?: (text: string) => void;
   /** Additional context to pass to workflow */
   context?: Record<string, unknown>;
+  /** Linked GitLab issue if thread has one */
+  linkedIssue?: {
+    chatId: string;
+    rootId: string;
+    project: string;
+    issueIid: number;
+    issueUrl: string;
+    createdBy: string;
+  };
 }
 
 /**
@@ -83,8 +92,12 @@ export async function executeSkillWorkflow(
   const startTime = Date.now();
   const registry = getWorkflowRegistry();
   
-  console.log(`[Workflow] Executing workflow: ${workflowId}, query: "${options.query?.substring(0, 100)}..."`);
-  console.log(`[Workflow] Options:`, { userId: options.userId, chatId: options.chatId, rootId: options.rootId });
+  console.log(`[Workflow] ============================================`);
+  console.log(`[Workflow] Executing workflow: ${workflowId}`);
+  console.log(`[Workflow] Query preview: "${options.query?.substring(0, 100)}..."`);
+  console.log(`[Workflow] Context: userId="${options.userId}", chatId="${options.chatId}", rootId="${options.rootId}"`);
+  console.log(`[Workflow] LinkedIssue: ${options.linkedIssue ? `#${options.linkedIssue.issueIid}` : 'none'}`);
+  console.log(`[Workflow] ============================================`);
   
   // Check if workflow exists
   const registration = registry.get(workflowId);
@@ -106,7 +119,9 @@ export async function executeSkillWorkflow(
     userId: options.userId,
     chatId: options.chatId,
     messageId: options.messageId,
+    rootId: options.rootId,
     context: options.context,
+    linkedIssue: options.linkedIssue,
   };
   
   // For OKR analysis, extract period from query
