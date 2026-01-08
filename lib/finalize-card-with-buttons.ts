@@ -186,7 +186,14 @@ export async function finalizeCardWithFollowups(
     }
 
     // Step 3: Keep card content clean (response only, no suggestion text)
-    contentWithSuggestions = finalContent;
+    contentWithSuggestions = finalContent || '';
+
+    // Step 3.5: Update card element with final content
+    // This ensures content is displayed even if streaming updates were batched/pending
+    if (contentWithSuggestions && elementId) {
+      console.log(`🔄 [CardSuggestions] Updating card element with final content (${contentWithSuggestions.length} chars)`);
+      await updateCardElement(cardId, elementId, contentWithSuggestions);
+    }
 
     // Step 4: Disable streaming mode
     console.log(`🎯 [CardSuggestions] Disabling streaming mode...`);

@@ -6,7 +6,7 @@ tags: ["routing", "classification", "orchestration", "workflow"]
 keywords: ["route", "classify", "agent", "specialist", "workflow"]
 routing_rules:
   dpa_assistant:
-    keywords: ["dpa", "data team", "dpa_mom", "gitlab", "glab", "create issue", "new issue", "创建issue", "提issue", "建issue", "报bug", "new bug"]
+    keywords: ["dpa", "data team", "dpa_mom", "dpa mom", "gitlab", "glab", "create issue", "new issue", "创建issue", "提issue", "建issue", "报bug", "new bug"]
     priority: 1
     enabled: true
     type: "workflow"
@@ -51,7 +51,7 @@ Skills inject instructions into manager agent:
 ## Routing Rules
 
 ### DPA Assistant (Priority 1 - Highest)
-- **Keywords**: dpa, data team, dpa_mom, gitlab, glab, 创建issue, 提issue, 建issue
+- **Keywords**: dpa, data team, dpa_mom, dpa mom, gitlab, glab, 创建issue, 提issue, 建issue
 - **Status**: Active
 - **Type**: Workflow (deterministic, intent-based)
 - **Workflow**: `dpa-assistant`
