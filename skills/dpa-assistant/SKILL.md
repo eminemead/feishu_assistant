@@ -17,6 +17,8 @@ Workflow-based DPA team assistant that routes queries to specialized execution p
 ### 1. GitLab Operations
 - **Create Issues**: "create issue", "new bug", "报个bug", "创建issue"
 - **List Issues/MRs**: "show issues", "list MRs", "查看issue", "我的MR"
+- **Link Thread to Issue**: "link to #123", "跟踪issue 456", "绑定issue" (re-engagement UX)
+- **Thread Auto-Sync**: Replies in linked threads auto-post to GitLab
 
 ### 2. Feishu Integration
 - **Chat Search**: Search chat history for messages
@@ -36,12 +38,12 @@ Query → Intent Classification (fast model)
     │ Branch  │
     └────┬────┘
          ↓
-  ┌──────┼──────┬──────┬──────┐
-  ↓      ↓      ↓      ↓      ↓
-gitlab  gitlab  chat   doc   general
-create  list   search  read   chat
-  ↓      ↓      ↓      ↓      ↓
-  └──────┴──────┴──────┴──────┘
+  ┌──────┼──────┬──────┬──────┬──────┬──────┐
+  ↓      ↓      ↓      ↓      ↓      ↓      ↓
+gitlab  gitlab  gitlab  gitlab  chat   doc   general
+create  list   update  relink search  read   chat
+  ↓      ↓      ↓      ↓      ↓      ↓      ↓
+  └──────┴──────┴──────┴──────┴──────┴──────┘
          ↓
     Format Response
 ```
@@ -52,6 +54,9 @@ create  list   search  read   chat
 |--------|----------|--------|
 | `gitlab_create` | create issue, new bug, 报bug | Execute glab issue create |
 | `gitlab_list` | show issues, list MRs, 查看 | Execute glab issue/mr list |
+| `gitlab_relink` | link to #123, 跟踪issue, 绑定 | Link current thread to existing issue |
+| `gitlab_summarize` | summarize #12, status #12, 总结 | Fetch issue + comments, LLM summary |
+| `gitlab_thread_update` | 补充, 更新, also (in linked thread) | Add note to linked issue |
 | `chat_search` | find messages, 查找聊天 | Search Feishu chat history |
 | `doc_read` | read doc, Feishu URL | Read Feishu document |
 | `general_chat` | everything else | Conversational agent |
@@ -79,6 +84,10 @@ create  list   search  read   chat
 
 "DPA团队的目标是什么？"
 → general_chat → Conversational response
+
+"link to #456"
+→ gitlab_relink → Link this thread to issue #456
+→ Future replies auto-sync as GitLab comments
 ```
 
 ## Migration from DPA Mom Agent

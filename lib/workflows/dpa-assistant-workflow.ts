@@ -44,6 +44,8 @@ const IntentEnum = z.enum([
   "gitlab_create",
   "gitlab_list", 
   "gitlab_thread_update",
+  "gitlab_relink",  // Link current thread to existing issue
+  "gitlab_summarize",  // Summarize issue with comments
   "chat_search",
   "doc_read",
   "general_chat"
@@ -122,6 +124,41 @@ const classifyIntentStep = createStep({
       return {
         intent: "gitlab_thread_update" as Intent,
         params: undefined,
+        query,
+        chatId,
+        rootId,
+        userId,
+        linkedIssue,
+      };
+    }
+    
+    // Check for relink keywords: "link to #123", "跟踪issue 123", "关联issue"
+    // This allows users to link a NEW thread to an EXISTING issue
+    const relinkKeywords = /(?:link\s*(?:to|this\s*to)?|跟踪|关联|绑定|track)\s*(?:#|issue\s*#?)?(\d+)/i;
+    const relinkMatch = query.match(relinkKeywords);
+    if (relinkMatch) {
+      const issueIid = parseInt(relinkMatch[1], 10);
+      console.log(`[DPA Workflow] Relink keywords detected, routing to gitlab_relink for issue #${issueIid}`);
+      return {
+        intent: "gitlab_relink" as Intent,
+        params: { issueIid: String(issueIid) },
+        query,
+        chatId,
+        rootId,
+        userId,
+        linkedIssue,
+      };
+    }
+    
+    // Check for summarize keywords: "summarize #12", "status #12", "issue status 12"
+    const summarizeKeywords = /(?:summarize|summary|status|状态|总结|进展)\s*(?:of\s*)?(?:#|issue\s*#?)?(\d+)/i;
+    const summarizeMatch = query.match(summarizeKeywords);
+    if (summarizeMatch) {
+      const issueIid = parseInt(summarizeMatch[1], 10);
+      console.log(`[DPA Workflow] Summarize keywords detected, routing to gitlab_summarize for issue #${issueIid}`);
+      return {
+        intent: "gitlab_summarize" as Intent,
+        params: { issueIid: String(issueIid) },
         query,
         chatId,
         rootId,
@@ -252,11 +289,13 @@ const executeGitLabCreateStep = createStep({
         const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
         
         if (result.success) {
-          let successMsg = `✅ **Issue Created!**\n\n**Title**: ${title}\n**Project**: ${project}`;
+          let successMsg = `## ✅ Issue Created\n\n---\n\n`;
+          successMsg += `**${title}**\n\n`;
+          successMsg += `📁 ${project}`;
           if (assignee) {
-            successMsg += `\n**Assigned to**: @${assignee}`;
+            successMsg += ` · 👤 @${assignee}`;
           }
-          successMsg += `\n\n${result.output || "Issue created successfully."}`;
+          successMsg += `\n\n---\n\n${result.output || "Issue created successfully."}`;
           
           // Extract issue IID and URL from glab output
           // glab outputs: "Creating issue in ... \n #123 Title \n https://git.nevint.com/..."
@@ -319,9 +358,9 @@ const executeGitLabCreateStep = createStep({
                 });
                 
                 if (taskResult.success) {
-                  successMsg += `\n\n📋 **Feishu Task Created** for @${assignee}`;
+                  successMsg += `\n\n---\n\n📋 **Feishu Task** → @${assignee}`;
                   if (taskResult.taskUrl) {
-                    successMsg += `\n[View Task](${taskResult.taskUrl})`;
+                    successMsg += ` · [View](${taskResult.taskUrl})`;
                   }
                   console.log(`[DPA Workflow] Feishu task created: ${taskResult.taskGuid}`);
                 } else {
@@ -341,13 +380,13 @@ const executeGitLabCreateStep = createStep({
           };
         } else {
           return {
-            result: `❌ Failed to create issue\n\nError: ${result.error}`,
+            result: `## ❌ Failed to Create Issue\n\n---\n\n${result.error}`,
             intent: "gitlab_create" as const,
           };
         }
       } catch (error: any) {
         return {
-          result: `❌ Error: ${error.message}`,
+          result: `## ❌ Error\n\n---\n\n${error.message}`,
           intent: "gitlab_create" as const,
         };
       }
@@ -525,17 +564,19 @@ ASSIGNEE: <username or "none">`;
     }
     
     // Build concise preview - only essential info
-    let preview = `📋 **Issue Preview**\n\n**Title**: ${title}\n**Project**: ${project}`;
+    let preview = `## 📋 Confirm Issue Creation\n\n---\n\n`;
+    preview += `**${title}**\n\n`;
+    preview += `📁 ${project}`;
     if (gitlabUsername) {
-      // Show who's assigning to whom when different
       const assignmentNote = explicitAssignee && requesterUsername && explicitAssignee !== requesterUsername
         ? ` (by @${requesterUsername})`
         : '';
-      preview += `\n**Assignee**: @${gitlabUsername}${assignmentNote}`;
+      preview += ` · 👤 @${gitlabUsername}${assignmentNote}`;
     }
     if (dueDate) {
-      preview += ` | **DDL**: ${dueDate}`;
+      preview += ` · 📅 ${dueDate}`;
     }
+    preview += `\n\n---`;
     
     // Encode issue data for confirmation button
     console.log(`[DPA Workflow] ============================================`);
@@ -573,7 +614,7 @@ ASSIGNEE: <username or "none">`;
       // LLM parsing failed - return user-friendly error
       console.error(`[DPA Workflow] GitLab create parsing failed: ${error.message}`);
       return {
-        result: `❌ Failed to parse issue request: ${error.message}\n\nPlease try again with a clearer request like:\n"create issue: [title], priority 2, ddl next wednesday"`,
+        result: `## ❌ Parse Failed\n\n---\n\n${error.message}\n\n---\n\n💡 Try: "create issue: [title], priority 2, ddl next wednesday"`,
         intent: "gitlab_create" as const,
       };
     }
@@ -600,24 +641,28 @@ const executeGitLabListStep = createStep({
     intent: IntentEnum,
   }),
   execute: async ({ inputData }) => {
-    const { query } = inputData;
+    const { query, linkedIssue } = inputData;
     
     console.log(`[DPA Workflow] Executing GitLab list`);
     
     // Determine if listing issues or MRs
     const isMR = /\b(mr|merge\s*request|合并请求)\b/i.test(query);
     const isMyItems = /\b(my|我的|mine)\b/i.test(query);
+    const isClosed = /\b(closed|已关闭|完成)\b/i.test(query);
     
     let glabCommand: string;
     
+    // glab uses -c/--closed for closed items, no flag = open items
+    // Use JSON output to get URLs
+    // Filter to dpa/dpa-mom/task project only
     if (isMR) {
       glabCommand = isMyItems 
-        ? "mr list --group dpa --assignee=@me --state opened"
-        : "mr list --group dpa --state opened";
+        ? `mr list -R dpa/dpa-mom/task --assignee=@me${isClosed ? ' --closed' : ''} -O json`
+        : `mr list -R dpa/dpa-mom/task${isClosed ? ' --closed' : ''} -O json`;
     } else {
       glabCommand = isMyItems
-        ? "issue list --group dpa --assignee=@me --state opened"
-        : "issue list --group dpa --state opened";
+        ? `issue list -R dpa/dpa-mom/task --assignee=@me${isClosed ? ' -c' : ''} -O json`
+        : `issue list -R dpa/dpa-mom/task${isClosed ? ' -c' : ''} -O json`;
     }
     
     try {
@@ -626,19 +671,59 @@ const executeGitLabListStep = createStep({
       if (result.success) {
         const itemType = isMR ? "Merge Requests" : "Issues";
         const scope = isMyItems ? "My " : "";
+        const stateLabel = isClosed ? " (Closed)" : "";
+        
+        // Parse JSON output
+        interface GitLabItem {
+          iid: number;
+          title: string;
+          web_url: string;
+          labels?: string[];
+          created_at: string;
+          references?: { full: string };
+        }
+        
+        let items: GitLabItem[] = [];
+        try {
+          items = JSON.parse(result.output || "[]");
+        } catch (e) {
+          console.error("[DPA Workflow] Failed to parse glab JSON output:", e);
+        }
+        
+        // Build clean markdown list
+        let response = `## ${scope}${itemType}${stateLabel}\n\n---\n\n`;
+        
+        if (items.length === 0) {
+          response += `No ${itemType.toLowerCase()} found.`;
+        } else {
+          for (const item of items) {
+            const labelsStr = item.labels?.length ? ` \`${item.labels.join(', ')}\`` : '';
+            response += `[**#${item.iid}**](${item.web_url}) ${item.title}${labelsStr}\n\n`;
+          }
+        }
+        
+        // Add linkage status and hint (only for issues, not MRs)
+        if (!isMR) {
+          if (linkedIssue) {
+            response += `---\n🔗 *Thread linked to #${linkedIssue.issueIid}*`;
+          } else if (items.length > 0) {
+            response += `---\n💡 Say "link to #123" to track an issue in this thread`;
+          }
+        }
+        
         return {
-          result: `## ${scope}${itemType}\n\n\`\`\`\n${result.output}\n\`\`\``,
+          result: response,
           intent: "gitlab_list" as const,
         };
       } else {
         return {
-          result: `❌ Failed to list: ${result.error}`,
+          result: `## ❌ List Failed\n\n---\n\n${result.error}`,
           intent: "gitlab_list" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `❌ GitLab Error: ${error.message}`,
+        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
         intent: "gitlab_list" as const,
       };
     }
@@ -672,7 +757,7 @@ const executeGitLabThreadUpdateStep = createStep({
     
     if (!linkedIssue) {
       return {
-        result: `❌ No linked GitLab issue found for this thread.`,
+        result: `## ❌ No Linked Issue\n\n---\n\n💡 Link this thread first: "link to #123"`,
         intent: "gitlab_thread_update" as const,
       };
     }
@@ -690,19 +775,208 @@ const executeGitLabThreadUpdateStep = createStep({
       
       if (result.success) {
         return {
-          result: `✅ **Added to GitLab Issue #${linkedIssue.issueIid}**\n\n[View Issue](${linkedIssue.issueUrl})\n\n> ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`,
+          result: `## ✅ Note Added\n\n---\n\n🔗 [Issue #${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n> ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`,
           intent: "gitlab_thread_update" as const,
         };
       } else {
         return {
-          result: `❌ Failed to add note to issue #${linkedIssue.issueIid}: ${result.error}`,
+          result: `## ❌ Failed to Add Note\n\n---\n\nIssue #${linkedIssue.issueIid}\n\n${result.error}`,
           intent: "gitlab_thread_update" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `❌ GitLab Error: ${error.message}`,
+        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
         intent: "gitlab_thread_update" as const,
+      };
+    }
+  }
+});
+
+/**
+ * Step: Execute GitLab Relink
+ * Links current thread to an existing GitLab issue (re-engagement UX)
+ */
+const executeGitLabRelinkStep = createStep({
+  id: "execute-gitlab-relink",
+  description: "Link current thread to an existing GitLab issue",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+  }),
+  execute: async ({ inputData }) => {
+    const { params, chatId, rootId, userId, linkedIssue } = inputData;
+    
+    console.log(`[DPA Workflow] Executing GitLab relink`);
+    
+    // Check if already linked
+    if (linkedIssue) {
+      return {
+        result: `## ⚠️ Already Linked\n\n---\n\n🔗 [Issue #${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n---\n\n💡 To link to a different issue, start a new thread.`,
+        intent: "gitlab_relink" as const,
+      };
+    }
+    
+    // Get issue IID from params
+    const issueIid = params?.issueIid ? parseInt(params.issueIid, 10) : null;
+    if (!issueIid) {
+      return {
+        result: `## ❌ Missing Issue Number\n\n---\n\n💡 Example: "link to #123" or "跟踪issue 456"`,
+        intent: "gitlab_relink" as const,
+      };
+    }
+    
+    if (!chatId || !rootId) {
+      return {
+        result: `## ❌ Cannot Link\n\n---\n\nMissing thread context`,
+        intent: "gitlab_relink" as const,
+      };
+    }
+    
+    try {
+      // Verify issue exists and get its details (use JSON for reliable parsing)
+      const glabCommand = `issue view ${issueIid} -R dpa/dpa-mom/task -F json`;
+      const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
+      
+      if (!result.success) {
+        return {
+          result: `## ❌ Issue Not Found\n\n---\n\nIssue #${issueIid} not found in dpa/dpa-mom/task\n\n${result.error}`,
+          intent: "gitlab_relink" as const,
+        };
+      }
+      
+      // Parse JSON to get URL
+      let issueUrl = `https://git.nevint.com/dpa/dpa-mom/task/-/issues/${issueIid}`;
+      const project = "dpa/dpa-mom/task";
+      
+      try {
+        const issueData = JSON.parse(result.output || "{}");
+        if (issueData.web_url) {
+          issueUrl = issueData.web_url;
+        }
+      } catch (e) {
+        console.warn("[DPA Workflow] Failed to parse issue JSON, using default URL");
+      }
+      
+      // Store the mapping
+      const mappingResult = await storeIssueThreadMapping({
+        chatId,
+        rootId,
+        project,
+        issueIid,
+        issueUrl,
+        createdBy: userId || 'unknown',
+      });
+      
+      if (mappingResult.success) {
+        return {
+          result: `## ✅ Thread Linked\n\n---\n\n🔗 [Issue #${issueIid}](${issueUrl})\n\n---\n\n💡 Future replies will auto-sync to GitLab as comments.`,
+          intent: "gitlab_relink" as const,
+        };
+      } else {
+        return {
+          result: `## ❌ Link Failed\n\n---\n\n${mappingResult.error}`,
+          intent: "gitlab_relink" as const,
+        };
+      }
+    } catch (error: any) {
+      return {
+        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        intent: "gitlab_relink" as const,
+      };
+    }
+  }
+});
+
+/**
+ * Step: Execute GitLab Summarize
+ * Fetches issue + comments and generates LLM summary
+ */
+const executeGitLabSummarizeStep = createStep({
+  id: "execute-gitlab-summarize",
+  description: "Summarize GitLab issue with comments",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+  }),
+  execute: async ({ inputData }) => {
+    const { params } = inputData;
+    
+    console.log(`[DPA Workflow] Executing GitLab summarize`);
+    
+    const issueIid = params?.issueIid ? parseInt(params.issueIid, 10) : null;
+    if (!issueIid) {
+      return {
+        result: `## ❌ Missing Issue Number\n\n---\n\n💡 Example: "summarize #12" or "总结 #123"`,
+        intent: "gitlab_summarize" as const,
+      };
+    }
+    
+    try {
+      // Fetch issue with comments
+      const glabCommand = `issue view ${issueIid} -R dpa/dpa-mom/task -c`;
+      const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
+      
+      if (!result.success) {
+        return {
+          result: `## ❌ Issue Not Found\n\n---\n\nIssue #${issueIid} not found\n\n${result.error}`,
+          intent: "gitlab_summarize" as const,
+        };
+      }
+      
+      const issueContent = result.output || "";
+      
+      // Default to Mandarin, only English if explicitly requested
+      const query = inputData.query || "";
+      const wantsEnglish = /\b(in english|english|eng)\b/i.test(query);
+      const language = wantsEnglish ? "English" : "Mandarin Chinese (中文)";
+      
+      // Use LLM to summarize
+      const summarizePrompt = `Summarize this GitLab issue concisely. Include:
+1. What the issue is about (1-2 sentences)
+2. Current status and key updates from comments
+3. Any action items or blockers mentioned
+
+Issue content:
+${issueContent}
+
+IMPORTANT: Respond in ${language}. Be concise but comprehensive.`;
+
+      const { text: summary } = await generateText({
+        model: freeModel,
+        prompt: summarizePrompt,
+        temperature: 0.3,
+      });
+      
+      // Build response
+      const issueUrl = `https://git.nevint.com/dpa/dpa-mom/task/-/issues/${issueIid}`;
+      
+      return {
+        result: `## 📋 Issue #${issueIid} Summary\n\n---\n\n${summary}\n\n---\n\n🔗 [View Full Issue](${issueUrl})`,
+        intent: "gitlab_summarize" as const,
+      };
+    } catch (error: any) {
+      return {
+        result: `## ❌ Summary Failed\n\n---\n\n${error.message}`,
+        intent: "gitlab_summarize" as const,
       };
     }
   }
@@ -1013,6 +1287,14 @@ export const dpaAssistantWorkflow = createWorkflow({
       executeGitLabThreadUpdateStep
     ],
     [
+      async ({ inputData }) => inputData?.intent === "gitlab_relink",
+      executeGitLabRelinkStep
+    ],
+    [
+      async ({ inputData }) => inputData?.intent === "gitlab_summarize",
+      executeGitLabSummarizeStep
+    ],
+    [
       async ({ inputData }) => inputData?.intent === "chat_search",
       executeChatSearchStep
     ],
@@ -1039,11 +1321,13 @@ export const dpaAssistantWorkflow = createWorkflow({
     const gitlabCreate = getStepResult("execute-gitlab-create");
     const gitlabList = getStepResult("execute-gitlab-list");
     const gitlabThreadUpdate = getStepResult("execute-gitlab-thread-update");
+    const gitlabRelink = getStepResult("execute-gitlab-relink");
+    const gitlabSummarize = getStepResult("execute-gitlab-summarize");
     const chatSearch = getStepResult("execute-chat-search");
     const docRead = getStepResult("execute-doc-read");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || gitlabThreadUpdate || chatSearch || docRead;
+    const branchResult = gitlabCreate || gitlabList || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead;
     
     if (branchResult) {
       return {
