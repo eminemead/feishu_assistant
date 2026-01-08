@@ -6,8 +6,7 @@
  * IMPORTANT: These are tool FACTORIES, not shared tool instances.
  * 
  * Architecture:
- * - Each agent has its own tool instances scoped to that agent
- * - Tools are NOT shared between agents (agent independence principle)
+ * - Unified agent has all tool instances
  * - Tool definitions are shared between production and development environments
  * 
  * Usage:
@@ -22,6 +21,7 @@ export { createGitLabCliTool } from "./gitlab-cli-tool";
 export { createFeishuChatHistoryTool } from "./feishu-chat-history-tool";
 export { createFeishuDocsTool } from "./feishu-docs-tool";
 export { createExecuteSqlTool } from "./execute-sql-tool";
+export { createExecuteWorkflowTool, executeWorkflowTool } from "./execute-workflow-tool";
 
 // Visualization tools
 export { visualizationTool, quickBarChart, quickPieChart, quickLineChart } from "./visualization-tool";

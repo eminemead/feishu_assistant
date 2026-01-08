@@ -1,8 +1,14 @@
 # Routing Logic Documentation
 
-## Current Implementation
+> **⚠️ DEPRECATED (Jan 2026)**: This document describes the old multi-agent routing system.
+> The system now uses a **single unified agent** that handles tool selection itself.
+> See [agent-architecture.md](./agent-architecture.md) for the current architecture.
 
-The routing logic in the manager agent is handled by the `@ai-sdk-tools/agents` library. Here's how it works:
+---
+
+## Historical Implementation (Deprecated)
+
+The routing logic was previously handled by keyword-based matching and LLM semantic routing:
 
 ### 1. **Keyword-Based Matching (`matchOn`)**
 

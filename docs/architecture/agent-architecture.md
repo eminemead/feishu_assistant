@@ -1,35 +1,76 @@
 # Agent Architecture
 
-This document provides an overview of the multi-agent architecture. For detailed information, see the linked documents below.
+This document describes the unified single-agent architecture.
 
 ## Overview
 
-The system follows a **Manager Agent → Specialist Agent → Tool** pattern using the `@ai-sdk-tools/agents` library.
+The system uses a **Single Unified Agent + Workflows** pattern using Mastra framework.
+
+**Key Change (Jan 2026)**: Replaced multi-agent routing with a single unified agent (`feishu-assistant-agent.ts`) that has all tools. The agent decides tool selection itself; deterministic multi-step operations use the `execute_workflow` tool.
 
 ## Architecture Pattern
 
-1. **Manager Agent** - Orchestrates and routes queries
-2. **Specialist Agents** - Handle domain-specific tasks
-3. **Tools** - Specialized functions for each agent
+```
+User Query → Feishu Assistant Agent → [Direct Tool Use OR execute_workflow]
+                    ↓
+              Tool Selection (by LLM)
+                    ↓
+         ┌─────────┴─────────┐
+    Direct Tools         Workflows
+    - gitlab_cli         - dpa-assistant
+    - feishu_docs        - okr-analysis  
+    - mgr_okr_review     - document-tracking
+    - chart_generation
+```
+
+## Key Components
+
+### Feishu Assistant Agent (`lib/agents/feishu-assistant-agent.ts`)
+- Single unified agent with all tools attached
+- Native Mastra memory for conversation persistence
+- Streaming with batched updates for Feishu cards
+- Handles both DPA Mom and OKR Reviewer capabilities
+
+### Tools Available
+| Tool | Purpose |
+|------|---------|
+| `gitlab_cli` | GitLab operations via glab CLI |
+| `feishu_chat_history` | Search Feishu group chat histories |
+| `feishu_docs` | Read Feishu documents |
+| `mgr_okr_review` | Fetch OKR metrics data |
+| `chart_generation` | Generate Mermaid/Vega-Lite charts |
+| `okr_visualization` | Generate OKR heatmaps |
+| `okr_chart_streaming` | Comprehensive OKR analysis with charts |
+| `execute_workflow` | Execute deterministic workflows |
+
+### Workflows (`lib/workflows/`)
+Used for deterministic multi-step operations:
+- **dpa-assistant**: GitLab issue creation with confirmation
+- **okr-analysis**: Complete OKR analysis pipeline
+- **document-tracking**: Document change monitoring
+
+## When Agent Uses Workflows vs Direct Tools
+
+| Scenario | Approach |
+|----------|----------|
+| GitLab issue creation | `execute_workflow("dpa-assistant")` |
+| Complete OKR analysis | `execute_workflow("okr-analysis")` |
+| Simple GitLab query | Direct `gitlab_cli` tool |
+| Chat history search | Direct `feishu_chat_history` tool |
+| Quick OKR data lookup | Direct `mgr_okr_review` tool |
 
 ## Documentation
 
-- [Routing Logic](./routing-logic.md) - How queries are routed to specialist agents
-- [Handoff System](./handoff-setup.md) - Agent handoff mechanism
-- [Agent README](../../lib/agents/README.md) - Detailed agent implementation guide
+- [Agent README](../../lib/agents/README.md) - Detailed implementation guide
+- [Workflow Index](../../lib/workflows/index.ts) - Available workflows
 
-## Quick Reference
+## Migration from Multi-Agent (Historical)
 
-### Manager Agent
-- Routes queries to appropriate specialist agents
-- Uses keyword matching and semantic analysis
-- Falls back to web search for general queries
+Previously used Manager → Specialist routing. Removed in Jan 2026:
+- `manager-agent-mastra.ts` - Deleted (replaced by `feishu-assistant-agent.ts`)
+- `query-router.ts` - Deleted (agent handles tool selection)
+- `skill-injector.ts` - Deleted (no longer needed)
+- Specialist agents consolidated into unified agent
 
-### Specialist Agents
-- **OKR Reviewer**: OKR metrics and manager performance analysis
-- **Alignment Agent**: Alignment tracking (under development)
-- **P&L Agent**: Profit & loss analysis (under development)
-- **DPA Mom Agent**: Chief-of-staff and executive assistant to Ian for the DPA team
-
-For implementation details, see [lib/agents/README.md](../../lib/agents/README.md).
+For implementation details, see [lib/agents/feishu-assistant-agent.ts](../../lib/agents/feishu-assistant-agent.ts).
 

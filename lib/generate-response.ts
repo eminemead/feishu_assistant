@@ -1,5 +1,5 @@
 import { CoreMessage } from "ai";
-import { managerAgent, ManagerAgentResult } from "./agents/manager-agent-mastra";
+import { feishuAssistantAgent, FeishuAssistantResult } from "./agents/feishu-assistant-agent";
 
 /**
  * Linked GitLab issue info for thread-to-issue mapping
@@ -25,9 +25,10 @@ export interface GenerateResponseResult {
 }
 
 /**
- * Generate response using the manager agent architecture
- * The manager agent orchestrates specialist agents (okr_reviewer, alignment_agent, etc.)
- * and routes queries to the appropriate specialist based on keywords or semantic meaning
+ * Generate response using unified Feishu Assistant agent
+ * 
+ * Single agent with all tools - handles tool selection itself.
+ * Uses execute_workflow tool for deterministic multi-step operations.
  * 
  * @param messages - Conversation messages
  * @param updateStatus - Optional callback for streaming status updates
@@ -43,5 +44,5 @@ export const generateResponse = async (
   rootId?: string,
   userId?: string,
 ): Promise<string | GenerateResponseResult> => {
-  return await managerAgent(messages, updateStatus, chatId, rootId, userId);
+  return await feishuAssistantAgent(messages, updateStatus, chatId, rootId, userId);
 };

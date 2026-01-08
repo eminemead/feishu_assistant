@@ -15,7 +15,12 @@ import {
   saveMessageToMemory,
   AgentMemoryContext,
 } from "../../lib/agents/memory-integration";
-import { managerAgent } from "../../lib/agents/manager-agent-mastra";
+import { feishuAssistantAgent, FeishuAssistantResult } from "../../lib/agents/feishu-assistant-agent";
+
+/** Helper to extract text from response */
+function getResponseText(response: string | FeishuAssistantResult): string {
+  return typeof response === "string" ? response : response.text;
+}
 
 describe("Memory System - Multi-Turn Conversations", () => {
   let userAContext: AgentMemoryContext;

@@ -6,11 +6,11 @@ In all interactions, plans, and commit messages, be extremely concise and sacrif
 
 ## Project: Feishu Assistant
 
-**WHY**: Build Feishu AI agent handling OKR review, P&L analysis, and document tracking etc.
+**WHY**: Build Feishu AI agent handling OKR review, team coordination, and document tracking etc.
 
-**WHAT**: TypeScript bot with Manager Agent routing to specialists (OKR Reviewer, Meeting Alignment, P&L Analysis, Doc Tracking, etc), using Vercel AI SDK v5, Supabase memory, and Feishu SDK.
+**WHAT**: TypeScript bot with unified single agent (dpa_mom personality) that handles all tools directly. Uses `execute_workflow` tool for deterministic multi-step operations (GitLab issues, OKR analysis). Mastra framework for agent/memory, Supabase for persistence, Feishu SDK for chat integration.
 
-**TECH**: TypeScript, Hono, Vercel AI SDK v5, Mastra, Supabase (memory/auth), StarRocks/DuckDB (metrics), Feishu SDK
+**TECH**: TypeScript, Hono, Mastra Framework, Supabase (memory/auth), StarRocks/DuckDB (metrics), Feishu SDK
 
 ## Getting Started
 

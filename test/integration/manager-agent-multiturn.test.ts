@@ -1,7 +1,7 @@
 /**
- * Manager Agent Multi-Turn Integration Tests
+ * Feishu Assistant Multi-Turn Integration Tests
  * 
- * Tests that the manager agent handles multi-turn conversations correctly,
+ * Tests that the unified agent handles multi-turn conversations correctly,
  * maintains context across turns, and properly isolates memory between users/chats.
  * 
  * Test Pattern:
@@ -12,13 +12,18 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { CoreMessage } from "ai";
-import { managerAgent } from "../../lib/agents/manager-agent-mastra";
+import { feishuAssistantAgent, FeishuAssistantResult } from "../../lib/agents/feishu-assistant-agent";
 import {
   initializeAgentMemoryContext,
   loadConversationHistory,
 } from "../../lib/agents/memory-integration";
 
-describe("Manager Agent - Multi-Turn Integration", () => {
+/** Helper to extract text from response */
+function getResponseText(response: string | FeishuAssistantResult): string {
+  return typeof response === "string" ? response : response.text;
+}
+
+describe("Feishu Assistant - Multi-Turn Integration", () => {
   let callCount = 0;
 
   beforeEach(() => {
@@ -50,7 +55,8 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       console.log(`[Test] Turn 1: "${q1}"`);
       let a1 = "";
       try {
-        a1 = await managerAgent(messages1, undefined, chatId, rootId, userId);
+        const resp1 = await feishuAssistantAgent(messages1, undefined, chatId, rootId, userId);
+        a1 = getResponseText(resp1);
         expect(a1).toBeDefined();
         expect(a1.length).toBeGreaterThan(0);
         console.log(`[Test] Turn 1 Response length: ${a1.length}`);
@@ -71,7 +77,8 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       console.log(`[Test] Turn 2: "${q2}"`);
       let a2 = "";
       try {
-        a2 = await managerAgent(messages2, undefined, chatId, rootId, userId);
+        const resp2 = await feishuAssistantAgent(messages2, undefined, chatId, rootId, userId);
+        a2 = getResponseText(resp2);
         expect(a2).toBeDefined();
         expect(a2.length).toBeGreaterThan(0);
         console.log(`[Test] Turn 2 Response length: ${a2.length}`);
@@ -108,13 +115,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
         const messages: CoreMessage[] = [{ role: "user", content: q }];
 
         try {
-          const response = await managerAgent(
+          const resp = await feishuAssistantAgent(
             messages,
             undefined,
             chatId,
             rootId,
             userId
           );
+          const response = getResponseText(resp);
           expect(response).toBeDefined();
           expect(response.length).toBeGreaterThan(0);
           console.log(`[Test] Query: "${q}" - Response length: ${response.length}`);
@@ -156,13 +164,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       // User A queries
       const messagesA: CoreMessage[] = [{ role: "user", content: queryA }];
       try {
-        const responseA = await managerAgent(
+        const respA = await feishuAssistantAgent(
           messagesA,
           undefined,
           chatId,
           rootId,
           userA
         );
+        const responseA = getResponseText(respA);
         console.log(
           `[Test] User A response length: ${responseA?.length || 0}`
         );
@@ -173,13 +182,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       // User B queries same topic
       const messagesB: CoreMessage[] = [{ role: "user", content: queryB }];
       try {
-        const responseB = await managerAgent(
+        const respB = await feishuAssistantAgent(
           messagesB,
           undefined,
           chatId,
           rootId,
           userB
         );
+        const responseB = getResponseText(respB);
         console.log(
           `[Test] User B response length: ${responseB?.length || 0}`
         );
@@ -218,13 +228,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       // Query in Chat A
       const messagesA: CoreMessage[] = [{ role: "user", content: query }];
       try {
-        const responseA = await managerAgent(
+        const respA = await feishuAssistantAgent(
           messagesA,
           undefined,
           chatIdA,
           rootIdA,
           userId
         );
+        const responseA = getResponseText(respA);
         console.log(
           `[Test] Chat A response length: ${responseA?.length || 0}`
         );
@@ -235,13 +246,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       // Query in Chat B (should not remember Chat A's conversation)
       const messagesB: CoreMessage[] = [{ role: "user", content: query }];
       try {
-        const responseB = await managerAgent(
+        const respB = await feishuAssistantAgent(
           messagesB,
           undefined,
           chatIdB,
           rootIdB,
           userId
         );
+        const responseB = getResponseText(respB);
         console.log(
           `[Test] Chat B response length: ${responseB?.length || 0}`
         );
@@ -303,13 +315,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
 
       // Should not throw even if memory system has issues
       try {
-        const response = await managerAgent(
+        const resp = await feishuAssistantAgent(
           messages,
           undefined,
           chatId,
           rootId,
           userId
         );
+        const response = getResponseText(resp);
         // If successful, response should be valid
         if (response) {
           expect(response.length).toBeGreaterThan(0);
@@ -349,13 +362,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       const promises = queries.map(async (q) => {
         const messages: CoreMessage[] = [{ role: "user", content: q.q }];
         try {
-          const response = await managerAgent(
+          const resp = await feishuAssistantAgent(
             messages,
             undefined,
             q.chat,
             q.root,
             q.user
           );
+          const response = getResponseText(resp);
           return { success: true, length: response?.length || 0 };
         } catch (error) {
           return { success: false, error: (error as Error).message };
@@ -402,13 +416,14 @@ describe("Manager Agent - Multi-Turn Integration", () => {
       ];
 
       try {
-        const response = await managerAgent(
+        const resp = await feishuAssistantAgent(
           messages,
           undefined,
           feishuContext.chatId,
           feishuContext.rootId,
           feishuContext.userId
         );
+        const response = getResponseText(resp);
         // Should produce valid response
         expect(response).toBeDefined();
       } catch (error) {
