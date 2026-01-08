@@ -43,6 +43,7 @@ const freeModel = openrouter(FREE_MODELS[0]); // nvidia/nemotron-3-nano-30b-a3b:
 const IntentEnum = z.enum([
   "gitlab_create",
   "gitlab_list", 
+  "gitlab_close",  // Close issue with deliverable
   "gitlab_thread_update",
   "gitlab_relink",  // Link current thread to existing issue
   "gitlab_summarize",  // Summarize issue with comments
@@ -50,6 +51,9 @@ const IntentEnum = z.enum([
   "doc_read",
   "general_chat"
 ]);
+
+// Asset types for deliverables (used as GitLab labels)
+const AssetTypeEnum = z.enum(["dashboard", "report", "table"]);
 
 type Intent = z.infer<typeof IntentEnum>;
 
@@ -167,17 +171,35 @@ const classifyIntentStep = createStep({
       };
     }
     
+    // Check for close keywords: "close #12", "完成 issue 12", "close issue 123 delivered dashboard"
+    const closeKeywords = /(?:close|完成|关闭|done|finish|结束)\s*(?:#|issue\s*#?)?(\d+)/i;
+    const closeMatch = query.match(closeKeywords);
+    if (closeMatch) {
+      const issueIid = parseInt(closeMatch[1], 10);
+      console.log(`[DPA Workflow] Close keywords detected, routing to gitlab_close for issue #${issueIid}`);
+      return {
+        intent: "gitlab_close" as Intent,
+        params: { issueIid: String(issueIid) },
+        query,
+        chatId,
+        rootId,
+        userId,
+        linkedIssue,
+      };
+    }
+    
     const classificationPrompt = `You are an intent classifier. Classify the user query into ONE of these intents:
 
 - gitlab_create: User wants to CREATE a new GitLab issue (e.g., "create issue", "new bug", "报个bug", "创建issue")
 - gitlab_list: User wants to LIST or VIEW GitLab issues/MRs (e.g., "show issues", "list MRs", "查看issue", "我的MR")
+- gitlab_close: User wants to CLOSE an issue (e.g., "close #12", "完成 issue 123", "done with #45", "关闭issue")
 - chat_search: User wants to SEARCH Feishu chat history (e.g., "find messages about X", "what did Y say", "查找聊天记录")
 - doc_read: User wants to READ a Feishu document (e.g., "read doc X", "查看文档", contains Feishu doc URL)
 - general_chat: General conversation, questions, help requests, or anything that doesn't fit above
 
 Query: "${query}"
 
-Respond with ONLY the intent name (one of: gitlab_create, gitlab_list, chat_search, doc_read, general_chat).
+Respond with ONLY the intent name (one of: gitlab_create, gitlab_list, gitlab_close, chat_search, doc_read, general_chat).
 Do not include any other text.`;
 
     let intent: Intent = "general_chat";
@@ -983,6 +1005,138 @@ IMPORTANT: Respond in ${language}. Be concise but comprehensive.`;
 });
 
 /**
+ * Step: Execute GitLab Close
+ * Closes an issue with deliverable information and asset label
+ */
+const executeGitLabCloseStep = createStep({
+  id: "execute-gitlab-close",
+  description: "Close GitLab issue with deliverable info",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+  }),
+  execute: async ({ inputData }) => {
+    const { params, query, userId } = inputData;
+    
+    console.log(`[DPA Workflow] Executing GitLab close`);
+    
+    const issueIid = params?.issueIid ? parseInt(params.issueIid, 10) : null;
+    if (!issueIid) {
+      return {
+        result: `## ❌ Missing Issue Number\n\n---\n\n💡 Example: "close #12 delivered dashboard at superset.nevint.com/dash/123"`,
+        intent: "gitlab_close" as const,
+      };
+    }
+    
+    try {
+      // Parse asset type from query
+      const dashboardMatch = /dashboard|仪表盘|看板/i.test(query);
+      const reportMatch = /report|报表|报告/i.test(query);
+      const tableMatch = /table|表|数据表/i.test(query);
+      
+      let assetType: string | null = null;
+      if (dashboardMatch) assetType = "dashboard";
+      else if (reportMatch) assetType = "report";
+      else if (tableMatch) assetType = "table";
+      
+      // Extract deliverable URL - REQUIRED for closing
+      const urlMatch = query.match(/(https?:\/\/[^\s]+)/i);
+      const extractedUrl = urlMatch?.[1] || null;
+      
+      // Validate: URL is required to close an issue
+      if (!extractedUrl) {
+        return {
+          result: `## ❌ Deliverable URL Required\n\n---\n\nTo close an issue, you must provide the deliverable URL.\n\n---\n\n💡 Example:\n- "close #${issueIid} delivered dashboard at https://superset.nevint.com/dashboard/123"\n- "完成 #${issueIid} report https://confluence.nevint.com/pages/456"`,
+          intent: "gitlab_close" as const,
+        };
+      }
+      
+      // Map Feishu user to GitLab username for attribution
+      const gitlabUsername = userId ? feishuIdToEmpAccount(userId) : null;
+      const closedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      
+      // Build deliverable comment
+      let commentParts: string[] = [];
+      commentParts.push(`**[Issue Closed via Feishu Bot]**`);
+      commentParts.push(``);
+      if (assetType) {
+        commentParts.push(`**Asset Type**: ${assetType}`);
+      }
+      if (extractedUrl) {
+        commentParts.push(`**Deliverable**: ${extractedUrl}`);
+      }
+      if (gitlabUsername) {
+        commentParts.push(`**Closed by**: @${gitlabUsername}`);
+      }
+      commentParts.push(`**Closed at**: ${closedAt}`);
+      
+      const comment = commentParts.join('\n');
+      const escapedComment = comment.replace(/"/g, '\\"');
+      
+      // Step 1: Add asset label if detected
+      if (assetType) {
+        const labelCommand = `issue update ${issueIid} -R dpa/dpa-mom/task -l "${assetType}"`;
+        console.log(`[DPA Workflow] Adding label: ${labelCommand}`);
+        const labelResult = await (gitlabTool.execute as any)({ command: labelCommand }) as { success: boolean; output?: string; error?: string };
+        if (!labelResult.success) {
+          console.warn(`[DPA Workflow] Failed to add label: ${labelResult.error}`);
+        }
+      }
+      
+      // Step 2: Add deliverable comment
+      const noteCommand = `issue note ${issueIid} -m "${escapedComment}" -R dpa/dpa-mom/task`;
+      console.log(`[DPA Workflow] Adding note: ${noteCommand}`);
+      const noteResult = await (gitlabTool.execute as any)({ command: noteCommand }) as { success: boolean; output?: string; error?: string };
+      if (!noteResult.success) {
+        console.warn(`[DPA Workflow] Failed to add note: ${noteResult.error}`);
+      }
+      
+      // Step 3: Close the issue
+      const closeCommand = `issue close ${issueIid} -R dpa/dpa-mom/task`;
+      console.log(`[DPA Workflow] Closing issue: ${closeCommand}`);
+      const closeResult = await (gitlabTool.execute as any)({ command: closeCommand }) as { success: boolean; output?: string; error?: string };
+      
+      if (closeResult.success) {
+        const issueUrl = `https://git.nevint.com/dpa/dpa-mom/task/-/issues/${issueIid}`;
+        
+        let successMsg = `## ✅ Issue #${issueIid} Closed\n\n---\n\n`;
+        if (assetType) {
+          successMsg += `🏷️ **Asset**: ${assetType}\n`;
+        }
+        if (extractedUrl) {
+          successMsg += `📦 **Deliverable**: ${extractedUrl}\n`;
+        }
+        successMsg += `\n---\n\n🔗 [View Issue](${issueUrl})`;
+        
+        return {
+          result: successMsg,
+          intent: "gitlab_close" as const,
+        };
+      } else {
+        return {
+          result: `## ❌ Failed to Close Issue\n\n---\n\nIssue #${issueIid}\n\n${closeResult.error}`,
+          intent: "gitlab_close" as const,
+        };
+      }
+    } catch (error: any) {
+      return {
+        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        intent: "gitlab_close" as const,
+      };
+    }
+  }
+});
+
+/**
  * Step: Execute Chat Search
  */
 const executeChatSearchStep = createStep({
@@ -1283,6 +1437,10 @@ export const dpaAssistantWorkflow = createWorkflow({
       executeGitLabListStep
     ],
     [
+      async ({ inputData }) => inputData?.intent === "gitlab_close",
+      executeGitLabCloseStep
+    ],
+    [
       async ({ inputData }) => inputData?.intent === "gitlab_thread_update",
       executeGitLabThreadUpdateStep
     ],
@@ -1320,6 +1478,7 @@ export const dpaAssistantWorkflow = createWorkflow({
     // Get result from whichever branch executed
     const gitlabCreate = getStepResult("execute-gitlab-create");
     const gitlabList = getStepResult("execute-gitlab-list");
+    const gitlabClose = getStepResult("execute-gitlab-close");
     const gitlabThreadUpdate = getStepResult("execute-gitlab-thread-update");
     const gitlabRelink = getStepResult("execute-gitlab-relink");
     const gitlabSummarize = getStepResult("execute-gitlab-summarize");
@@ -1327,7 +1486,7 @@ export const dpaAssistantWorkflow = createWorkflow({
     const docRead = getStepResult("execute-doc-read");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead;
+    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead;
     
     if (branchResult) {
       return {

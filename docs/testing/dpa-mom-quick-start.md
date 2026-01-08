@@ -16,7 +16,8 @@
 - ✅ `dpa_mom` now uses **workflow-based routing** (was skill-based)
 - ✅ Workflow ID: `dpa-assistant`
 - ✅ Routes via `skills/agent-routing/SKILL.md` (priority 1)
-- ✅ Supports 5 intents: gitlab_create, gitlab_list, chat_search, doc_read, general_chat
+- ✅ Supports 6 intents: gitlab_create, gitlab_list, gitlab_close, chat_search, doc_read, general_chat
+- ✅ Asset labels: dashboard, report, table (auto-applied on close)
 
 ## Essential Checks
 
@@ -43,7 +44,8 @@ Try these in Feishu:
 
 1. **Create Issue**: "create issue: test workflow, priority 2"
 2. **List Issues**: "show my issues" or "list MRs"
-3. **General Chat**: "dpa team help with data pipeline"
+3. **Close Issue**: "close #123 dashboard https://superset.nevint.com/dash/456" (URL required!)
+4. **General Chat**: "dpa team help with data pipeline"
 
 ## Monitoring
 

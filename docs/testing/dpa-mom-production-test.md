@@ -26,9 +26,15 @@ The `dpa_mom` functionality has been migrated from skill-based routing to workfl
 ### Intents Supported
 - `gitlab_create`: Create GitLab issues
 - `gitlab_list`: List/view GitLab issues/MRs
+- `gitlab_close`: Close issues with deliverable info + asset label
 - `chat_search`: Search Feishu chat history
 - `doc_read`: Read Feishu documents
 - `general_chat`: Conversational AI
+
+### Asset Labels (for gitlab_close)
+- `dashboard`: Superset/BI dashboards
+- `report`: Analysis reports
+- `table`: Data tables, views, models
 
 ## Pre-Flight Checks
 
@@ -167,7 +173,36 @@ NODE_ENV=production
 # [DPA Workflow] Executing general chat
 ```
 
-### Test 4: glab CLI Error Handling
+### Test 4: Close Issue with Deliverable
+
+**Query**: "close #123 delivered dashboard at superset.nevint.com/dashboard/456"
+
+**Expected Flow**:
+1. ✅ Routes to `dpa-assistant` workflow
+2. ✅ Classifies intent as `gitlab_close`
+3. ✅ Parses: issue IID=123, asset type=dashboard, deliverable URL
+4. ✅ Adds `dashboard` label to issue
+5. ✅ Adds deliverable comment with attribution
+6. ✅ Closes the issue
+7. ✅ Returns success message with link
+
+**Verification**:
+```bash
+# Check logs for:
+# [DPA Workflow] Close keywords detected, routing to gitlab_close for issue #123
+# [DPA Workflow] Adding label: issue update 123 -R dpa/dpa-mom/task -l "dashboard"
+# [DPA Workflow] Closing issue: issue close 123 -R dpa/dpa-mom/task
+```
+
+**Variations**:
+- "完成 issue 45, report https://confluence.nevint.com/page/123" → label=report
+- "close #78 table https://starrocks.nevint.com/dpa.user_ltv" → label=table
+
+**Validation**: Deliverable URL is **required** — closing without URL will be rejected:
+- ❌ "done with #99" → Error: "Deliverable URL Required"
+- ✅ "done with #99 https://superset.nevint.com/dashboard/1" → OK
+
+### Test 5: glab CLI Error Handling
 
 **Test Case**: Invalid project path
 
@@ -186,7 +221,7 @@ NODE_ENV=production
 # Or: ❌ Failed to create issue
 ```
 
-### Test 5: Authentication Edge Cases
+### Test 6: Authentication Edge Cases
 
 **Test Case**: glab token expired or invalid
 
