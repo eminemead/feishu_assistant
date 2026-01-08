@@ -229,10 +229,10 @@ export async function isThreadBotRelevant(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`❌ [ThreadValidation] Error checking thread relevance: ${errorMsg}`);
-    // On error, be permissive and allow processing - better to respond than miss a valid request
-    // The worst case is responding to an unrelated thread, which is better than ignoring a user
-    console.warn(`⚠️ [ThreadValidation] Allowing thread ${rootId} due to error (fail-open)`);
-    return true;
+    // On error, be conservative and skip processing - responding to unrelated threads is worse UX
+    // than occasionally missing a valid request (user can always re-@ the bot)
+    console.warn(`⚠️ [ThreadValidation] Skipping thread ${rootId} due to error (fail-closed)`);
+    return false;
   }
 }
 

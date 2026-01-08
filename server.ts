@@ -85,9 +85,10 @@ const useSubscriptionMode = process.env.FEISHU_SUBSCRIPTION_MODE === "true" ||
                              (!process.env.FEISHU_ENCRYPT_KEY && !process.env.FEISHU_VERIFICATION_TOKEN);
 
 // WebSocket watchdog configuration
-const WS_WATCHDOG_INTERVAL_MS = 30_000;
-const WS_STALE_THRESHOLD_MS = 3 * 60 * 1000; // restart if no events for 3 minutes
-const WS_MAX_CONSECUTIVE_FAILURES = 3;
+// Increased thresholds to reduce unnecessary reconnects that cause duplicate message processing
+const WS_WATCHDOG_INTERVAL_MS = 60_000; // Check every 60s instead of 30s
+const WS_STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes instead of 3 - low traffic is normal
+const WS_MAX_CONSECUTIVE_FAILURES = 5; // 5 failures instead of 3
 
 const encryptKey = process.env.FEISHU_ENCRYPT_KEY;
 const verificationToken = process.env.FEISHU_VERIFICATION_TOKEN;
@@ -393,35 +394,57 @@ eventDispatcher.register({
   "im.message.receive_v1": async (data) => {
       try {
         // IMMEDIATE FIX: Filter out old messages to prevent processing during WebSocket reconnections
-        const messageCreateTime = (data as any).message?.create_time || (data as any).message?.timestamp;
+        const rawCreateTime = (data as any).message?.create_time || (data as any).message?.timestamp;
         const now = Date.now();
-        const messageAgeMs = messageCreateTime ? (now - messageCreateTime * 1000) : 0; // Feishu uses seconds
+        
+        // Detect if timestamp is in seconds (10 digits) or milliseconds (13 digits)
+        // Feishu typically sends seconds, but handle both cases
+        let messageCreateTimeMs: number | null = null;
+        if (rawCreateTime) {
+          const tsNum = typeof rawCreateTime === 'string' ? parseInt(rawCreateTime, 10) : rawCreateTime;
+          // If timestamp is less than 10^12, it's in seconds; convert to ms
+          messageCreateTimeMs = tsNum < 1e12 ? tsNum * 1000 : tsNum;
+        }
+        
+        const messageAgeMs = messageCreateTimeMs ? (now - messageCreateTimeMs) : null;
         
         // Ignore messages older than 5 minutes (300000 ms) to prevent reprocessing on reconnect
+        // Also ignore if we can't determine age (null) - safer to skip than to process old messages
+        if (messageAgeMs === null) {
+          console.warn(`⚠️ [WebSocket] Ignoring message with unknown timestamp: messageId=${(data as any).message?.message_id}`);
+          return;
+        }
         if (messageAgeMs > 300000) {
           console.log(`⚠️ [WebSocket] Ignoring old message (${Math.round(messageAgeMs / 1000)}s ago): messageId=${(data as any).message?.message_id}`);
           return;
         }
+        if (messageAgeMs < -60000) {
+          // Message from the "future" (clock skew > 1 min) - likely bad timestamp, skip
+          console.warn(`⚠️ [WebSocket] Ignoring message with future timestamp (${Math.round(messageAgeMs / 1000)}s): messageId=${(data as any).message?.message_id}`);
+          return;
+        }
 
-        // Deduplicate events by event_id, falling back to message_id
+        // Deduplicate events - ALWAYS use message_id as primary key (stable across reconnects)
+        // event_id can change on WebSocket reconnection, but message_id stays the same
         const eventId = (data as any).event_id || (data as any).event?.event_id;
         const message = data.message;
         const messageId = message?.message_id;
-        const dedupKey = eventId || (messageId ? `msg:${messageId}` : null);
+        
+        // Primary dedup by message_id (most reliable), fallback to event_id
+        const dedupKey = messageId ? `msg:${messageId}` : (eventId ? `evt:${eventId}` : null);
         
         if (!dedupKey) {
-          console.warn(`⚠️ [WebSocket] No event_id or message_id for deduplication, processing anyway`);
-        } else if (processedEvents.has(dedupKey)) {
-          console.log(`⚠️ [WebSocket] Duplicate event ignored: ${dedupKey}`);
-          return;
-        } else {
-          processedEvents.set(dedupKey, Date.now());
-          cleanupProcessedEvents();
+          console.warn(`⚠️ [WebSocket] No message_id or event_id for deduplication, skipping message`);
+          return; // Changed: skip instead of processing - safer
         }
         
-        if (!eventId) {
-          console.warn(`⚠️ [WebSocket] Missing event_id, using message_id fallback: ${messageId}`);
+        if (processedEvents.has(dedupKey)) {
+          console.log(`⚠️ [WebSocket] Duplicate event ignored: ${dedupKey}`);
+          return;
         }
+        
+        processedEvents.set(dedupKey, Date.now());
+        cleanupProcessedEvents();
 
         console.log("📨 [WebSocket] Event received: im.message.receive_v1");
       console.log("📨 [WebSocket] Event data:", JSON.stringify(data, null, 2));
