@@ -47,7 +47,6 @@ export type QueryCategory = "okr" | "alignment" | "pnl" | "dpa_mom" | "general";
  */
 const classifyQueryStep = createStep({
   id: "classify-query",
-  description: "Classify user query to determine routing",
   inputSchema: z.object({
     query: z.string(),
     messages: z.any().optional(), // CoreMessage[] - using any for workflow compatibility
@@ -147,7 +146,6 @@ const classifyQueryStep = createStep({
  */
 const determineAgentStep = createStep({
   id: "determine-agent",
-  description: "Map category to agent name for routing",
   inputSchema: z.object({
     query: z.string(),
     category: z.enum(["okr", "alignment", "pnl", "dpa_mom", "general"]),

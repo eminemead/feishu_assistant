@@ -76,26 +76,31 @@ const linkedIssueSchema = z.object({
   createdBy: z.string(),
 }).optional();
 
+// Input/Output schemas for classify intent step
+const classifyIntentInputSchema = z.object({
+  query: z.string(),
+  chatId: z.string().optional(),
+  rootId: z.string().optional(),
+  userId: z.string().optional(),
+  linkedIssue: linkedIssueSchema,
+});
+
+const classifyIntentOutputSchema = z.object({
+  intent: IntentEnum,
+  params: z.record(z.string()).optional(),
+  query: z.string(),
+  chatId: z.string().optional(),
+  rootId: z.string().optional(),
+  userId: z.string().optional(),
+  linkedIssue: linkedIssueSchema,
+});
+
 const classifyIntentStep = createStep({
   id: "classify-intent",
-  description: "Classify user query into intent category",
-  inputSchema: z.object({
-    query: z.string().describe("User's original query"),
-    chatId: z.string().optional().describe("Feishu chat ID"),
-    rootId: z.string().optional().describe("Root message ID for thread identification"),
-    userId: z.string().optional().describe("User ID"),
-    linkedIssue: linkedIssueSchema.describe("Linked GitLab issue if thread has one"),
-  }),
-  outputSchema: z.object({
-    intent: IntentEnum,
-    params: z.record(z.string()).optional(),
-    query: z.string(),
-    chatId: z.string().optional(),
-    rootId: z.string().optional(),
-    userId: z.string().optional(),
-    linkedIssue: linkedIssueSchema,
-  }),
-  execute: async ({ inputData }) => {
+  // @ts-ignore - Mastra beta.20 has overload resolution issues with tsgo
+  inputSchema: classifyIntentInputSchema,
+  outputSchema: classifyIntentOutputSchema,
+  execute: async ({ inputData }: { inputData: z.infer<typeof classifyIntentInputSchema> }) => {
     const { query, chatId, rootId, userId, linkedIssue } = inputData;
     
     console.log(`[DPA Workflow] ============================================`);
@@ -284,7 +289,6 @@ Do not include any other text.`;
  */
 const executeGitLabCreateStep = createStep({
   id: "execute-gitlab-create",
-  description: "Create GitLab issue",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -672,7 +676,6 @@ ASSIGNEE: <username or "none">`;
  */
 const executeGitLabListStep = createStep({
   id: "execute-gitlab-list",
-  description: "List/view GitLab issues or MRs",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -782,7 +785,6 @@ const executeGitLabListStep = createStep({
  */
 const executeGitLabThreadUpdateStep = createStep({
   id: "execute-gitlab-thread-update",
-  description: "Add note to linked GitLab issue from thread reply",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -845,7 +847,6 @@ const executeGitLabThreadUpdateStep = createStep({
  */
 const executeGitLabRelinkStep = createStep({
   id: "execute-gitlab-relink",
-  description: "Link current thread to an existing GitLab issue",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -949,7 +950,6 @@ const executeGitLabRelinkStep = createStep({
  */
 const executeGitLabSummarizeStep = createStep({
   id: "execute-gitlab-summarize",
-  description: "Summarize GitLab issue with comments",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -1034,7 +1034,6 @@ IMPORTANT: Respond in ${language}. Be concise but comprehensive.`;
  */
 const executeGitLabCloseStep = createStep({
   id: "execute-gitlab-close",
-  description: "Close GitLab issue with deliverable info",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -1172,7 +1171,6 @@ const executeGitLabCloseStep = createStep({
  */
 const executeGitLabAssignStep = createStep({
   id: "execute-gitlab-assign",
-  description: "Assign user to linked GitLab issue",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -1253,7 +1251,6 @@ const executeGitLabAssignStep = createStep({
  */
 const executeChatSearchStep = createStep({
   id: "execute-chat-search",
-  description: "Search Feishu chat history",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -1329,7 +1326,6 @@ const executeChatSearchStep = createStep({
  */
 const executeDocReadStep = createStep({
   id: "execute-doc-read",
-  description: "Read Feishu document via workflow (fetch → persist → embed)",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -1411,7 +1407,6 @@ const executeDocReadStep = createStep({
  */
 const executeGeneralChatStep = createStep({
   id: "execute-general-chat",
-  description: "Handle general conversation with DPA Mom agent",
   inputSchema: z.object({
     intent: IntentEnum,
     params: z.record(z.string()).optional(),
@@ -1432,6 +1427,7 @@ const executeGeneralChatStep = createStep({
       // Create inline agent for conversational response
       // Uses free model: nvidia/nemotron-3-nano-30b-a3b:free
       const dpaMomAgent = new Agent({
+        id: "dpa-mom-chat",
         name: "dpa_mom_chat",
         instructions: `You are dpa_mom, the loving chief-of-staff for the DPA (Data Product & Analytics) team.
 
@@ -1472,7 +1468,6 @@ GUIDELINES:
  */
 const formatResponseStep = createStep({
   id: "format-response",
-  description: "Format final response",
   inputSchema: z.object({
     result: z.string(),
     intent: IntentEnum,

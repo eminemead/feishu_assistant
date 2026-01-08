@@ -50,7 +50,6 @@ function hashContent(content: string): string {
 
 const fetchDocumentStep = createStep({
   id: "fetch-document",
-  description: "Fetch Feishu document content via user OAuth or app token",
   inputSchema: z.object({
     docUrl: z.string().min(1, "docUrl is required"),
     userId: z.string().min(1, "userId is required"),
@@ -103,7 +102,6 @@ const fetchDocumentStep = createStep({
 
 const persistDocumentStep = createStep({
   id: "persist-document",
-  description: "Store document metadata and content snapshot to Supabase",
   inputSchema: z.object({
     docUrl: z.string(),
     docToken: z.string(),
@@ -221,7 +219,6 @@ const persistDocumentStep = createStep({
 
 const embedDocumentStep = createStep({
   id: "embed-document",
-  description: "Add document to RAG vector store for semantic search",
   inputSchema: z.object({
     docUrl: z.string(),
     docToken: z.string(),

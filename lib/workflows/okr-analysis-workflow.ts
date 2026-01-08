@@ -22,7 +22,6 @@ import { getOkrReviewerAgent } from "../agents/okr-reviewer-agent";
  */
 const queryOkrDataStep = createStep({
   id: "query-okr-data",
-  description: "Query OKR metrics from database",
   inputSchema: z.object({
     period: z.string().describe('Period to analyze (e.g., "10 月", "11 月")'),
     userId: z.string().optional().describe('Optional user ID for data filtering (RLS)')
@@ -65,7 +64,6 @@ const queryOkrDataStep = createStep({
  */
 const generateChartsStep = createStep({
   id: "generate-charts",
-  description: "Generate charts from OKR metrics",
   inputSchema: z.object({
     metrics: z.any(),
     period: z.string(),
@@ -162,7 +160,6 @@ const generateChartsStep = createStep({
  */
 const analyzeStep = createStep({
   id: "analyze",
-  description: "Generate insights using OKR Reviewer Agent",
   inputSchema: z.object({
     charts: z.array(z.object({
       type: z.string(),
@@ -227,7 +224,6 @@ Format your response in Markdown.`;
  */
 const formatResponseStep = createStep({
   id: "format-response",
-  description: "Format final response with analysis and charts",
   inputSchema: z.object({
     analysis: z.string(),
     charts: z.array(z.object({

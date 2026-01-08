@@ -33,7 +33,6 @@ import { startTrackingDoc } from "../doc-poller";
 
 const fetchMetadataStep = createStep({
   id: "fetch-metadata",
-  description: "Fetch Feishu document metadata",
   inputSchema: z.object({
     docToken: z.string().min(1, "docToken is required"),
     docType: z.string().default("doc"),
@@ -63,7 +62,6 @@ const fetchMetadataStep = createStep({
 
 const detectChangeStep = createStep({
   id: "detect-change",
-  description: "Compare metadata and detect changes with debouncing",
   inputSchema: z.object({
     metadata: z.custom<DocMetadata>(),
     docToken: z.string(),
@@ -107,7 +105,6 @@ const detectChangeStep = createStep({
 
 const persistChangeStep = createStep({
   id: "persist-change",
-  description: "Persist tracking state and audit trail",
   inputSchema: z.object({
     metadata: z.custom<DocMetadata>(),
     detection: z.custom<ChangeDetectionResult>(),
@@ -189,7 +186,6 @@ const persistChangeStep = createStep({
 
 const notifyStep = createStep({
   id: "notify",
-  description: "Send notification if change detected",
   inputSchema: z.object({
     metadata: z.custom<DocMetadata>(),
     detection: z.custom<ChangeDetectionResult>(),
