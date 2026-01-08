@@ -141,22 +141,19 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         console.log(`[FeishuMention] Generating response...`);
         const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
         
-        // Handle structured result (with reasoning, confirmation, showFollowups) or plain string
+        // Handle structured result (with reasoning, confirmation) or plain string
         let result: string;
         let reasoning: string | undefined;
         let needsConfirmation = false;
         let confirmationData: string | undefined;
-        let showFollowups: boolean | undefined;
         
         if (typeof rawResult === "string") {
             result = rawResult;
-            showFollowups = true; // String response = general, show suggestions
         } else {
             result = rawResult.text;
             reasoning = rawResult.reasoning;
             needsConfirmation = rawResult.needsConfirmation || false;
             confirmationData = rawResult.confirmationData;
-            showFollowups = rawResult.showFollowups; // Propagate from manager
         }
         console.log(`[FeishuMention] Response generated:`);
         console.log(`  - length=${result?.length || 0}`);
@@ -173,27 +170,22 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             result = result + thinkingSection;
         }
 
-        // Finalize card with follow-up suggestions and send buttons in separate message
-        // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons
-        console.log(`[FeishuMention] Finalizing card with suggestions. cardId=${card.cardId}, result length=${result?.length || 0}`);
-        // BUG FIX: Use rootId (thread root), not messageId, for button context
-        // This ensures confirmation callbacks can store the correct thread mapping
+        // Finalize card and send confirmation buttons if needed
+        console.log(`[FeishuMention] Finalizing card. cardId=${card.cardId}, result length=${result?.length || 0}`);
         const finalizeResult = await finalizeCardWithFollowups(
             card.cardId,
             card.elementId,
             result,
-            cleanText,  // context for question generation
-            needsConfirmation ? 0 : 3,  // No followups if confirmation needed
+            undefined,  // context (unused)
+            undefined,  // maxFollowups (unused)
             {
                 conversationId: chatId,
-                rootId: rootId,  // FIXED: Use thread root ID for correct mapping
+                rootId: rootId,
                 threadId: rootId,
-                sendButtonsAsSeperateMessage: true,
                 confirmationData: needsConfirmation ? confirmationData : undefined,
-                showFollowups: showFollowups, // Propagate from manager (false for deterministic workflows)
             }
         );
-        console.log(`[FeishuMention] Card finalized with suggestions${finalizeResult.buttonMessageId ? ` (buttons: ${finalizeResult.buttonMessageId})` : ''}`);
+        console.log(`[FeishuMention] Card finalized${finalizeResult.buttonMessageId ? ` (confirmation buttons: ${finalizeResult.buttonMessageId})` : ''}`);
 
         // Track successful response
         const duration = Date.now() - startTime;

@@ -141,23 +141,20 @@ export async function handleNewMessage(data: FeishuMessageData) {
     // Generate response with streaming and memory context
     const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
     
-    // Handle structured result (with confirmation data, reasoning, showFollowups) or plain string
+    // Handle structured result (with confirmation data, reasoning) or plain string
     let result: string;
     let needsConfirmation = false;
     let confirmationData: string | undefined;
     let reasoning: string | undefined;
-    let showFollowups: boolean | undefined;
     let linkedIssue: { issueIid: number; issueUrl: string; project: string } | undefined;
     
     if (typeof rawResult === "string") {
       result = rawResult;
-      showFollowups = true; // String response = general, show suggestions
     } else {
       result = rawResult.text;
       needsConfirmation = rawResult.needsConfirmation || false;
       confirmationData = rawResult.confirmationData;
       reasoning = rawResult.reasoning;
-      showFollowups = rawResult.showFollowups; // Propagate from manager
       linkedIssue = rawResult.linkedIssue;
     }
     
@@ -198,22 +195,18 @@ export async function handleNewMessage(data: FeishuMessageData) {
       result = result + thinkingSection;
     }
 
-    // Finalize card with follow-up suggestions and send buttons in separate message
-    // This handles: disabling streaming, generating followups, formatting as markdown, updating card, and sending buttons
+    // Finalize card and send confirmation buttons if needed
     const finalizeResult = await finalizeCardWithFollowups(
       card.cardId,
       card.elementId,
       result,
-      cleanText,  // context for question generation
-      needsConfirmation ? 0 : 3,  // No followups if confirmation needed
+      undefined,  // context (unused)
+      undefined,  // maxFollowups (unused)
       {
         conversationId: chatId,
-        rootId: rootId,  // Use actual rootId (root of conversation thread)
+        rootId: rootId,
         threadId: rootId,
-        sendButtonsAsSeperateMessage: true,
-        // Pass confirmation data for special handling
         confirmationData: needsConfirmation ? confirmationData : undefined,
-        showFollowups: showFollowups, // Propagate from manager (false for deterministic workflows)
       }
     );
 

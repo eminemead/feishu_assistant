@@ -197,7 +197,6 @@ export interface ManagerAgentResult {
   needsConfirmation?: boolean;
   confirmationData?: string;
   reasoning?: string; // Thinking traces from reasoning models
-  showFollowups?: boolean; // Controls whether to show follow-up buttons
   linkedIssue?: LinkedIssueResult; // Linked GitLab issue if thread has one
 }
 
@@ -278,7 +277,6 @@ export async function managerAgent(
       console.log(`[Manager] DPA workflow (thread update) complete: ${result.response.substring(0, 100)}...`);
       return {
         text: result.response,
-        showFollowups: false,
         linkedIssue: linkedIssue,
       };
     } catch (error) {
@@ -371,14 +369,12 @@ export async function managerAgent(
             text: result.response,
             needsConfirmation: true,
             confirmationData: result.confirmationData,
-            showFollowups: false, // Confirmation flow = no other suggestions
             linkedIssue: linkedIssue || undefined,
           };
         }
         
         return {
           text: result.response,
-          showFollowups: false, // Deterministic workflow completed = no suggestions
           linkedIssue: linkedIssue || undefined,
         };
       }
@@ -527,18 +523,14 @@ export async function managerAgent(
           // Memory is automatically saved by Mastra when memoryConfig is provided
           console.log(`[Manager] ${routingDecision.category} response complete (length=${finalText.length}, reasoning=${accumulatedReasoning.length})`);
           
-          // Return structured result - skill injection may benefit from suggestions
+          // Return structured result
           if (accumulatedReasoning.length > 0) {
             return {
               text: finalText,
               reasoning: accumulatedReasoning,
-              showFollowups: true, // Skill augmented response = may benefit from suggestions
             };
           }
-          return {
-            text: finalText,
-            showFollowups: true, // Skill execution = suggestions helpful
-          };
+          return { text: finalText };
         }
       }
     } catch (error) {
@@ -734,23 +726,11 @@ export async function managerAgent(
       `[Manager] Response complete (length=${text.length}, reasoning=${reasoning.length}, duration=${duration}ms)`
     );
     
-    // Determine whether to show follow-ups based on routing confidence
-    // Low confidence = general query = show suggestions
-    // High confidence = specific question = fewer/no suggestions
-    const showFollowups = routingDecision.confidence < 0.6;
-    
     // Return structured result
     if (reasoning.length > 0) {
-      return {
-        text,
-        reasoning,
-        showFollowups,
-      };
+      return { text, reasoning };
     }
-    return {
-      text,
-      showFollowups,
-    };
+    return { text };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[Manager] Error during streaming:`, errorMsg);

@@ -1,21 +1,15 @@
 /**
- * Enhanced card finalization with button follow-up suggestions
+ * Card finalization with confirmation buttons
  * 
- * Implementation of Hypothesis 1: Send buttons in separate message
+ * Handles:
+ * 1. Confirmation buttons (Confirm/Cancel) for workflows needing user approval
+ * 2. Finalizing streaming cards (disable streaming mode)
  * 
- * Strategy:
- * 1. Stream response in card with streaming_mode: true
- * 2. Add text-based suggestions to response
- * 3. Disable streaming mode
- * 4. Send buttons in SEPARATE message (no streaming_mode, so buttons work!)
- * 
- * This bypasses Feishu's 99992402 restriction entirely by putting buttons
- * in a non-streaming message where they're allowed.
+ * NOTE: LLM-generated follow-up suggestions removed - they were generic and unhelpful.
  */
 
 import { getNextCardSequence, client as feishuClient, updateCardElement } from "./feishu-utils";
-import { generateFollowupQuestions, FollowupOption } from "./tools/generate-followups-tool";
-import { formatSuggestionsAsMarkdown } from "./format-suggestions";
+import { FollowupOption } from "./tools/generate-followups-tool";
 import { sendFollowupButtonsMessage } from "./send-follow-up-buttons-message";
 
 /**
@@ -80,32 +74,25 @@ export interface FinalizeCardConfig {
    * The value is JSON-encoded data to be passed to the confirmation callback
    */
   confirmationData?: string;
-  
-  /**
-   * Whether to show follow-up suggestions
-   * If false, skip suggestion generation (for deterministic workflows)
-   */
-  showFollowups?: boolean;
 }
 
 /**
- * Finalize card and add follow-up suggestions
- * This is called at the end of response generation
+ * Finalize card and optionally show confirmation buttons
  * 
  * @param cardId Feishu card ID
  * @param elementId Markdown element ID for main content
  * @param finalContent Final response text to display
- * @param context Context for generating follow-up questions
- * @param maxFollowups Maximum number of suggestions to generate (default: 3)
- * @param config Configuration for button sending and other options
- * @returns Object with generated followups or error
+ * @param _context Unused (kept for API compatibility)
+ * @param _maxFollowups Unused (kept for API compatibility)
+ * @param config Configuration for confirmation buttons
+ * @returns Object with buttonMessageId if confirmation sent
  */
 export async function finalizeCardWithFollowups(
   cardId: string,
   elementId: string,
   finalContent?: string,
-  context?: string,
-  maxFollowups?: number,
+  _context?: string,
+  _maxFollowups?: number,
   config?: FinalizeCardConfig
 ): Promise<{
   followups?: FollowupOption[];
@@ -113,16 +100,14 @@ export async function finalizeCardWithFollowups(
   error?: string;
 }> {
   try {
-    console.log(`🎯 [CardSuggestions] Finalizing card with follow-ups: cardId=${cardId}, contentLength=${finalContent?.length || 0}`);
+    console.log(`🎯 [CardFinalize] Finalizing card: cardId=${cardId}, contentLength=${finalContent?.length || 0}`);
 
-    // Check if this is a confirmation flow (e.g., GitLab issue creation)
-    // NOTE: Must check BEFORE showFollowups, because confirmation flows also set showFollowups=false
+    // Handle confirmation flow (e.g., GitLab issue creation needs Confirm/Cancel)
     if (config?.confirmationData && config?.conversationId && config?.rootId) {
-      console.log(`🔘 [CardSuggestions] Sending confirmation buttons...`);
+      console.log(`🔘 [CardFinalize] Sending confirmation buttons...`);
       
       // Update card content with final preview BEFORE disabling streaming
       if (finalContent && elementId) {
-        console.log(`🔄 [CardSuggestions] Updating card with final preview: ${finalContent.length} chars`);
         await updateCardElement(cardId, elementId, finalContent);
       }
       
@@ -138,103 +123,31 @@ export async function finalizeCardWithFollowups(
       );
       
       if (confirmationResult.success) {
-        console.log(`✅ [CardSuggestions] Confirmation buttons sent: ${confirmationResult.messageId}`);
+        console.log(`✅ [CardFinalize] Confirmation buttons sent: ${confirmationResult.messageId}`);
       } else {
-        console.log(`⚠️ [CardSuggestions] Failed to send confirmation buttons: ${confirmationResult.error}`);
+        console.log(`⚠️ [CardFinalize] Failed to send confirmation buttons: ${confirmationResult.error}`);
       }
       
       return { buttonMessageId: confirmationResult.messageId };
     }
 
-    // Skip follow-up generation if showFollowups is explicitly false (deterministic workflows)
-    // This check comes AFTER confirmation flow, so confirmation buttons still work
-    if (config?.showFollowups === false) {
-      console.log(`🎯 [CardSuggestions] Skipping follow-ups (showFollowups=false, deterministic workflow)`);
-      
-      // Update card element with final content (in case onUpdate wasn't called or failed)
-      if (finalContent && elementId) {
-        console.log(`🔄 [CardSuggestions] Updating card element with final content (${finalContent.length} chars)`);
-        await updateCardElement(cardId, elementId, finalContent);
-      }
-      
-      // Finalize card settings (disable streaming)
-      await finalizeCardSettings(cardId, finalContent, feishuClient);
-      console.log(`✅ [CardSuggestions] Card finalized without follow-ups`);
-      
-      return { followups: [] };
+    // No confirmation needed - just finalize the card
+    if (finalContent && elementId) {
+      await updateCardElement(cardId, elementId, finalContent);
     }
-
-    // Step 1: Generate follow-up questions (while streaming is still active)
-    console.log(`🎯 [CardSuggestions] Generating follow-up suggestions...`);
-    const followups = await generateFollowupQuestions(
-      finalContent || "",
-      context,
-      maxFollowups || 3
-    );
-    console.log(`🎯 [CardSuggestions] generateFollowupQuestions returned ${followups?.length || 0} followups`);
-
-    let contentWithSuggestions = finalContent || '';
     
-    // Step 2: If suggestions were generated, format and append them as text
-    // NOTE: Don't append suggestions to card content!
-    // Follow-ups are displayed as interactive buttons in a separate message
-    // This avoids duplicate information (text + buttons)
-    if (followups && followups.length > 0) {
-      console.log(`🎯 [CardSuggestions] Generated ${followups.length} follow-up suggestions (will show as buttons)`);
-    } else {
-      console.log(`⚠️ [CardSuggestions] No follow-ups generated`);
-    }
-
-    // Step 3: Keep card content clean (response only, no suggestion text)
-    contentWithSuggestions = finalContent || '';
-
-    // Step 3.5: Update card element with final content
-    // This ensures content is displayed even if streaming updates were batched/pending
-    if (contentWithSuggestions && elementId) {
-      console.log(`🔄 [CardSuggestions] Updating card element with final content (${contentWithSuggestions.length} chars)`);
-      await updateCardElement(cardId, elementId, contentWithSuggestions);
-    }
-
-    // Step 4: Disable streaming mode
-    console.log(`🎯 [CardSuggestions] Disabling streaming mode...`);
-    await finalizeCardSettings(cardId, contentWithSuggestions, feishuClient);
-    console.log(`✅ [CardSuggestions] Streaming mode disabled (card content: response only, no duplicate suggestions)`);
-
-    // Step 5: Send buttons in SEPARATE message (Hypothesis 1)
-    // This works because non-streaming messages CAN have action elements!
-    let buttonMessageId: string | undefined;
+    await finalizeCardSettings(cardId, finalContent, feishuClient);
+    console.log(`✅ [CardFinalize] Card finalized`);
     
-    if (followups && followups.length > 0 && config?.conversationId && config?.rootId) {
-      console.log(`🔘 [CardSuggestions] Sending buttons in separate message (Hypothesis 1)...`);
-      
-      const buttonResult = await sendFollowupButtonsMessage(
-        config.conversationId,
-        followups,
-        config.rootId,
-        config.threadId
-      );
-
-      if (buttonResult.success && buttonResult.messageId) {
-        buttonMessageId = buttonResult.messageId;
-        console.log(`✅ [CardSuggestions] Buttons sent in separate message: ${buttonMessageId}`);
-      } else {
-        console.log(`⚠️ [CardSuggestions] Failed to send button message: ${buttonResult.error}`);
-        // Text suggestions are already in the response, so this is a degradation, not a failure
-      }
-    } else if (followups && followups.length > 0) {
-      console.log(`⚠️ [CardSuggestions] Config missing conversationId/rootId - buttons not sent in separate message`);
-      console.log(`   Text-based suggestions are in response as fallback`);
-    }
-
-    return { followups, buttonMessageId };
+    return { followups: [] };
   } catch (error) {
-    console.error("❌ [CardSuggestions] Error finalizing card:", error);
+    console.error("❌ [CardFinalize] Error finalizing card:", error);
     
-    // Gracefully degrade: still disable streaming even if suggestions failed
+    // Gracefully degrade: still disable streaming even if something failed
     try {
       await finalizeCardSettings(cardId, finalContent, feishuClient);
     } catch (finalizeError) {
-      console.error("❌ [CardSuggestions] Also failed to finalize settings:", finalizeError);
+      console.error("❌ [CardFinalize] Also failed to finalize settings:", finalizeError);
     }
 
     return {

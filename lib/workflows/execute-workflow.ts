@@ -66,8 +66,6 @@ export interface WorkflowExecutionResult {
   confirmationData?: string;
   /** Whether workflow should be skipped (handled by agent instead) */
   skipWorkflow?: boolean;
-  /** Whether to show follow-up suggestions (false for deterministic workflows) */
-  showFollowups?: boolean;
 }
 
 /**
@@ -259,7 +257,6 @@ export async function executeSkillWorkflow(
       artifacts,
       needsConfirmation,
       confirmationData,
-      showFollowups: false, // Deterministic workflow = no suggestions needed
     };
   } catch (error) {
     const durationMs = Date.now() - startTime;

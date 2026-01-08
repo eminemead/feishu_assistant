@@ -21,7 +21,6 @@ export interface GenerateResponseResult {
   needsConfirmation?: boolean;
   confirmationData?: string;
   reasoning?: string; // Thinking traces from reasoning models
-  showFollowups?: boolean; // Controls whether to show follow-up buttons
   linkedIssue?: LinkedIssueInfo; // Linked GitLab issue if thread has one
 }
 

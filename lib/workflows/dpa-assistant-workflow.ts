@@ -328,13 +328,13 @@ const executeGitLabCreateStep = createStep({
         const result = await (gitlabTool.execute as any)({ command: glabCommand }) as { success: boolean; output?: string; error?: string };
         
         if (result.success) {
-          let successMsg = `## ✅ Issue Created\n\n---\n\n`;
-          successMsg += `**${title}**\n\n`;
-          successMsg += `📁 ${project}`;
+          let successMsg = `✅ **Issue Created**\n\n`;
+          successMsg += `**${title}**\n`;
+          successMsg += `\n📁 \`${project}\``;
           if (assignee) {
-            successMsg += ` · 👤 @${assignee}`;
+            successMsg += `  ·  👤 @${assignee}`;
           }
-          successMsg += `\n\n---\n\n${result.output || "Issue created successfully."}`;
+          successMsg += `\n\n${result.output || "Issue created successfully."}`;
           
           // Extract issue IID and URL from glab output
           // glab outputs: "Creating issue in ... \n #123 Title \n https://git.nevint.com/..."
@@ -397,9 +397,9 @@ const executeGitLabCreateStep = createStep({
                 });
                 
                 if (taskResult.success) {
-                  successMsg += `\n\n---\n\n📋 **Feishu Task** → @${assignee}`;
+                  successMsg += `\n\n📋 Feishu Task → @${assignee}`;
                   if (taskResult.taskUrl) {
-                    successMsg += ` · [View](${taskResult.taskUrl})`;
+                    successMsg += `  ·  [View](${taskResult.taskUrl})`;
                   }
                   console.log(`[DPA Workflow] Feishu task created: ${taskResult.taskGuid}`);
                 } else {
@@ -419,13 +419,13 @@ const executeGitLabCreateStep = createStep({
           };
         } else {
           return {
-            result: `## ❌ Failed to Create Issue\n\n---\n\n${result.error}`,
+            result: `❌ **Failed to Create Issue**\n\n${result.error}`,
             intent: "gitlab_create" as const,
           };
         }
       } catch (error: any) {
         return {
-          result: `## ❌ Error\n\n---\n\n${error.message}`,
+          result: `❌ **Error**\n\n${error.message}`,
           intent: "gitlab_create" as const,
         };
       }
@@ -433,7 +433,7 @@ const executeGitLabCreateStep = createStep({
     
     if (query.startsWith(CANCEL_PREFIX)) {
       return {
-        result: `🚫 Issue creation cancelled.`,
+        result: `🚫 Cancelled`,
         intent: "gitlab_create" as const,
       };
     }
@@ -494,7 +494,9 @@ const executeGitLabCreateStep = createStep({
     
       const parsePrompt = `Parse this GitLab issue creation request and extract:
 - title: Issue title (required). Clean up any @mentions or formatting.
-- description: Issue description (expand on the title with context)
+  **IMPORTANT**: Title MUST be in Mandarin Chinese (中文). Keep technical jargons, project names, tool names, and URLs in English.
+- description: Issue description (expand on the title with context).
+  **IMPORTANT**: Description MUST be in Mandarin Chinese (中文). Keep technical jargons, code snippets, project names, tool names, API names, and URLs in English.
 - project: GitLab project path. Look for explicit mentions like "in dpa/xxx", "项目 xxx". 
   Common DPA projects: dpa/dpa-mom/task (default), dpa/dagster (data pipelines), dpa/analytics (analysis/reports), dpa/dbt (data models), dpa/feishu-assistant (bot/automation).
   If not specified, default to "dpa/dpa-mom/task".
@@ -519,8 +521,8 @@ const executeGitLabCreateStep = createStep({
 Request: "${query}"
 
 Respond in this exact format:
-TITLE: <title>
-DESCRIPTION: <description>
+TITLE: <title in Chinese, keep technical terms in English>
+DESCRIPTION: <description in Chinese, keep technical terms/URLs in English>
 PROJECT: <project>
 PRIORITY: <1-4 or "none">
 DUE_DATE: <YYYY-MM-DD or "none">
@@ -585,9 +587,10 @@ ASSIGNEE: <username or "none">`;
     const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
     // Append requester attribution to description (always show who requested, even if assigned to someone else)
+    // Use Mandarin for labels, keep @mentions and timestamps as-is
     const requesterInfo = requesterUsername 
-      ? `\n\n---\n📋 *Created via Feishu Bot*\n**Requester**: @${requesterUsername}\n**Created at**: ${createdAt}`
-      : `\n\n---\n📋 *Created via Feishu Bot*\n**Created at**: ${createdAt}`;
+      ? `\n\n---\n📋 *通过飞书机器人创建*\n**发起人**: @${requesterUsername}\n**创建时间**: ${createdAt}`
+      : `\n\n---\n📋 *通过飞书机器人创建*\n**创建时间**: ${createdAt}`;
     const enrichedDescription = description + requesterInfo;
     
     // Build glab command with assignee (explicit or requester)
@@ -602,20 +605,24 @@ ASSIGNEE: <username or "none">`;
       glabCommand += ` --due-date ${dueDate}`;
     }
     
-    // Build concise preview - only essential info
-    let preview = `## 📋 Confirm Issue Creation\n\n---\n\n`;
-    preview += `**${title}**\n\n`;
-    preview += `📁 ${project}`;
+    // Build preview with title + body + metadata
+    let preview = `📋 **Confirm Issue Creation**\n\n`;
+    preview += `**${title}**\n`;
+    // Show description (truncate if too long for preview)
+    const descPreview = description.length > 500 
+      ? description.substring(0, 500) + "..."
+      : description;
+    preview += `\n${descPreview}\n\n`;
+    preview += `📁 \`${project}\``;
     if (gitlabUsername) {
       const assignmentNote = explicitAssignee && requesterUsername && explicitAssignee !== requesterUsername
         ? ` (by @${requesterUsername})`
         : '';
-      preview += ` · 👤 @${gitlabUsername}${assignmentNote}`;
+      preview += `  ·  👤 @${gitlabUsername}${assignmentNote}`;
     }
     if (dueDate) {
-      preview += ` · 📅 ${dueDate}`;
+      preview += `  ·  📅 ${dueDate}`;
     }
-    preview += `\n\n---`;
     
     // Encode issue data for confirmation button
     console.log(`[DPA Workflow] ============================================`);
@@ -653,7 +660,7 @@ ASSIGNEE: <username or "none">`;
       // LLM parsing failed - return user-friendly error
       console.error(`[DPA Workflow] GitLab create parsing failed: ${error.message}`);
       return {
-        result: `## ❌ Parse Failed\n\n---\n\n${error.message}\n\n---\n\n💡 Try: "create issue: [title], priority 2, ddl next wednesday"`,
+        result: `❌ **Parse Failed**\n\n${error.message}\n\n💡 Try: \`create issue: [title], priority 2, ddl next wednesday\``,
         intent: "gitlab_create" as const,
       };
     }
@@ -730,23 +737,23 @@ const executeGitLabListStep = createStep({
         }
         
         // Build clean markdown list
-        let response = `## ${scope}${itemType}${stateLabel}\n\n---\n\n`;
+        let response = `📋 **${scope}${itemType}${stateLabel}**\n\n`;
         
         if (items.length === 0) {
           response += `No ${itemType.toLowerCase()} found.`;
         } else {
           for (const item of items) {
-            const labelsStr = item.labels?.length ? ` \`${item.labels.join(', ')}\`` : '';
-            response += `[**#${item.iid}**](${item.web_url}) ${item.title}${labelsStr}\n\n`;
+            const labelsStr = item.labels?.length ? `  \`${item.labels.join(', ')}\`` : '';
+            response += `• [#${item.iid}](${item.web_url}) ${item.title}${labelsStr}\n`;
           }
         }
         
         // Add linkage status and hint (only for issues, not MRs)
         if (!isMR) {
           if (linkedIssue) {
-            response += `---\n🔗 *Thread linked to #${linkedIssue.issueIid}*`;
+            response += `\n🔗 *Thread linked to #${linkedIssue.issueIid}*`;
           } else if (items.length > 0) {
-            response += `---\n💡 Say "link to #123" to track an issue in this thread`;
+            response += `\n💡 Say \`link to #123\` to track an issue`;
           }
         }
         
@@ -756,13 +763,13 @@ const executeGitLabListStep = createStep({
         };
       } else {
         return {
-          result: `## ❌ List Failed\n\n---\n\n${result.error}`,
+          result: `❌ **List Failed**\n\n${result.error}`,
           intent: "gitlab_list" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        result: `❌ **GitLab Error**\n\n${error.message}`,
         intent: "gitlab_list" as const,
       };
     }
@@ -796,15 +803,15 @@ const executeGitLabThreadUpdateStep = createStep({
     
     if (!linkedIssue) {
       return {
-        result: `## ❌ No Linked Issue\n\n---\n\n💡 Link this thread first: "link to #123"`,
+        result: `❌ **No Linked Issue**\n\n💡 Link this thread first: \`link to #123\``,
         intent: "gitlab_thread_update" as const,
       };
     }
     
     try {
-      // Format the comment with user attribution
-      const userMention = userId ? `@${userId}` : "Feishu user";
-      const comment = `**[Feishu Thread Update from ${userMention}]**\n\n${query}`;
+      // Format the comment with user attribution (Mandarin headers)
+      const userMention = userId ? `@${userId}` : "飞书用户";
+      const comment = `**[飞书消息同步 - 来自 ${userMention}]**\n\n${query}`;
       
       // Escape quotes for shell command
       const escapedComment = comment.replace(/"/g, '\\"');
@@ -814,18 +821,18 @@ const executeGitLabThreadUpdateStep = createStep({
       
       if (result.success) {
         return {
-          result: `## ✅ Note Added\n\n---\n\n🔗 [Issue #${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n> ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`,
+          result: `✅ **Note Added** → [#${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n> ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`,
           intent: "gitlab_thread_update" as const,
         };
       } else {
         return {
-          result: `## ❌ Failed to Add Note\n\n---\n\nIssue #${linkedIssue.issueIid}\n\n${result.error}`,
+          result: `❌ **Failed to Add Note**\n\nIssue #${linkedIssue.issueIid}\n\n${result.error}`,
           intent: "gitlab_thread_update" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        result: `❌ **GitLab Error**\n\n${error.message}`,
         intent: "gitlab_thread_update" as const,
       };
     }
@@ -860,7 +867,7 @@ const executeGitLabRelinkStep = createStep({
     // Check if already linked
     if (linkedIssue) {
       return {
-        result: `## ⚠️ Already Linked\n\n---\n\n🔗 [Issue #${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n---\n\n💡 To link to a different issue, start a new thread.`,
+        result: `⚠️ **Already Linked** → [#${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n💡 To link to a different issue, start a new thread.`,
         intent: "gitlab_relink" as const,
       };
     }
@@ -869,14 +876,14 @@ const executeGitLabRelinkStep = createStep({
     const issueIid = params?.issueIid ? parseInt(params.issueIid, 10) : null;
     if (!issueIid) {
       return {
-        result: `## ❌ Missing Issue Number\n\n---\n\n💡 Example: "link to #123" or "跟踪issue 456"`,
+        result: `❌ **Missing Issue Number**\n\n💡 Example: \`link to #123\` or \`跟踪issue 456\``,
         intent: "gitlab_relink" as const,
       };
     }
     
     if (!chatId || !rootId) {
       return {
-        result: `## ❌ Cannot Link\n\n---\n\nMissing thread context`,
+        result: `❌ **Cannot Link**\n\nMissing thread context`,
         intent: "gitlab_relink" as const,
       };
     }
@@ -888,7 +895,7 @@ const executeGitLabRelinkStep = createStep({
       
       if (!result.success) {
         return {
-          result: `## ❌ Issue Not Found\n\n---\n\nIssue #${issueIid} not found in dpa/dpa-mom/task\n\n${result.error}`,
+          result: `❌ **Issue Not Found**\n\nIssue #${issueIid} not found in \`dpa/dpa-mom/task\`\n\n${result.error}`,
           intent: "gitlab_relink" as const,
         };
       }
@@ -918,18 +925,18 @@ const executeGitLabRelinkStep = createStep({
       
       if (mappingResult.success) {
         return {
-          result: `## ✅ Thread Linked\n\n---\n\n🔗 [Issue #${issueIid}](${issueUrl})\n\n---\n\n💡 Future replies will auto-sync to GitLab as comments.`,
+          result: `✅ **Thread Linked** → [#${issueIid}](${issueUrl})\n\n💡 Future replies will auto-sync to GitLab as comments.`,
           intent: "gitlab_relink" as const,
         };
       } else {
         return {
-          result: `## ❌ Link Failed\n\n---\n\n${mappingResult.error}`,
+          result: `❌ **Link Failed**\n\n${mappingResult.error}`,
           intent: "gitlab_relink" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        result: `❌ **GitLab Error**\n\n${error.message}`,
         intent: "gitlab_relink" as const,
       };
     }
@@ -964,7 +971,7 @@ const executeGitLabSummarizeStep = createStep({
     const issueIid = params?.issueIid ? parseInt(params.issueIid, 10) : null;
     if (!issueIid) {
       return {
-        result: `## ❌ Missing Issue Number\n\n---\n\n💡 Example: "summarize #12" or "总结 #123"`,
+        result: `❌ **Missing Issue Number**\n\n💡 Example: \`summarize #12\` or \`总结 #123\``,
         intent: "gitlab_summarize" as const,
       };
     }
@@ -976,7 +983,7 @@ const executeGitLabSummarizeStep = createStep({
       
       if (!result.success) {
         return {
-          result: `## ❌ Issue Not Found\n\n---\n\nIssue #${issueIid} not found\n\n${result.error}`,
+          result: `❌ **Issue Not Found**\n\nIssue #${issueIid} not found\n\n${result.error}`,
           intent: "gitlab_summarize" as const,
         };
       }
@@ -1009,12 +1016,12 @@ IMPORTANT: Respond in ${language}. Be concise but comprehensive.`;
       const issueUrl = `https://git.nevint.com/dpa/dpa-mom/task/-/issues/${issueIid}`;
       
       return {
-        result: `## 📋 Issue #${issueIid} Summary\n\n---\n\n${summary}\n\n---\n\n🔗 [View Full Issue](${issueUrl})`,
+        result: `📋 **Issue #${issueIid} Summary**\n\n${summary}\n\n🔗 [View Full Issue](${issueUrl})`,
         intent: "gitlab_summarize" as const,
       };
     } catch (error: any) {
       return {
-        result: `## ❌ Summary Failed\n\n---\n\n${error.message}`,
+        result: `❌ **Summary Failed**\n\n${error.message}`,
         intent: "gitlab_summarize" as const,
       };
     }
@@ -1049,7 +1056,7 @@ const executeGitLabCloseStep = createStep({
     const issueIid = params?.issueIid ? parseInt(params.issueIid, 10) : null;
     if (!issueIid) {
       return {
-        result: `## ❌ Missing Issue Number\n\n---\n\n💡 Example: "close #12 delivered dashboard at superset.nevint.com/dash/123"`,
+        result: `❌ **Missing Issue Number**\n\n💡 Example: \`close #12 delivered dashboard at superset.nevint.com/dash/123\``,
         intent: "gitlab_close" as const,
       };
     }
@@ -1072,7 +1079,7 @@ const executeGitLabCloseStep = createStep({
       // Validate: URL is required to close an issue
       if (!extractedUrl) {
         return {
-          result: `## ❌ Deliverable URL Required\n\n---\n\nTo close an issue, you must provide the deliverable URL.\n\n---\n\n💡 Example:\n- "close #${issueIid} delivered dashboard at https://superset.nevint.com/dashboard/123"\n- "完成 #${issueIid} report https://confluence.nevint.com/pages/456"`,
+          result: `❌ **Deliverable URL Required**\n\nTo close an issue, you must provide the deliverable URL.\n\n💡 Example:\n• \`close #${issueIid} delivered dashboard at https://superset.nevint.com/dashboard/123\`\n• \`完成 #${issueIid} report https://confluence.nevint.com/pages/456\``,
           intent: "gitlab_close" as const,
         };
       }
@@ -1081,20 +1088,26 @@ const executeGitLabCloseStep = createStep({
       const gitlabUsername = userId ? feishuIdToEmpAccount(userId) : null;
       const closedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
       
-      // Build deliverable comment
+      // Build deliverable comment (Mandarin labels, keep URLs and @mentions as-is)
       let commentParts: string[] = [];
-      commentParts.push(`**[Issue Closed via Feishu Bot]**`);
+      commentParts.push(`**[通过飞书机器人关闭]**`);
       commentParts.push(``);
       if (assetType) {
-        commentParts.push(`**Asset Type**: ${assetType}`);
+        // Map asset type to Chinese
+        const assetTypeZh: Record<string, string> = {
+          dashboard: "仪表盘 (dashboard)",
+          report: "报表 (report)",
+          table: "数据表 (table)",
+        };
+        commentParts.push(`**交付物类型**: ${assetTypeZh[assetType] || assetType}`);
       }
       if (extractedUrl) {
-        commentParts.push(`**Deliverable**: ${extractedUrl}`);
+        commentParts.push(`**交付物链接**: ${extractedUrl}`);
       }
       if (gitlabUsername) {
-        commentParts.push(`**Closed by**: @${gitlabUsername}`);
+        commentParts.push(`**关闭人**: @${gitlabUsername}`);
       }
-      commentParts.push(`**Closed at**: ${closedAt}`);
+      commentParts.push(`**关闭时间**: ${closedAt}`);
       
       const comment = commentParts.join('\n');
       const escapedComment = comment.replace(/"/g, '\\"');
@@ -1125,14 +1138,14 @@ const executeGitLabCloseStep = createStep({
       if (closeResult.success) {
         const issueUrl = `https://git.nevint.com/dpa/dpa-mom/task/-/issues/${issueIid}`;
         
-        let successMsg = `## ✅ Issue #${issueIid} Closed\n\n---\n\n`;
+        let successMsg = `✅ **Issue #${issueIid} Closed**\n\n`;
         if (assetType) {
-          successMsg += `🏷️ **Asset**: ${assetType}\n`;
+          successMsg += `🏷️ Asset: \`${assetType}\`\n`;
         }
         if (extractedUrl) {
-          successMsg += `📦 **Deliverable**: ${extractedUrl}\n`;
+          successMsg += `📦 Deliverable: ${extractedUrl}\n`;
         }
-        successMsg += `\n---\n\n🔗 [View Issue](${issueUrl})`;
+        successMsg += `\n🔗 [View Issue](${issueUrl})`;
         
         return {
           result: successMsg,
@@ -1140,13 +1153,13 @@ const executeGitLabCloseStep = createStep({
         };
       } else {
         return {
-          result: `## ❌ Failed to Close Issue\n\n---\n\nIssue #${issueIid}\n\n${closeResult.error}`,
+          result: `❌ **Failed to Close Issue**\n\nIssue #${issueIid}\n\n${closeResult.error}`,
           intent: "gitlab_close" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        result: `❌ **GitLab Error**\n\n${error.message}`,
         intent: "gitlab_close" as const,
       };
     }
@@ -1180,14 +1193,14 @@ const executeGitLabAssignStep = createStep({
     
     if (!linkedIssue) {
       return {
-        result: `## ❌ No Linked Issue\n\n---\n\nThis thread is not linked to a GitLab issue.\n\n💡 First link a thread: "link to #123"`,
+        result: `❌ **No Linked Issue**\n\nThis thread is not linked to a GitLab issue.\n\n💡 First link a thread: \`link to #123\``,
         intent: "gitlab_assign" as const,
       };
     }
     
     if (!userId) {
       return {
-        result: `## ❌ Unknown User\n\n---\n\nCouldn't identify your user ID for assignment.`,
+        result: `❌ **Unknown User**\n\nCouldn't identify your user ID for assignment.`,
         intent: "gitlab_assign" as const,
       };
     }
@@ -1198,7 +1211,7 @@ const executeGitLabAssignStep = createStep({
       
       if (!gitlabUsername) {
         return {
-          result: `## ❌ User Not Mapped\n\n---\n\nCouldn't map Feishu user "${userId}" to GitLab username.\n\n💡 Contact admin to add user mapping.`,
+          result: `❌ **User Not Mapped**\n\nCouldn't map Feishu user \`${userId}\` to GitLab username.\n\n💡 Contact admin to add user mapping.`,
           intent: "gitlab_assign" as const,
         };
       }
@@ -1211,24 +1224,24 @@ const executeGitLabAssignStep = createStep({
       
       if (!assignResult.success) {
         return {
-          result: `## ❌ Assignment Failed\n\n---\n\nIssue #${linkedIssue.issueIid}\n\n${assignResult.error}`,
+          result: `❌ **Assignment Failed**\n\nIssue #${linkedIssue.issueIid}\n\n${assignResult.error}`,
           intent: "gitlab_assign" as const,
         };
       }
       
-      // Add comment noting the assignment
+      // Add comment noting the assignment (Mandarin text)
       const assignedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
-      const comment = `**[Self-Assigned via Feishu Bot]**\\n\\n@${gitlabUsername} assigned themselves to this issue.\\n**Time**: ${assignedAt}`;
+      const comment = `**[通过飞书机器人自我指派]**\\n\\n@${gitlabUsername} 认领了此任务。\\n**时间**: ${assignedAt}`;
       const noteCommand = `issue note ${linkedIssue.issueIid} -m "${comment}" -R ${linkedIssue.project}`;
       await (gitlabTool.execute as any)({ command: noteCommand });
       
       return {
-        result: `## ✅ Assigned to @${gitlabUsername}\n\n---\n\n🔗 [Issue #${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n---\n\n💡 You can now update progress by replying in this thread.`,
+        result: `✅ **Assigned to @${gitlabUsername}** → [#${linkedIssue.issueIid}](${linkedIssue.issueUrl})\n\n💡 You can now update progress by replying in this thread.`,
         intent: "gitlab_assign" as const,
       };
     } catch (error: any) {
       return {
-        result: `## ❌ GitLab Error\n\n---\n\n${error.message}`,
+        result: `❌ **GitLab Error**\n\n${error.message}`,
         intent: "gitlab_assign" as const,
       };
     }
@@ -1261,7 +1274,7 @@ const executeChatSearchStep = createStep({
     
     if (!chatId) {
       return {
-        result: "❌ 无法搜索聊天记录：未提供聊天ID\n\nPlease specify which chat to search.",
+        result: "❌ **Cannot Search**\n\n无法搜索聊天记录：未提供聊天ID",
         intent: "chat_search" as const,
       };
     }
@@ -1282,28 +1295,28 @@ const executeChatSearchStep = createStep({
         
         if (filtered.length > 0) {
           const summary = filtered.slice(0, 10).map((msg: any) => 
-            `- **${msg.sender?.name || 'User'}**: ${(msg.content || "").substring(0, 100)}...`
+            `• **${msg.sender?.name || 'User'}**: ${(msg.content || "").substring(0, 100)}...`
           ).join("\n");
           
           return {
-            result: `## 搜索结果 (${filtered.length} 条消息)\n\n${summary}`,
+            result: `🔍 **搜索结果** (${filtered.length} 条消息)\n\n${summary}`,
             intent: "chat_search" as const,
           };
         } else {
           return {
-            result: `未找到相关消息。已搜索 ${result.messageCount} 条消息。`,
+            result: `🔍 未找到相关消息 (已搜索 ${result.messageCount} 条)`,
             intent: "chat_search" as const,
           };
         }
       } else {
         return {
-          result: `❌ 搜索失败: ${result.error || "未知错误"}`,
+          result: `❌ **搜索失败**\n\n${result.error || "未知错误"}`,
           intent: "chat_search" as const,
         };
       }
     } catch (error: any) {
       return {
-        result: `❌ 搜索错误: ${error.message}`,
+        result: `❌ **搜索错误**\n\n${error.message}`,
         intent: "chat_search" as const,
       };
     }
@@ -1341,7 +1354,7 @@ const executeDocReadStep = createStep({
     
     if (!docUrl) {
       return {
-        result: "❌ 未找到文档链接\n\n请提供飞书文档链接（支持 docs/docx/wiki/sheets/bitable）。",
+        result: "❌ **未找到文档链接**\n\n请提供飞书文档链接（支持 docs/docx/wiki/sheets/bitable）",
         intent: "doc_read" as const,
       };
     }
@@ -1362,19 +1375,19 @@ const executeDocReadStep = createStep({
         
         // Truncate if too long
         const displayContent = content.length > 2000 
-          ? content.substring(0, 2000) + "...\n\n(内容已截断)"
+          ? content.substring(0, 2000) + "...\n\n*(内容已截断)*"
           : content;
         
         // Add persistence status
-        const persistStatus = result.persisted ? "💾 已保存" : "";
+        const persistStatus = result.persisted ? "  💾" : "";
         
         return {
-          result: `## 📄 ${title} ${persistStatus}\n\n${displayContent}`,
+          result: `📄 **${title}**${persistStatus}\n\n${displayContent}`,
           intent: "doc_read" as const,
         };
       } else {
         // Include auth prompt if needed
-        let errorMsg = `❌ 读取文档失败: ${result.error}`;
+        let errorMsg = `❌ **读取文档失败**\n\n${result.error}`;
         if (result.needsAuth && result.authUrl) {
           errorMsg += `\n\n👉 [点击授权后重试](${result.authUrl})`;
         }
@@ -1385,7 +1398,7 @@ const executeDocReadStep = createStep({
       }
     } catch (error: any) {
       return {
-        result: `❌ 文档错误: ${error.message}`,
+        result: `❌ **文档错误**\n\n${error.message}`,
         intent: "doc_read" as const,
       };
     }
@@ -1473,7 +1486,6 @@ const formatResponseStep = createStep({
     needsConfirmation: z.boolean().optional(),
     confirmationData: z.string().optional(),
     skipWorkflow: z.boolean().optional(),
-    showFollowups: z.boolean().optional(),
   }),
   execute: async ({ inputData }) => {
     const { result, intent, needsConfirmation, confirmationData, skipWorkflow } = inputData;
@@ -1485,20 +1497,16 @@ const formatResponseStep = createStep({
         response: "__SKIP_WORKFLOW__",
         intent: "general_chat",
         skipWorkflow: true,
-        showFollowups: true, // Skip workflow = manager handles = show suggestions
       };
     }
     
     console.log(`[DPA Workflow] Formatting response for intent: ${intent}, needsConfirmation: ${needsConfirmation}`);
     
-    // Response is already formatted by execution steps
-    // DPA workflow = deterministic = no suggestions needed
     return {
       response: result,
       intent,
       needsConfirmation,
       confirmationData,
-      showFollowups: false, // Deterministic workflow = no suggestions
     };
   }
 });
