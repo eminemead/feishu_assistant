@@ -1,121 +1,84 @@
 # Agent Architecture
 
-This directory contains the multi-agent architecture implementation for the Feishu assistant using [`@ai-sdk-tools/agents`](https://ai-sdk-tools.dev/docs/agents).
+This directory contains the unified DPA Mom agent implementation using [Mastra](https://mastra.ai) framework.
 
 > 📚 **Documentation**: For detailed architecture documentation, see [docs/architecture/](../../docs/architecture/)
 
-## Architecture Overview
+## Overview
 
-The system follows a **Manager Agent → Specialist Agent → Tool** pattern using the `@ai-sdk-tools/agents` library:
+The system uses a **Single Unified Agent + Workflows** pattern:
 
-1. **Manager Agent** (`manager-agent.ts`): 
-   - **ONLY responsible for orchestration/routing**
-   - Uses `Agent` class with `handoffs` array to route queries to specialist agents
-   - Routes based on `matchOn` patterns (keywords) defined in specialist agents
-   - Falls back to web search tool if no specialist matches
-   - Does NOT have access to specialist tools
-2. **Specialist Agents**: 
-   - Each uses the `Agent` class from `@ai-sdk-tools/agents`
-   - Handle specific domains (OKR, alignment, P&L, DPA PM)
-   - Use `matchOn` for keyword-based routing
-   - Each agent has its own tools scoped to that agent only
-3. **Tools**: 
-   - Specialized functions available only to their dedicated specialist agent
-   - Example: `mgr_okr_review` tool is only available to the OKR Reviewer agent
+- **DPA Mom Agent** (`dpa-mom-agent.ts`): Single agent with all tools attached
+- **Workflows** (`../workflows/`): Deterministic multi-step operations via `execute_workflow` tool
 
-## Agents
+## DPA Mom Agent
 
-### Manager Agent
-- **File**: `manager-agent.ts`
-- **Purpose**: Routes user queries to appropriate specialist agents
-- **Routing Strategy**: 
-  - First tries keyword-based matching
-  - Falls back to LLM-based semantic routing
-  - If no match, uses web search or asks for clarification
+**File**: `dpa-mom-agent.ts`
 
-### OKR Reviewer Agent
-- **File**: `okr-reviewer-agent.ts`
-- **Purpose**: Analyzes OKR metrics and manager performance
-- **Tools**:
-  - `mgr_okr_review`: Analyzes `has_metric_percentage` per city company from DuckDB
-- **Keywords**: okr, objective, key result, metrics, manager review, has_metric, 覆盖率, 指标
+The caring chief-of-staff for the DPA (Data Product & Analytics) team.
 
-### Alignment Agent
-- **File**: `alignment-agent.ts`
-- **Status**: Placeholder (pending specification)
-- **Keywords**: alignment, 对齐, 目标对齐
+### Capabilities
+- **Team Coordination**: GitLab issue management, task tracking
+- **OKR Analysis**: Metrics review, visualization, trend analysis
+- **Document Operations**: Feishu docs reading, chat history search
+- **Data Operations**: Chart generation, workflow execution
 
-### P&L Agent
-- **File**: `pnl-agent.ts`
-- **Status**: Placeholder (pending specification)
-- **Keywords**: pnl, profit, loss, 损益, 利润, 亏损
+### Tools Available
 
-### DPA Mom Agent
-- **File**: `dpa-mom-agent.ts`
-- **Status**: Active
-- **Role**: Chief-of-staff and executive assistant to Ian for the DPA team
-- **Keywords**: dpa, data team, ae, da, dpa_mom, mom
+| Tool | Purpose |
+|------|---------|
+| `gitlab_cli` | GitLab operations via glab CLI |
+| `feishu_chat_history` | Search Feishu group chat histories |
+| `feishu_docs` | Read Feishu documents |
+| `mgr_okr_review` | Fetch OKR metrics data |
+| `chart_generation` | Generate Mermaid/Vega-Lite charts |
+| `okr_visualization` | Generate OKR heatmaps |
+| `okr_chart_streaming` | Comprehensive OKR analysis with charts |
+| `execute_workflow` | Execute deterministic workflows |
+
+### Workflows (via `execute_workflow`)
+
+| Workflow ID | Purpose |
+|-------------|---------|
+| `dpa-assistant` | GitLab issue creation with confirmation |
+| `okr-analysis` | Complete OKR analysis pipeline |
+| `document-tracking` | Document change monitoring |
 
 ## Usage
 
-The manager agent is automatically used by `generate-response.ts` when processing user messages. Specialist agents are invoked based on query analysis.
+The agent is used by `generate-response.ts`:
 
-## Adding New Agents
-
-1. Create a new agent file using the `Agent` class from `@ai-sdk-tools/agents`
-2. Define `matchOn` patterns for keyword-based routing
-3. Add the agent to the `handoffs` array in `manager-agent.ts`
-4. Define any tools the agent needs using the `tool()` function from AI SDK
-
-Example:
 ```typescript
-import { Agent } from "@ai-sdk-tools/agents";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { dpaMomAgent } from "./agents/dpa-mom-agent";
 
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-
-export const myAgent = new Agent({
-  name: "my_agent",
-  model: openrouter("kwaipilot/kat-coder-pro:free"),
-  instructions: "Agent instructions here...",
-  matchOn: ["keyword1", "keyword2"], // Keywords for routing
-  tools: {
-    // Tools specific to this agent
-  },
-});
+const response = await dpaMomAgent(messages, updateStatus, chatId, rootId, userId);
 ```
 
-## Tools
+## Key Exports
 
-Tools are defined using the AI SDK v5 `tool()` function with:
-- `description`: What the tool does
-- `parameters`: Zod schema defining input parameters (wrapped with `zodSchema()`)
-- `execute`: Async function that performs the tool's action
-
-Example:
 ```typescript
-import { tool, zodSchema } from "ai";
-import { z } from "zod";
+// Main agent function
+export async function dpaMomAgent(
+  messages: CoreMessage[],
+  updateStatus?: (status: string) => void,
+  chatId?: string,
+  rootId?: string,
+  userId?: string,
+): Promise<string | DpaMomResult>
 
-export const myTool = tool({
-  description: "Tool description",
-  parameters: zodSchema(z.object({
-    param: z.string().describe("Parameter description"),
-  })),
-  execute: async ({ param }: { param: string }) => {
-    // Tool implementation
-    return { result: "..." };
-  },
-});
+// Get agent instance (for Mastra registration)
+export function getDpaMomAgent(): Agent
+
+// Result type
+export interface DpaMomResult {
+  text: string;
+  needsConfirmation?: boolean;
+  confirmationData?: string;
+  reasoning?: string;
+  linkedIssue?: LinkedIssueResult;
+}
 ```
 
-## Benefits of @ai-sdk-tools/agents
+## Historical Note
 
-- **Built-in handoff management**: Automatic routing between agents
-- **Pattern-based routing**: `matchOn` for efficient keyword matching
-- **Event handling**: Track agent handoffs and execution
-- **Memory integration**: Can add `@ai-sdk-tools/memory` for persistent context
-- **Provider flexibility**: Use different models for different agents
-
+Previously used a multi-agent Manager → Specialist routing pattern. Consolidated into single unified agent in Jan 2026 for simplicity and better LLM-based tool selection.

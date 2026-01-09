@@ -1,30 +1,31 @@
 # Feishu AI Assistant
 
-An AI-powered multi-agent chatbot for Feishu/Lark built with [Mastra](https://mastra.ai) and [Hono](https://hono.dev/).
+An AI-powered Feishu/Lark assistant built with [Mastra](https://mastra.ai) and [Hono](https://hono.dev/), using a single unified agent (`dpa_mom`) with tools and workflows.
 
 ## Features
 
 - Integrates with [Feishu/Lark Open Platform](https://open.larksuite.com) for seamless communication
-- Multi-agent orchestration powered by Mastra framework
+- Single Mastra agent (`dpa_mom`) orchestrating tools and workflows
 - Works with direct messages and group mentions
 - Persistent conversation memory via Supabase
-- Built-in tools for enhanced capabilities:
-  - Real-time weather lookup
-  - Web search (powered by [Exa](https://exa.ai))
-  - Document RAG with pgvector
+- Built-in tools for DPA team operations:
+  - GitLab integration (issues, MRs, CI/CD)
+  - Feishu chat history search
+  - Feishu document reading
+  - OKR metrics analysis and visualization
 - Streaming responses via Feishu interactive cards
 - Observability via Arize Phoenix
-- Multi-agent system with specialist agents for different domains (OKR, P&L, Alignment, DPA MoM)
+- Unified agent with tools for OKR analysis, GitLab workflows, Feishu docs/chat search, and document tracking
 
 ## Documentation
 
 📚 **Full documentation** is available in the [`docs/`](./docs/) directory:
 
 - [Setup & Configuration](./docs/setup/) - DSPyground setup, observability tools
-- [Architecture](./docs/architecture/) - Agent architecture, routing logic, handoff system
+- [Architecture](./docs/architecture/) - Unified agent architecture, toolset, and workflow execution
 - [Implementation](./docs/implementation/) - OKR tools, visualization, Chinese support
 - [Testing](./docs/testing/) - Testing guides and quick start
-- [Verification](./docs/verification/) - API verification and handoff verification
+- [Verification](./docs/verification/) - API and workflow verification
 
 See [docs/README.md](./docs/README.md) for the complete documentation index.
 
@@ -244,39 +245,54 @@ The bot maintains context within threads, so it can follow along with the conver
    - Example: "Search for the latest news about AI technology"
    - You can also specify a domain: "Search for the latest sports news on bbc.com"
 
-### Multi-Agent Architecture
+### Unified Agent Architecture
 
-The chatbot uses a **Manager Agent → Specialist Agent → Tool** architecture:
+The chatbot uses a **single unified Mastra agent (`dpa_mom`) with tools and workflows**:
 
-- **Manager Agent**: Orchestrates specialist agents and routes queries based on keywords or semantic meaning
-- **Specialist Agents**:
-  - **OKR Reviewer**: Analyzes OKR metrics and manager performance (includes `mgr_okr_review` tool)
-  - **Alignment Agent**: Alignment tracking (placeholder)
-  - **P&L Agent**: Profit & Loss analysis (placeholder)
-  - **DPA PM Agent**: Product management tasks (placeholder)
+- **DPA Mom Agent** (`lib/agents/dpa-mom-agent.ts`)
+  - The caring chief-of-staff for the DPA (Data Product & Analytics) team
+  - Single agent with all tools attached
+  - Uses Mastra memory for conversation persistence
+  - Streams responses via Feishu interactive cards
+
+- **Tools** (attached to `dpa_mom`):
+  - `gitlab_cli`: GitLab operations (issues, MRs, CI/CD) via `glab` CLI
+  - `feishu_chat_history`: Search Feishu group chat histories
+  - `feishu_docs`: Read Feishu documents (Docs, Sheets, Bitable)
+  - `mgr_okr_review`: Fetch OKR metrics data
+  - `chart_generation`: Generate Mermaid/Vega-Lite charts
+  - `okr_visualization`: Generate OKR heatmap visualizations
+  - `okr_chart_streaming`: Generate comprehensive OKR analysis with charts
+  - `execute_workflow`: Run deterministic multi-step workflows
+
+- **Workflows** (invoked via `execute_workflow`):
+  - `dpa-assistant`: GitLab issue workflows with confirmation buttons
+  - `okr-analysis`: Complete OKR analysis with data + charts + insights
+  - `document-tracking`: Set up document change tracking
 
 See `lib/agents/README.md` for detailed documentation on the agent architecture.
 
 ### Extending with New Tools
 
-Tools are defined within specialist agents using Mastra's `createTool()` and automatically made available through the manager agent.
+Tools are attached directly to the unified `dpa_mom` agent using Mastra's `createTool()`. For multi-step, deterministic flows, expose them via the `execute_workflow` tool and register a Mastra workflow.
 
 To add a new tool:
-1. Create or update a specialist agent in `lib/agents/`
-2. Define the tool using Mastra's `createTool()` with Zod schema
-3. Register the tool in the agent configuration
+1. Implement the tool in `lib/tools/` using Mastra's `createTool()` (with Zod schema for inputs)
+2. Wire the tool into `lib/agents/dpa-mom-agent.ts` by adding it to the `tools` map
+3. (Optional) Update the system prompt if needed to describe the new capability
+4. (Optional) For deterministic multi-step operations, create a workflow in `lib/workflows/`
 
-See `lib/agents/README.md` for examples.
+See `lib/agents/README.md` and `lib/tools/` for examples.
 
 ## Architecture
 
 - **Hono** - Fast web framework for the backend
 - **Feishu Node SDK** - Official SDK for Feishu/Lark Open Platform
-- **Mastra** - Multi-agent orchestration framework with memory & observability
+- **Mastra** - Agent and workflow framework with memory & observability
 - **Supabase** - Persistent memory storage (PostgreSQL + pgvector)
 - **Arize Phoenix** - Observability & tracing for LLM calls
 - **Streaming Cards** - Real-time response updates via Feishu interactive cards
-- **Multi-Agent System** - Manager agent orchestrates specialist agents (OKR, Alignment, P&L, DPA MoM)
+- **Unified Agent** - Single `dpa_mom` agent with tools and workflows (OKR analysis, GitLab, document tracking)
 - **DuckDB** - Database for OKR metrics storage and analysis
 
 ## Troubleshooting

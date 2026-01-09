@@ -1,5 +1,5 @@
 /**
- * Feishu Assistant Multi-Turn Integration Tests
+ * DPA Mom Multi-Turn Integration Tests
  * 
  * Tests that the unified agent handles multi-turn conversations correctly,
  * maintains context across turns, and properly isolates memory between users/chats.
@@ -12,18 +12,18 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { CoreMessage } from "ai";
-import { feishuAssistantAgent, FeishuAssistantResult } from "../../lib/agents/feishu-assistant-agent";
+import { dpaMomAgent, DpaMomResult } from "../../lib/agents/dpa-mom-agent";
 import {
   initializeAgentMemoryContext,
   loadConversationHistory,
 } from "../../lib/agents/memory-integration";
 
 /** Helper to extract text from response */
-function getResponseText(response: string | FeishuAssistantResult): string {
+function getResponseText(response: string | DpaMomResult): string {
   return typeof response === "string" ? response : response.text;
 }
 
-describe("Feishu Assistant - Multi-Turn Integration", () => {
+describe("DPA Mom - Multi-Turn Integration", () => {
   let callCount = 0;
 
   beforeEach(() => {
@@ -55,7 +55,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       console.log(`[Test] Turn 1: "${q1}"`);
       let a1 = "";
       try {
-        const resp1 = await feishuAssistantAgent(messages1, undefined, chatId, rootId, userId);
+        const resp1 = await dpaMomAgent(messages1, undefined, chatId, rootId, userId);
         a1 = getResponseText(resp1);
         expect(a1).toBeDefined();
         expect(a1.length).toBeGreaterThan(0);
@@ -77,7 +77,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       console.log(`[Test] Turn 2: "${q2}"`);
       let a2 = "";
       try {
-        const resp2 = await feishuAssistantAgent(messages2, undefined, chatId, rootId, userId);
+        const resp2 = await dpaMomAgent(messages2, undefined, chatId, rootId, userId);
         a2 = getResponseText(resp2);
         expect(a2).toBeDefined();
         expect(a2.length).toBeGreaterThan(0);
@@ -115,7 +115,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
         const messages: CoreMessage[] = [{ role: "user", content: q }];
 
         try {
-          const resp = await feishuAssistantAgent(
+          const resp = await dpaMomAgent(
             messages,
             undefined,
             chatId,
@@ -164,7 +164,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       // User A queries
       const messagesA: CoreMessage[] = [{ role: "user", content: queryA }];
       try {
-        const respA = await feishuAssistantAgent(
+        const respA = await dpaMomAgent(
           messagesA,
           undefined,
           chatId,
@@ -182,7 +182,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       // User B queries same topic
       const messagesB: CoreMessage[] = [{ role: "user", content: queryB }];
       try {
-        const respB = await feishuAssistantAgent(
+        const respB = await dpaMomAgent(
           messagesB,
           undefined,
           chatId,
@@ -228,7 +228,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       // Query in Chat A
       const messagesA: CoreMessage[] = [{ role: "user", content: query }];
       try {
-        const respA = await feishuAssistantAgent(
+        const respA = await dpaMomAgent(
           messagesA,
           undefined,
           chatIdA,
@@ -246,7 +246,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       // Query in Chat B (should not remember Chat A's conversation)
       const messagesB: CoreMessage[] = [{ role: "user", content: query }];
       try {
-        const respB = await feishuAssistantAgent(
+        const respB = await dpaMomAgent(
           messagesB,
           undefined,
           chatIdB,
@@ -315,7 +315,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
 
       // Should not throw even if memory system has issues
       try {
-        const resp = await feishuAssistantAgent(
+        const resp = await dpaMomAgent(
           messages,
           undefined,
           chatId,
@@ -362,7 +362,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       const promises = queries.map(async (q) => {
         const messages: CoreMessage[] = [{ role: "user", content: q.q }];
         try {
-          const resp = await feishuAssistantAgent(
+          const resp = await dpaMomAgent(
             messages,
             undefined,
             q.chat,
@@ -416,7 +416,7 @@ describe("Feishu Assistant - Multi-Turn Integration", () => {
       ];
 
       try {
-        const resp = await feishuAssistantAgent(
+        const resp = await dpaMomAgent(
           messages,
           undefined,
           feishuContext.chatId,

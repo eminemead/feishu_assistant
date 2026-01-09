@@ -1,5 +1,5 @@
 import { CoreMessage } from "ai";
-import { feishuAssistantAgent, FeishuAssistantResult } from "./agents/feishu-assistant-agent";
+import { dpaMomAgent, DpaMomResult } from "./agents/dpa-mom-agent";
 
 /**
  * Linked GitLab issue info for thread-to-issue mapping
@@ -25,7 +25,7 @@ export interface GenerateResponseResult {
 }
 
 /**
- * Generate response using unified Feishu Assistant agent
+ * Generate response using DPA Mom agent
  * 
  * Single agent with all tools - handles tool selection itself.
  * Uses execute_workflow tool for deterministic multi-step operations.
@@ -44,5 +44,5 @@ export const generateResponse = async (
   rootId?: string,
   userId?: string,
 ): Promise<string | GenerateResponseResult> => {
-  return await feishuAssistantAgent(messages, updateStatus, chatId, rootId, userId);
+  return await dpaMomAgent(messages, updateStatus, chatId, rootId, userId);
 };

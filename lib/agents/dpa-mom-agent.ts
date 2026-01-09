@@ -1,133 +1,191 @@
 /**
- * DPA Mom Agent - Mastra Implementation
+ * DPA Mom Agent - Unified Single Agent Architecture
  * 
- * Replaces the AI SDK Tools implementation with Mastra framework.
- * Specialized in DPA team support as chief-of-staff/executive assistant to Ian.
+ * The caring chief-of-staff for the DPA (Data Product & Analytics) team.
+ * Single agent with all tools; uses execute_workflow for deterministic flows.
  * 
- * IDENTITY & SCOPE:
- * - DPA = Data Product & Analytics team
- * - Ian is the dad, dpa_mom takes care of every team member with love and care
- * - Role: Chief-of-staff or executive assistant to Ian
- * - Scope: Comprehensive support for team operations, coordination, and care
- * 
- * KEY CHANGES FROM AI SDK TOOLS:
- * 1. Uses Mastra's Agent instead of @ai-sdk-tools/agents
- * 2. Native model fallback array instead of dual agents
- * 3. Same streaming API (textStream)
- * 4. Custom execution context via options
+ * KEY DESIGN:
+ * - Single agent with all tools attached
+ * - execute_workflow tool for deterministic multi-step flows
+ * - Native Mastra memory for conversation persistence
+ * - Streaming with batched updates for Feishu cards
  */
 
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
-import { getMastraModel } from "../shared/model-router";
 import { devtoolsTracker } from "../devtools-integration";
-import { getSupabaseUserId } from "../auth/feishu-supabase-id";
+import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
+import { getMastraModelSingle } from "../shared/model-router";
+import { hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
+import { healthMonitor } from "../health-monitor";
+import { getLinkedIssue, IssueThreadMapping } from "../services/issue-thread-mapping-service";
+
+// Import tool factories
 import { 
   createGitLabCliTool, 
   createFeishuChatHistoryTool, 
-  createFeishuDocsTool 
+  createFeishuDocsTool,
+  createOkrReviewTool,
+  chartGenerationTool,
 } from "../tools";
-import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
-
-/**
- * Get query text from messages
- */
-function getQueryText(messages: CoreMessage[]): string {
-  const lastMessage = messages[messages.length - 1];
-  if (lastMessage && lastMessage.role === "user" && typeof lastMessage.content === "string") {
-    return lastMessage.content;
-  }
-  return "";
-}
+import { okrVisualizationTool } from "./okr-visualization-tool";
+import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
+import { createExecuteWorkflowTool } from "../tools/execute-workflow-tool";
 
 // Lazy-initialized agent
-let dpaMomAgentInstance: Agent | null = null;
+let dpaMomInstance: Agent | null = null;
 let isInitializing = false;
 
 /**
- * Initialize the DPA Mom agent (lazy - called on first request)
+ * Get system prompt for unified agent
+ */
+function getSystemPrompt(): string {
+  return `You are a Feishu/Lark AI assistant that helps users with OKR analysis, team coordination, and data operations. Most queries will be in Chinese (中文).
+
+你是Feishu/Lark AI助手，帮助用户进行OKR分析、团队协调和数据操作。大多数查询将是中文。
+
+IDENTITY:
+- You are dpa_mom, the caring chief-of-staff for the DPA (Data Product & Analytics) team
+- Ian is the team lead; you support both Ian and every team member
+- Be warm, professional, and proactive in helping the team
+
+AVAILABLE TOOLS:
+1. **gitlab_cli**: GitLab operations (issues, MRs, CI/CD) via glab CLI
+2. **feishu_chat_history**: Search Feishu group chat histories
+3. **feishu_docs**: Read Feishu documents (Docs, Sheets, Bitable)
+4. **mgr_okr_review**: Fetch OKR metrics data (has_metric_percentage per company)
+5. **chart_generation**: Generate Mermaid/Vega-Lite charts
+6. **okr_visualization**: Generate OKR heatmap visualizations
+7. **okr_chart_streaming**: Generate comprehensive OKR analysis with charts
+8. **execute_workflow**: Execute deterministic workflows for multi-step operations
+
+WORKFLOW USAGE (execute_workflow tool):
+Use execute_workflow when you need:
+- **dpa-assistant**: GitLab issue creation with confirmation buttons
+- **okr-analysis**: Complete OKR analysis with data + charts + insights
+- **document-tracking**: Set up document change tracking
+
+DIRECT TOOL USAGE:
+Use tools directly for:
+- Simple GitLab queries (list issues, check MRs)
+- Chat history search
+- Document reading
+- Quick OKR data lookups
+- Single chart generation
+
+OKR ANALYSIS GUIDELINES:
+- Period format: "11月" → pass "11 月" (with space before 月)
+- Always generate at least ONE chart for OKR analysis requests
+- Use okr_chart_streaming for comprehensive analysis with embedded charts
+
+RESPONSE FORMAT:
+- Use Markdown (Lark format) for Feishu cards
+- Do not tag users (不要@用户)
+- Current date: ${new Date().toISOString().split("T")[0]}
+- Be concise but comprehensive`;
+}
+
+/**
+ * Initialize the unified agent (lazy - called on first request)
  */
 function initializeAgent(): void {
-  if (dpaMomAgentInstance || isInitializing) {
+  if (dpaMomInstance || isInitializing) {
     return;
   }
 
   isInitializing = true;
 
-  // Create tool instances for dpa_mom
+  // Log internal model availability
+  if (hasInternalModel()) {
+    console.log(`✅ [DpaMom] Internal fallback model available: ${getInternalModelInfo()}`);
+  }
+
+  // Create tool instances
   const gitlabCliTool = createGitLabCliTool(true);
   const feishuChatHistoryTool = createFeishuChatHistoryTool(true);
   const feishuDocsTool = createFeishuDocsTool(true);
+  const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
+  const executeWorkflowTool = createExecuteWorkflowTool();
 
-  // Create native Mastra memory for this agent
+  // Create native Mastra memory
   const agentMemory = createAgentMemory({
     lastMessages: 20,
     enableWorkingMemory: true,
     enableSemanticRecall: true,
   });
 
-  // Create agent with Mastra framework
-  dpaMomAgentInstance = new Agent({
+  // Single model - Mastra Agent expects single model
+  const model = getMastraModelSingle(true); // requireTools=true
+
+  dpaMomInstance = new Agent({
     id: "dpa_mom",
-    name: "dpa_mom",
+    name: "DPA Mom",
+    instructions: getSystemPrompt(),
+    model,
     memory: agentMemory || undefined,
-    instructions: `You are dpa_mom, the loving and caring chief-of-staff and executive assistant to Ian (the dad) for the DPA (Data Product & Analytics) team. Most user queries will be in Chinese (中文).
-
-你是dpa_mom，是Ian（爸爸）的贴心首席幕僚和执行助理，负责照顾DPA（数据产品与分析）团队的每一位成员。大多数用户查询将是中文。
-
-IDENTITY & ROLE:
-- You are dpa_mom, reflecting love and care for the team
-- Ian is the dad, and you take care of every team member better than the dad
-- Your role is like a chief-of-staff or executive assistant to Ian
-- Your scope is comprehensive: team operations, coordination, support, and care
-
-CORE RESPONSIBILITIES:
-- Executive assistance: Help Ian with strategic planning, coordination, and decision support
-- Team care: Support every DPA team member with their needs, questions, and challenges
-- Operations: Coordinate team activities, track progress, manage information flow
-- Communication: Facilitate clear and effective communication within the team
-- Problem-solving: Proactively identify and address team needs
-
-AVAILABLE TOOLS:
-- gitlab_cli: Access GitLab repository and issue management via glab CLI (issues, MRs, CI/CD, etc.)
-- feishu_chat_history: Access Feishu group chat histories and message threads
-- feishu_docs: Read and access Feishu documents (Docs, Sheets, Bitable)
-
-Use these tools proactively to help the team:
-- Check GitLab issues and merge requests when asked about project status
-- Retrieve chat history to understand context and previous discussions
-- Read Feishu documents to answer questions about team documentation
-
-GUIDELINES:
-- Do not tag users. 不要@用户。
-- Current date is: ${new Date().toISOString().split("T")[0]}
-- Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.
-- Be warm, caring, and professional - embody the "mom" role with love and attention to detail
-- Think comprehensively about team needs and Ian's priorities
-- Always consider the well-being and success of every team member
-- Use tools proactively to gather information before responding`,
-    // Use native Mastra model router with free models only
-    model: getMastraModel(),
-    // Add tools to agent
     tools: {
+      // DPA Mom tools
       gitlab_cli: gitlabCliTool,
       feishu_chat_history: feishuChatHistoryTool,
       feishu_docs: feishuDocsTool,
+      // OKR Reviewer tools
+      mgr_okr_review: mgrOkrReviewTool,
+      chart_generation: chartGenerationTool,
+      okr_visualization: okrVisualizationTool as any,
+      okr_chart_streaming: okrChartStreamingTool,
+      // Workflow execution
+      execute_workflow: executeWorkflowTool,
     },
   });
 
   isInitializing = false;
+  console.log(`✅ [DpaMom] Agent initialized with 8 tools`);
 }
 
 /**
- * Main DPA Mom Agent function - Mastra implementation
+ * Helper: extract query text from messages
+ */
+function getQueryText(messages: CoreMessage[]): string {
+  const lastMessage = messages[messages.length - 1];
+  if (lastMessage && typeof lastMessage.content === "string") {
+    return lastMessage.content;
+  }
+  return "[non-text message]";
+}
+
+/**
+ * Linked issue info for thread-to-issue mapping
+ */
+export interface LinkedIssueResult {
+  chatId: string;
+  rootId: string;
+  project: string;
+  issueIid: number;
+  issueUrl: string;
+  createdBy: string;
+}
+
+/**
+ * Agent result - can include confirmation data and reasoning
+ */
+export interface DpaMomResult {
+  text: string;
+  needsConfirmation?: boolean;
+  confirmationData?: string;
+  reasoning?: string;
+  linkedIssue?: LinkedIssueResult;
+}
+
+/**
+ * DPA Mom Agent
+ * 
+ * Single entry point for all queries. Agent handles tool selection itself.
  * 
  * @param messages - Conversation history
- * @param updateStatus - Optional callback for streaming updates
+ * @param updateStatus - Callback for streaming updates to Feishu card
  * @param chatId - Feishu chat ID
  * @param rootId - Feishu thread root ID
- * @param userId - Feishu user ID
- * @returns Promise<string> - Agent response text
+ * @param userId - Feishu user ID for auth/RLS
  */
 export async function dpaMomAgent(
   messages: CoreMessage[],
@@ -135,107 +193,171 @@ export async function dpaMomAgent(
   chatId?: string,
   rootId?: string,
   userId?: string,
-): Promise<string> {
-  // Lazy initialize agent
+): Promise<string | DpaMomResult> {
+  // Lazy initialize
   initializeAgent();
 
   const query = getQueryText(messages);
   const startTime = Date.now();
-  console.log(`[DPA Mom] Received query: "${query}"`);
+  console.log(`[FeishuAssistant] Query: "${query}"`);
 
-  // Set up memory scoping using Mastra-native helpers
-  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  // Build memory config
   const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
+  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  
+  const memoryConfig = memoryResource && memoryThread ? {
+    resource: memoryResource,
+    thread: {
+      id: memoryThread,
+      metadata: { chatId, rootId, userId },
+      title: `Feishu Chat ${chatId}`,
+    },
+  } : undefined;
 
-  console.log(
-    `[DPA Mom] Memory context: thread=${memoryThread}, resource=${memoryResource}`
-  );
+  if (memoryConfig) {
+    console.log(`✅ [DpaMom] Memory: resource=${memoryResource}, thread=${memoryThread}`);
+  }
 
-  // Batch updates to avoid spamming Feishu
-  const BATCH_DELAY_MS = 1000; // Batch every 1 second for better performance
-  const MIN_CHARS_PER_UPDATE = 50; // Minimum characters to trigger update
-
-  const accumulatedText: string[] = [];
-  let pendingTimeout: NodeJS.Timeout | null = null;
-  let lastUpdateLength = 0;
-
-  const updateCardBatched = async (text: string): Promise<void> => {
-    if (!updateStatus) {
-      return;
+  // Check for linked GitLab issue
+  let linkedIssue: IssueThreadMapping | null = null;
+  if (chatId && rootId) {
+    linkedIssue = await getLinkedIssue(chatId, rootId);
+    if (linkedIssue) {
+      console.log(`[DpaMom] ✅ Thread linked to GitLab #${linkedIssue.issueIid}`);
     }
+  }
 
-    // Clear pending update
-    if (pendingTimeout) {
-      clearTimeout(pendingTimeout);
-      pendingTimeout = null;
-    }
-
-    const newChars = text.length - lastUpdateLength;
-
-    // If we have enough new text, update immediately
-    if (newChars >= MIN_CHARS_PER_UPDATE) {
-      updateStatus(text);
-      lastUpdateLength = text.length;
-    } else {
-      // Otherwise, batch the update
-      pendingTimeout = setTimeout(() => {
-        if (updateStatus) {
-          updateStatus(text);
-        }
-        lastUpdateLength = text.length;
-        pendingTimeout = null;
-      }, BATCH_DELAY_MS);
-    }
-  };
+  // Batched card updates
+  const updateCardBatched = createBatchedUpdater(updateStatus);
 
   try {
-     // Track agent call for devtools monitoring
-     devtoolsTracker.trackAgentCall("dpa_mom", query);
+    devtoolsTracker.trackAgentCall("dpa_mom", query, { chatId, rootId });
 
-     // Build memory config for agent calls (native Mastra pattern)
-     const memoryConfig = memoryResource && memoryThread ? {
-       resource: memoryResource,
-       thread: {
-         id: memoryThread,
-         metadata: { chatId, rootId, userId },
-       },
-     } : undefined;
+    // Stream response
+    const stream = await dpaMomInstance!.stream(messages, {
+      memory: memoryConfig,
+    });
 
-     // MASTRA STREAMING: Call DPA Mom agent with streaming
-     const stream = await dpaMomAgentInstance!.stream(messages, {
-       memory: memoryConfig,
-     });
+    // Process stream with thinking tag stripping
+    let rawText = "";
+    let displayText = "";
+    let reasoning = "";
 
-    let text = "";
-    for await (const chunk of stream.textStream) {
-      text += chunk;
-      accumulatedText.push(chunk);
-      await updateCardBatched(text);
+    for await (const chunk of stream.fullStream) {
+      if (chunk.type === "text-delta") {
+        const textDelta = (chunk as any).payload?.text || (chunk as any).textDelta || "";
+        rawText += textDelta;
+
+        // Strip <think>...</think> blocks in real-time
+        const thinkPattern = /<think>([\s\S]*?)<\/think>/gi;
+        let match;
+        while ((match = thinkPattern.exec(rawText)) !== null) {
+          const thinkContent = match[1].trim();
+          if (thinkContent && !reasoning.includes(thinkContent)) {
+            reasoning += (reasoning ? "\n\n" : "") + thinkContent;
+          }
+        }
+
+        // Remove complete think blocks from display
+        displayText = rawText.replace(thinkPattern, "").trim();
+
+        // Check if in incomplete think block
+        const openCount = (rawText.match(/<think>/gi) || []).length;
+        const closeCount = (rawText.match(/<\/think>/gi) || []).length;
+        const inThinkBlock = openCount > closeCount;
+
+        if (inThinkBlock) {
+          await updateCardBatched("🧠 *Thinking...*");
+        } else if (displayText.length > 0) {
+          await updateCardBatched(displayText);
+        }
+      } else if (chunk.type === "reasoning-delta") {
+        const reasoningText = (chunk as any).payload?.text || (chunk as any).textDelta || "";
+        if (reasoningText) {
+          reasoning += reasoningText;
+        }
+      }
+    }
+
+    // Final text
+    const finalText = displayText || rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+    // Final update
+    if (updateStatus && finalText.length > 0) {
+      updateStatus(finalText);
     }
 
     const duration = Date.now() - startTime;
-    devtoolsTracker.trackResponse("dpa_mom", text, duration);
+    devtoolsTracker.trackResponse("dpa_mom", finalText, duration);
+    healthMonitor.trackAgentCall("dpa_mom", duration, true);
 
-    console.log(
-      `[DPA Mom] Response complete (length=${text.length}, duration=${duration}ms)`
-    );
-    return text;
+    console.log(`[DpaMom] Complete (length=${finalText.length}, reasoning=${reasoning.length}, duration=${duration}ms)`);
+
+    // Return structured result
+    const result: DpaMomResult = { text: finalText };
+    if (reasoning.length > 0) result.reasoning = reasoning;
+    if (linkedIssue) result.linkedIssue = linkedIssue;
+
+    return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[DPA Mom] Error during streaming:`, errorMsg);
-
-    devtoolsTracker.trackError(
-      "DPA Mom",
-      error instanceof Error ? error : new Error(errorMsg)
-    );
+    console.error(`[DpaMom] Error:`, errorMsg);
+    
+    devtoolsTracker.trackError("dpa_mom", error instanceof Error ? error : new Error(errorMsg));
+    healthMonitor.trackAgentCall("dpa_mom", Date.now() - startTime, false);
     throw error;
   }
 }
 
 /**
- * Export helper to get DPA Mom agent (for internal use)
+ * Create batched updater for Feishu card updates
+ */
+function createBatchedUpdater(updateStatus?: (status: string) => void) {
+  const BATCH_DELAY_MS = 150;
+  const MIN_CHARS_PER_UPDATE = 50;
+  const MAX_DELAY_MS = 1000;
+
+  let lastUpdateTime = Date.now();
+  let lastUpdateLength = 0;
+  let pendingUpdate: NodeJS.Timeout | null = null;
+
+  return async (text: string) => {
+    if (!updateStatus) return;
+
+    const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+    const charsSinceLastUpdate = text.length - lastUpdateLength;
+
+    const shouldUpdateImmediately =
+      text.length === 0 ||
+      charsSinceLastUpdate >= MIN_CHARS_PER_UPDATE ||
+      timeSinceLastUpdate >= MAX_DELAY_MS;
+
+    if (shouldUpdateImmediately) {
+      if (pendingUpdate) {
+        clearTimeout(pendingUpdate);
+        pendingUpdate = null;
+      }
+      updateStatus(text);
+      lastUpdateTime = Date.now();
+      lastUpdateLength = text.length;
+    } else {
+      if (pendingUpdate) {
+        clearTimeout(pendingUpdate);
+      }
+      pendingUpdate = setTimeout(() => {
+        updateStatus(text);
+        lastUpdateTime = Date.now();
+        lastUpdateLength = text.length;
+        pendingUpdate = null;
+      }, BATCH_DELAY_MS);
+    }
+  };
+}
+
+/**
+ * Get the agent instance (for observability registration)
  */
 export function getDpaMomAgent(): Agent {
   initializeAgent();
-  return dpaMomAgentInstance!;
+  return dpaMomInstance!;
 }

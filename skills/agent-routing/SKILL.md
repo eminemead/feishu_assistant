@@ -8,14 +8,14 @@ keywords: []
 
 # Agent Routing Skill
 
-> **⚠️ DEPRECATED (Jan 2026)**: Routing is now handled by the unified Feishu Assistant agent.
+> **⚠️ DEPRECATED (Jan 2026)**: Routing is now handled by the unified DPA Mom agent.
 > The agent decides tool selection itself using LLM-based reasoning.
 > Workflows are invoked via the `execute_workflow` tool when deterministic multi-step execution is needed.
 
 ## Current Architecture
 
-The system now uses a **single unified agent** with all tools attached. See:
-- `lib/agents/feishu-assistant-agent.ts` - Unified agent
+The system now uses a **single unified agent** (DPA Mom) with all tools attached. See:
+- `lib/agents/dpa-mom-agent.ts` - Unified agent
 - `lib/tools/execute-workflow-tool.ts` - Workflow execution tool
 
 ## Available Workflows

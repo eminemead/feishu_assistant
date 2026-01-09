@@ -6,13 +6,13 @@
  * This module initializes Mastra with observability enabled, allowing all agents
  * and workflows to be automatically traced and logged.
  * 
- * ARCHITECTURE: Single unified agent (feishu_assistant) replaces multi-agent routing.
+ * ARCHITECTURE: Single unified agent (dpa_mom) replaces multi-agent routing.
  */
 
 import { Mastra } from "@mastra/core";
 import { ArizeExporter } from "@mastra/arize";
 import { Observability } from "@mastra/observability";
-import { getFeishuAssistantAgent } from "./agents/feishu-assistant-agent";
+import { getDpaMomAgent } from "./agents/dpa-mom-agent";
 import { okrAnalysisWorkflow } from "./workflows/okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./workflows/document-tracking-workflow";
 import { documentReadWorkflow } from "./workflows/document-read-workflow";
@@ -58,7 +58,7 @@ const observability = new Observability({
  * Single unified agent handles all queries with tool selection.
  */
 const registeredAgents = {
-  feishuAssistant: getFeishuAssistantAgent(),
+  dpaMom: getDpaMomAgent(),
 };
 
 /**

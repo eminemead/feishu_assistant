@@ -15,10 +15,10 @@ import {
   saveMessageToMemory,
   AgentMemoryContext,
 } from "../../lib/agents/memory-integration";
-import { feishuAssistantAgent, FeishuAssistantResult } from "../../lib/agents/feishu-assistant-agent";
+import { dpaMomAgent, DpaMomResult } from "../../lib/agents/dpa-mom-agent";
 
 /** Helper to extract text from response */
-function getResponseText(response: string | FeishuAssistantResult): string {
+function getResponseText(response: string | DpaMomResult): string {
   return typeof response === "string" ? response : response.text;
 }
 

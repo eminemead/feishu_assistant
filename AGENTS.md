@@ -6,9 +6,13 @@ In all interactions, plans, and commit messages, be extremely concise and sacrif
 
 ## Project: Feishu Assistant
 
+Single-agent architecture: one Mastra agent (`dpa_mom`) with tools + workflows (no manager/specialist sub-agents).
+
 **WHY**: Build Feishu AI agent handling OKR review, team coordination, and document tracking etc.
 
-**WHAT**: TypeScript bot with unified single agent (dpa_mom personality) that handles all tools directly. Uses `execute_workflow` tool for deterministic multi-step operations (GitLab issues, OKR analysis). Mastra framework for agent/memory, Supabase for persistence, Feishu SDK for chat integration.
+**WHAT**: TypeScript bot with a single unified Mastra agent (`dpa_mom`, id: `dpa_mom`) — the caring chief-of-staff for the DPA team. The agent owns all tools directly and uses `execute_workflow` + registered Mastra workflows for deterministic multi-step operations (GitLab issues, OKR analysis, document tracking). Mastra handles agent/memory, Supabase provides persistence, and Feishu SDK provides chat integration.
+
+**AGENT**: `lib/agents/dpa-mom-agent.ts` — single entry point, exported as `dpaMomAgent()` and `getDpaMomAgent()`
 
 **TECH**: TypeScript, Hono, Mastra Framework, Supabase (memory/auth), StarRocks/DuckDB (metrics), Feishu SDK
 

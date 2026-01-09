@@ -1,5 +1,5 @@
 /**
- * Simple smoke test that runs the Feishu Assistant agent once and lets Mastra
+ * Simple smoke test that runs the DPA Mom agent once and lets Mastra
  * send traces to Phoenix via the Arize exporter.
  *
  * Run: bun scripts/test-phoenix-trace.ts
@@ -7,13 +7,13 @@
  */
 
 import { mastra } from "../lib/observability-config";
-import { getFeishuAssistantAgent } from "../lib/agents/feishu-assistant-agent";
+import { getDpaMomAgent } from "../lib/agents/dpa-mom-agent";
 
 async function main() {
   // Ensure Mastra + observability are initialized
-  const agent = getFeishuAssistantAgent();
+  const agent = getDpaMomAgent();
 
-  console.log("🚀 Running Feishu Assistant agent smoke test...");
+  console.log("🚀 Running DPA Mom agent smoke test...");
   const stream = await agent.stream([
     { role: "user", content: "Quick health check: say hello succinctly." },
   ]);
