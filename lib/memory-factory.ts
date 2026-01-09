@@ -52,6 +52,8 @@ const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL;
 
 let sharedStorage: PostgresStore | null = null;
 let sharedVector: PgVector | null = null;
+let storageInitialized = false;
+let vectorInitialized = false;
 
 /**
  * Get or create the shared PostgresStore instance
@@ -72,11 +74,33 @@ export function getSharedStorage(): PostgresStore | null {
       id: "feishu-assistant-pg",
       connectionString: SUPABASE_DATABASE_URL,
     });
-    logger.success('MemoryFactory', 'Shared PostgresStore initialized');
+    logger.success('MemoryFactory', 'Shared PostgresStore created');
     return sharedStorage;
   } catch (error) {
-    logger.fail('MemoryFactory', 'Failed to initialize PostgresStore', error);
+    logger.fail('MemoryFactory', 'Failed to create PostgresStore', error);
     return null;
+  }
+}
+
+/**
+ * Initialize storage tables (call once at startup)
+ * Required when using PostgresStore directly outside of Mastra core
+ */
+export async function initializeStorage(): Promise<boolean> {
+  if (storageInitialized) return true;
+  
+  const storage = getSharedStorage();
+  if (!storage) return false;
+  
+  try {
+    await storage.init();
+    storageInitialized = true;
+    logger.success('MemoryFactory', 'PostgresStore tables initialized');
+    return true;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    logger.fail('MemoryFactory', `Failed to init PostgresStore: ${errMsg}`);
+    return false;
   }
 }
 
@@ -98,11 +122,32 @@ export function getSharedVector(): PgVector | null {
       id: "feishu-assistant-vector",
       connectionString: SUPABASE_DATABASE_URL,
     });
-    logger.success('MemoryFactory', 'Shared PgVector initialized');
+    logger.success('MemoryFactory', 'Shared PgVector created');
     return sharedVector;
   } catch (error) {
-    logger.fail('MemoryFactory', 'Failed to initialize PgVector', error);
+    logger.fail('MemoryFactory', 'Failed to create PgVector', error);
     return null;
+  }
+}
+
+/**
+ * Initialize vector tables (call once at startup)
+ */
+export async function initializeVector(): Promise<boolean> {
+  if (vectorInitialized) return true;
+  
+  const vector = getSharedVector();
+  if (!vector) return false;
+  
+  try {
+    await vector.init();
+    vectorInitialized = true;
+    logger.success('MemoryFactory', 'PgVector tables initialized');
+    return true;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    logger.fail('MemoryFactory', `Failed to init PgVector: ${errMsg}`);
+    return false;
   }
 }
 
@@ -161,9 +206,13 @@ export function createAgentMemory(options?: {
     }
 
     const memory = new Memory(memoryConfig);
+    logger.success('MemoryFactory', 'Memory instance created successfully');
     return memory;
   } catch (error) {
-    logger.fail('MemoryFactory', 'Failed to create memory', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    logger.fail('MemoryFactory', `Failed to create memory: ${errMsg}`);
+    if (errStack) console.error('[MemoryFactory] Stack:', errStack);
     return null;
   }
 }

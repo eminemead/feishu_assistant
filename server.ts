@@ -1301,9 +1301,15 @@ async function startServer() {
     console.warn("⚠️ [Startup] Step 0a: Mastra Observability disabled (PHOENIX_ENDPOINT not set)");
   }
   
-  // Memory is now initialized automatically via createAgentMemory in agent construction
-  // No manual initialization needed - Mastra handles it when agent.stream() is called with memory config
-  console.log("✅ [Startup] Step 0b: Memory configured via memory-factory (lazy init on first use)");
+  // Initialize memory storage tables (required when using PostgresStore directly)
+  const { initializeStorage, initializeVector } = await import("./lib/memory-factory");
+  const storageOk = await initializeStorage();
+  const vectorOk = await initializeVector();
+  if (storageOk && vectorOk) {
+    console.log("✅ [Startup] Step 0b: Memory storage + vector tables initialized");
+  } else {
+    console.warn("⚠️ [Startup] Step 0b: Memory initialization partial", { storageOk, vectorOk });
+  }
   
   // Step 0c: Initialize Mastra Server (exposes agents/workflows/tools as HTTP endpoints + Studio)
   console.log("📋 [Startup] Step 0c: Initializing Mastra Server...");
