@@ -14,7 +14,7 @@
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import { devtoolsTracker } from "../devtools-integration";
-import { createAgentMemory, getMemoryThreadId, getMemoryResourceId, ensureWorkingMemoryInitialized } from "../memory-factory";
+import { createAgentMemoryAsync, getMemoryThreadId, getMemoryResourceId, ensureWorkingMemoryInitialized } from "../memory-factory";
 import { inputProcessors } from "../memory-processors";
 import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
@@ -97,9 +97,9 @@ You have access to a persistent user profile that tracks preferences and context
 }
 
 /**
- * Initialize the unified agent (lazy - called on first request)
+ * Initialize the unified agent (async - ensures storage is ready)
  */
-function initializeAgent(): void {
+async function initializeAgentAsync(): Promise<void> {
   if (dpaMomInstance || isInitializing) {
     return;
   }
@@ -118,8 +118,8 @@ function initializeAgent(): void {
   const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
   const executeWorkflowTool = createExecuteWorkflowTool();
 
-  // Create native Mastra memory (store reference for auto-population)
-  dpaMomMemory = createAgentMemory({
+  // Create native Mastra memory with async init (ensures storage tables exist)
+  dpaMomMemory = await createAgentMemoryAsync({
     lastMessages: 20,
     enableWorkingMemory: true,
     enableSemanticRecall: true,
@@ -206,8 +206,8 @@ export async function dpaMomAgent(
   rootId?: string,
   userId?: string,
 ): Promise<string | DpaMomResult> {
-  // Lazy initialize
-  initializeAgent();
+  // Lazy initialize (async to ensure storage is ready)
+  await initializeAgentAsync();
 
   const query = getQueryText(messages);
   const startTime = Date.now();
@@ -391,9 +391,17 @@ function createBatchedUpdater(updateStatus?: (status: string) => void): BatchedU
 }
 
 /**
- * Get the agent instance (for observability registration)
+ * Get the agent instance (async - ensures proper initialization)
  */
-export function getDpaMomAgent(): Agent {
-  initializeAgent();
+export async function getDpaMomAgentAsync(): Promise<Agent> {
+  await initializeAgentAsync();
   return dpaMomInstance!;
+}
+
+/**
+ * Get the agent instance if already initialized (sync, may return null)
+ * Use getDpaMomAgentAsync for guaranteed initialization
+ */
+export function getDpaMomAgent(): Agent | null {
+  return dpaMomInstance;
 }

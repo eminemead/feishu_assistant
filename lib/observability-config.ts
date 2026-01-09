@@ -54,12 +54,13 @@ const observability = new Observability({
 } as any);
 
 /**
- * Initialize Mastra instance with observability enabled.
- * Single unified agent handles all queries with tool selection.
+ * Registered agents placeholder - actual agent initialized lazily at first request
+ * This avoids sync init issues with storage that needs async init
  */
-const registeredAgents = {
-  dpaMom: getDpaMomAgent(),
-};
+const registeredAgents: Record<string, any> = {};
+
+// Agent will be registered when first accessed via dpaMomAgent() function
+// This allows storage to be properly initialized before agent creation
 
 /**
  * Registered workflows for Mastra instance

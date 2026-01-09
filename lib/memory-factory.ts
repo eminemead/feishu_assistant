@@ -147,7 +147,43 @@ export async function initializeVector(): Promise<boolean> {
 }
 
 /**
- * Create a Memory instance for an agent
+ * Create a Memory instance for an agent (async version with proper init)
+ */
+export async function createAgentMemoryAsync(options?: {
+  lastMessages?: number;
+  enableSemanticRecall?: boolean;
+  enableWorkingMemory?: boolean;
+}): Promise<Memory | null> {
+  // Ensure storage is initialized before creating memory
+  const storageReady = await initializeStorage();
+  if (!storageReady) {
+    logger.warn('[MemoryFactory] Cannot create memory - storage init failed');
+    return null;
+  }
+  
+  const storage = getSharedStorage();
+  if (!storage) {
+    logger.warn('[MemoryFactory] Cannot create memory - storage unavailable');
+    return null;
+  }
+
+  const {
+    lastMessages = 20,
+    enableSemanticRecall = true,
+    enableWorkingMemory = true,
+  } = options || {};
+
+  // Init vector if semantic recall requested
+  if (enableSemanticRecall) {
+    await initializeVector();
+  }
+
+  return createAgentMemorySync(storage, { lastMessages, enableSemanticRecall, enableWorkingMemory });
+}
+
+/**
+ * Create a Memory instance for an agent (sync version, assumes storage is ready)
+ * @deprecated Use createAgentMemoryAsync instead
  */
 export function createAgentMemory(options?: {
   lastMessages?: number;
@@ -163,9 +199,21 @@ export function createAgentMemory(options?: {
 
   const {
     lastMessages = 20,
-    enableSemanticRecall = true, // Enabled by default with PgVector + NIO embedding
+    enableSemanticRecall = true,
     enableWorkingMemory = true,
   } = options || {};
+  
+  return createAgentMemorySync(storage, { lastMessages, enableSemanticRecall, enableWorkingMemory });
+}
+
+/**
+ * Internal sync memory creation
+ */
+function createAgentMemorySync(
+  storage: PostgresStore,
+  options: { lastMessages: number; enableSemanticRecall: boolean; enableWorkingMemory: boolean }
+): Memory | null {
+  const { lastMessages, enableSemanticRecall, enableWorkingMemory } = options;
 
   try {
     const memoryConfig: any = {
