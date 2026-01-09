@@ -35,7 +35,7 @@ import { createExecuteWorkflowTool } from "../tools/execute-workflow-tool";
 
 // Lazy-initialized agent and memory
 let dpaMomInstance: Agent | null = null;
-let dpaMomMemory: ReturnType<typeof createAgentMemory> = null;
+let dpaMomMemory: Awaited<ReturnType<typeof createAgentMemoryAsync>> = null;
 let isInitializing = false;
 
 /**
@@ -135,6 +135,12 @@ async function initializeAgentAsync(): Promise<void> {
     enableWorkingMemory: true,
     enableSemanticRecall: true,
   });
+  
+  if (dpaMomMemory) {
+    console.log(`✅ [DpaMom] Memory created with working memory enabled`);
+  } else {
+    console.warn(`⚠️ [DpaMom] Memory creation failed - agent will run without memory`);
+  }
 
   // Single model - Mastra Agent expects single model
   const model = getMastraModelSingle(true); // requireTools=true
@@ -144,7 +150,7 @@ async function initializeAgentAsync(): Promise<void> {
     name: "DPA Mom",
     instructions: getSystemPrompt(),
     model,
-    memory: dpaMomMemory || undefined,
+    memory: dpaMomMemory ?? undefined,
     inputProcessors,
     tools: {
       // DPA Mom tools
