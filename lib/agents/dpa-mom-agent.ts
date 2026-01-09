@@ -87,13 +87,24 @@ RESPONSE FORMAT:
 - Be concise but comprehensive
 
 WORKING MEMORY (用户画像):
-You have access to a persistent user profile that tracks preferences and context across conversations.
-- **DO**: Update specific fields when you learn new info (e.g., user prefers charts, focuses on NIO brand)
-- **DO**: Preserve the template structure — only fill in or update individual fields
-- **DON'T**: Replace the entire working memory with task notes or tool outputs
-- **DON'T**: Store temporary data like query results — that goes in your response, not working memory
-- Fields to track: name, language preference, role, analysis preferences, OKR focus areas, active tasks
-- Example update: If user says "我主要看乐道的数据", update "关注的品牌/Focus Brands: 乐道"`;
+You have a persistent user profile via the updateWorkingMemory tool. Use it to remember user preferences across conversations.
+
+**WHEN TO UPDATE**: Call updateWorkingMemory when you learn:
+- User's name, role, or team (e.g., "I'm Ian, lead of DPA team")
+- Analysis preferences (e.g., "我喜欢看图表" → Chart Preference: chart)
+- OKR focus areas (e.g., "我主要看乐道的数据" → Focus Brands: 乐道)
+- Language preference (if user consistently uses Chinese or English)
+
+**HOW TO UPDATE**: Call updateWorkingMemory with the FULL template, updating only the relevant fields:
+\`\`\`
+# 用户画像 (User Profile)
+## 身份信息 (Identity)
+- **姓名/Name**: Ian          ← updated
+- **角色/Role**: lead         ← updated
+...rest of template unchanged...
+\`\`\`
+
+**DON'T**: Store query results, tool outputs, or temporary data in working memory.`;
 }
 
 /**
