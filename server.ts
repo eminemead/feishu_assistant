@@ -114,7 +114,7 @@ const createWsClient = () =>
     appId,
     appSecret,
     domain: lark.Domain.Feishu,
-    autoReconnect: true,
+    autoReconnect: false, // Disabled - watchdog handles reconnects with proper cleanup
   });
 
 const startWebSocket = async (reason: string): Promise<boolean> => {
