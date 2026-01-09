@@ -14,7 +14,7 @@
 import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import { devtoolsTracker } from "../devtools-integration";
-import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
+import { createAgentMemory, getMemoryThreadId, getMemoryResourceId, ensureWorkingMemoryInitialized } from "../memory-factory";
 import { inputProcessors } from "../memory-processors";
 import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
@@ -33,8 +33,9 @@ import { okrVisualizationTool } from "./okr-visualization-tool";
 import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
 import { createExecuteWorkflowTool } from "../tools/execute-workflow-tool";
 
-// Lazy-initialized agent
+// Lazy-initialized agent and memory
 let dpaMomInstance: Agent | null = null;
+let dpaMomMemory: ReturnType<typeof createAgentMemory> = null;
 let isInitializing = false;
 
 /**
@@ -108,8 +109,8 @@ function initializeAgent(): void {
   const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
   const executeWorkflowTool = createExecuteWorkflowTool();
 
-  // Create native Mastra memory
-  const agentMemory = createAgentMemory({
+  // Create native Mastra memory (store reference for auto-population)
+  dpaMomMemory = createAgentMemory({
     lastMessages: 20,
     enableWorkingMemory: true,
     enableSemanticRecall: true,
@@ -123,7 +124,7 @@ function initializeAgent(): void {
     name: "DPA Mom",
     instructions: getSystemPrompt(),
     model,
-    memory: agentMemory || undefined,
+    memory: dpaMomMemory || undefined,
     inputProcessors,
     tools: {
       // DPA Mom tools
@@ -220,6 +221,11 @@ export async function dpaMomAgent(
     console.log(`✅ [DpaMom] Memory: resource=${memoryResource}, thread=${memoryThread}`);
   }
 
+  // Auto-populate working memory on first interaction (fetches from Feishu API)
+  if (userId && memoryThread && dpaMomMemory) {
+    await ensureWorkingMemoryInitialized(userId, dpaMomMemory, memoryThread);
+  }
+
   // Check for linked GitLab issue
   let linkedIssue: IssueThreadMapping | null = null;
   if (chatId && rootId) {
@@ -230,7 +236,7 @@ export async function dpaMomAgent(
   }
 
   // Batched card updates
-  const updateCardBatched = createBatchedUpdater(updateStatus);
+  const batchedUpdater = createBatchedUpdater(updateStatus);
 
   try {
     devtoolsTracker.trackAgentCall("dpa_mom", query, { chatId, rootId });
@@ -269,9 +275,9 @@ export async function dpaMomAgent(
         const inThinkBlock = openCount > closeCount;
 
         if (inThinkBlock) {
-          await updateCardBatched("🧠 *Thinking...*");
+          await batchedUpdater.update("🧠 *Thinking...*");
         } else if (displayText.length > 0) {
-          await updateCardBatched(displayText);
+          await batchedUpdater.update(displayText);
         }
       } else if (chunk.type === "reasoning-delta") {
         const reasoningText = (chunk as any).payload?.text || (chunk as any).textDelta || "";
@@ -283,6 +289,10 @@ export async function dpaMomAgent(
 
     // Final text
     const finalText = displayText || rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+    // CRITICAL: Cancel any pending batched updates before final update
+    // This prevents race condition where pending timeout fires after finalization
+    batchedUpdater.flush();
 
     // Final update
     if (updateStatus && finalText.length > 0) {
@@ -302,6 +312,9 @@ export async function dpaMomAgent(
 
     return result;
   } catch (error) {
+    // Cancel any pending updates on error
+    batchedUpdater.flush();
+    
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[DpaMom] Error:`, errorMsg);
     
@@ -312,9 +325,17 @@ export async function dpaMomAgent(
 }
 
 /**
+ * Batched updater result with flush capability
+ */
+interface BatchedUpdater {
+  update: (text: string) => Promise<void>;
+  flush: () => void; // Cancel pending updates to prevent race with finalization
+}
+
+/**
  * Create batched updater for Feishu card updates
  */
-function createBatchedUpdater(updateStatus?: (status: string) => void) {
+function createBatchedUpdater(updateStatus?: (status: string) => void): BatchedUpdater {
   const BATCH_DELAY_MS = 150;
   const MIN_CHARS_PER_UPDATE = 50;
   const MAX_DELAY_MS = 1000;
@@ -323,7 +344,14 @@ function createBatchedUpdater(updateStatus?: (status: string) => void) {
   let lastUpdateLength = 0;
   let pendingUpdate: NodeJS.Timeout | null = null;
 
-  return async (text: string) => {
+  const flush = () => {
+    if (pendingUpdate) {
+      clearTimeout(pendingUpdate);
+      pendingUpdate = null;
+    }
+  };
+
+  const update = async (text: string) => {
     if (!updateStatus) return;
 
     const timeSinceLastUpdate = Date.now() - lastUpdateTime;
@@ -335,17 +363,12 @@ function createBatchedUpdater(updateStatus?: (status: string) => void) {
       timeSinceLastUpdate >= MAX_DELAY_MS;
 
     if (shouldUpdateImmediately) {
-      if (pendingUpdate) {
-        clearTimeout(pendingUpdate);
-        pendingUpdate = null;
-      }
+      flush();
       updateStatus(text);
       lastUpdateTime = Date.now();
       lastUpdateLength = text.length;
     } else {
-      if (pendingUpdate) {
-        clearTimeout(pendingUpdate);
-      }
+      flush();
       pendingUpdate = setTimeout(() => {
         updateStatus(text);
         lastUpdateTime = Date.now();
@@ -354,6 +377,8 @@ function createBatchedUpdater(updateStatus?: (status: string) => void) {
       }, BATCH_DELAY_MS);
     }
   };
+
+  return { update, flush };
 }
 
 /**
