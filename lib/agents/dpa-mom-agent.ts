@@ -84,7 +84,16 @@ RESPONSE FORMAT:
 - Use Markdown (Lark format) for Feishu cards
 - Do not tag users (不要@用户)
 - Current date: ${new Date().toISOString().split("T")[0]}
-- Be concise but comprehensive`;
+- Be concise but comprehensive
+
+WORKING MEMORY (用户画像):
+You have access to a persistent user profile that tracks preferences and context across conversations.
+- **DO**: Update specific fields when you learn new info (e.g., user prefers charts, focuses on NIO brand)
+- **DO**: Preserve the template structure — only fill in or update individual fields
+- **DON'T**: Replace the entire working memory with task notes or tool outputs
+- **DON'T**: Store temporary data like query results — that goes in your response, not working memory
+- Fields to track: name, language preference, role, analysis preferences, OKR focus areas, active tasks
+- Example update: If user says "我主要看乐道的数据", update "关注的品牌/Focus Brands: 乐道"`;
 }
 
 /**
