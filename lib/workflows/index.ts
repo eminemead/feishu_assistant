@@ -37,12 +37,24 @@ export {
 export { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 export { documentTrackingWorkflow, runDocumentTrackingWorkflow } from "./document-tracking-workflow";
 export { dpaAssistantWorkflow, runDpaAssistantWorkflow } from "./dpa-assistant-workflow";
+export { 
+  releaseNotesWorkflow, 
+  releaseNotesPreviewWorkflow,
+  postReleaseNotes, 
+  generateReleaseNotesPreview,
+  postPreviewedReleaseNotes,
+  sendReleaseNotesPreviewCard,
+  handleReleaseNotesCardAction,
+  TOPIC_GROUPS,
+  GITLAB_PROJECTS,
+} from "./release-notes-workflow";
 // Note: manager-routing-workflow is deprecated, see query-router.ts
 
 import { getWorkflowRegistry, registerWorkflow } from "./registry";
 import { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./document-tracking-workflow";
 import { dpaAssistantWorkflow } from "./dpa-assistant-workflow";
+import { releaseNotesWorkflow } from "./release-notes-workflow";
 
 /**
  * Initialize and register all workflows
@@ -99,6 +111,19 @@ export function initializeWorkflows(): void {
       estimatedDurationSec: 5,
     },
     dpaAssistantWorkflow as any
+  );
+
+  // Register Release Notes Workflow
+  registerWorkflow(
+    {
+      id: "release-notes",
+      name: "Release Notes",
+      description: "Post release notes/changelogs to DPA Release Notes topic group",
+      tags: ["release", "changelog", "notification", "topic-group"],
+      supportsStreaming: false,
+      estimatedDurationSec: 2,
+    },
+    releaseNotesWorkflow as any
   );
 
   registry.setInitialized();

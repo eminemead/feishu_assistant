@@ -187,6 +187,14 @@ const eventDispatcher = new lark.EventDispatcher({
       const operatorId = (data as any).operator?.user_id || (data as any).operator?.open_id || "";
       const rawActionValue = (data as any).action?.value;
       
+      // Handle Release Notes card actions first
+      if (typeof rawActionValue === "object" && rawActionValue?.action?.startsWith("release_notes_")) {
+        console.log(`📋 [CardAction] Release notes action (WebSocket): ${rawActionValue.action}`);
+        const { handleReleaseNotesCardAction } = await import("./lib/workflows/release-notes-workflow");
+        await handleReleaseNotesCardAction(rawActionValue);
+        return; // Handled
+      }
+      
       // Handle both string (legacy) and object (CardKit 2.0 with behaviors) formats
       // Object format: { context: "chatId|rootId", index: 0, text: "button text" }
       let actionValue: string | undefined;
@@ -291,6 +299,14 @@ eventDispatcher.register({
           const botUserId = await getBotId();
           const operatorId = (data as any).operator?.user_id || (data as any).operator?.open_id || "";
           const rawActionValue = (data as any).action?.value;
+          
+          // Handle Release Notes card actions first
+          if (typeof rawActionValue === "object" && rawActionValue?.action?.startsWith("release_notes_")) {
+            console.log(`📋 [CardAction] Release notes action (WebSocket v1): ${rawActionValue.action}`);
+            const { handleReleaseNotesCardAction } = await import("./lib/workflows/release-notes-workflow");
+            await handleReleaseNotesCardAction(rawActionValue);
+            return; // Handled
+          }
           
           // Handle both string (legacy) and object (CardKit 2.0) formats
           let actionValue: string | undefined;
@@ -1096,8 +1112,16 @@ app.post("/webhook/card", async (c) => {
     // Get bot ID for button followup routing
     const botUserId = await getBotId();
 
-    // Check if this is a button action (string value) - treat as button followup
+    // Check if this is a button action
     const actionValue = cardActionPayload.event?.action?.value;
+    
+    // Handle Release Notes card actions
+    if (typeof actionValue === "object" && actionValue?.action?.startsWith("release_notes_")) {
+      console.log(`📋 [CardAction] Release notes action detected: ${actionValue.action}`);
+      const { handleReleaseNotesCardAction } = await import("./lib/workflows/release-notes-workflow");
+      const response = await handleReleaseNotesCardAction(actionValue);
+      return c.json(response, 200);
+    }
     if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
       console.log(`🔘 [CardAction] Detected button followup action: "${actionValue}"`);
 
