@@ -310,8 +310,14 @@ export async function ensureWorkingMemoryInitialized(
     // Check if working memory already has content (not just template)
     // We do this by checking thread metadata - if user has interacted before,
     // the LLM would have updated working memory
-    const threads = await memory.getThreadsByResourceId({ resourceId });
-    const hasExistingThreads = threads && threads.length > 0;
+    let hasExistingThreads = false;
+    try {
+      const threads = await memory.getThreadsByResourceId({ resourceId });
+      hasExistingThreads = threads && threads.length > 0;
+    } catch (threadErr) {
+      // getThreadsByResourceId may fail if table doesn't exist yet - that's OK
+      logger.info('MemoryFactory', `No existing threads for ${feishuUserId} (first time)`);
+    }
     
     if (hasExistingThreads) {
       // User has history, mark as initialized and skip
@@ -332,6 +338,7 @@ export async function ensureWorkingMemoryInitialized(
     
     // Generate and set initial working memory
     const initialMemory = generateInitialWorkingMemory(userInfo);
+    logger.info('MemoryFactory', `Generated initial memory for ${userInfo.name}, updating...`);
     
     await memory.updateWorkingMemory({
       threadId,
@@ -343,7 +350,10 @@ export async function ensureWorkingMemoryInitialized(
     logger.success('MemoryFactory', `Auto-populated working memory for ${userInfo.name} (${feishuUserId})`);
     return true;
   } catch (error) {
-    logger.fail('MemoryFactory', `Failed to auto-populate working memory for ${feishuUserId}`, error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    logger.fail('MemoryFactory', `Failed to auto-populate for ${feishuUserId}: ${errMsg}`);
+    if (errStack) console.error('[MemoryFactory] Stack:', errStack);
     initializedUsers.add(resourceId); // Don't retry on error
     return false;
   }
