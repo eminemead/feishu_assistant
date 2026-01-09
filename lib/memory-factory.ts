@@ -2,10 +2,7 @@
  * Mastra Memory Factory - Native Memory Integration
  * 
  * Creates Memory instances for agents using Mastra's native pattern.
- * Uses Supabase PostgreSQL for continuity with existing infrastructure.
- * 
- * Phase 1: Attach memory to agents so Studio can see it.
- * Phase 2: Will consolidate all memory operations through this pattern.
+ * Uses Supabase PostgreSQL for persistence.
  * 
  * @see https://mastra.ai/docs/memory/overview
  */
@@ -15,6 +12,33 @@ import { PostgresStore, PgVector } from '@mastra/pg';
 import { getInternalEmbedding } from './shared/internal-embedding';
 import { openai } from '@ai-sdk/openai';
 import { logger } from './logger';
+
+// Working memory template - LLM fills this in based on user interactions
+const WORKING_MEMORY_TEMPLATE = `
+# 用户信息 (User Profile)
+
+## 基本信息 (Basic Info)
+- **姓名/Name**:
+- **语言偏好/Language**: (zh-CN / en)
+- **部门/Department**:
+- **角色/Role**:
+
+## 偏好设置 (Preferences)
+- **报告格式/Report Format**: (表格/table | 图表/chart | 摘要/summary)
+- **默认时间范围/Default Period**: (如 "Q4 2025", "12月")
+- **关注的公司/Focus Companies**:
+- **沟通风格/Communication Style**:
+
+## OKR 上下文 (OKR Context)
+- **关注的指标/Key Metrics**:
+- **近期分析/Recent Analysis**:
+- **对比基准/Comparison Baseline**:
+
+## 会话状态 (Session State)
+- **当前讨论主题/Current Topic**:
+- **待办事项/Pending Actions**:
+- **未解决问题/Open Questions**:
+`;
 
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL;
 
@@ -76,15 +100,6 @@ export function getSharedVector(): PgVector | null {
 
 /**
  * Create a Memory instance for an agent
- * 
- * This is the Mastra-native way to attach memory to agents.
- * The Memory instance handles:
- * - Working memory (Layer 1): Persistent user facts
- * - Conversation history (Layer 2): Recent messages
- * - Semantic recall (Layer 3): Vector-based retrieval (when enabled)
- * 
- * @param options - Optional configuration overrides
- * @returns Memory instance or null if storage unavailable
  */
 export function createAgentMemory(options?: {
   lastMessages?: number;
@@ -105,32 +120,35 @@ export function createAgentMemory(options?: {
   } = options || {};
 
   try {
-    // Build memory config based on options
     const memoryConfig: any = {
-      storage: storage,
+      storage,
       options: {
         lastMessages,
-        workingMemory: enableWorkingMemory ? { enabled: true } : undefined,
-        semanticRecall: false, // disabled by default
+        workingMemory: enableWorkingMemory ? {
+          enabled: true,
+          scope: "resource",
+          template: WORKING_MEMORY_TEMPLATE,
+        } : undefined,
+        semanticRecall: false,
+        threads: { generateTitle: true },
       },
     };
 
-    // Only configure semantic recall when explicitly enabled
     if (enableSemanticRecall) {
       const vector = getSharedVector();
       if (!vector) {
-        logger.warn('[MemoryFactory] Semantic recall requested but PgVector unavailable, falling back to disabled');
+        logger.warn('[MemoryFactory] Semantic recall requested but PgVector unavailable');
       } else {
-        // Get embedder - prefer internal, fallback to OpenAI
         const embedder = getInternalEmbedding() || openai.embedding("text-embedding-3-small");
-        
         memoryConfig.vector = vector;
         memoryConfig.embedder = embedder;
         memoryConfig.options.semanticRecall = {
-          topK: 10,
-          messageRange: 5,
+          topK: 5,
+          messageRange: { before: 3, after: 1 },
+          scope: "resource",
+          threshold: 0.65,
         };
-        logger.success('MemoryFactory', 'Semantic recall enabled with PgVector');
+        logger.success('MemoryFactory', 'Semantic recall enabled');
       }
     }
 

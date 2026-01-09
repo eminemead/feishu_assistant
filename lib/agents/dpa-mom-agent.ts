@@ -15,6 +15,7 @@ import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import { devtoolsTracker } from "../devtools-integration";
 import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
+import { inputProcessors } from "../memory-processors";
 import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
 import { healthMonitor } from "../health-monitor";
@@ -123,6 +124,7 @@ function initializeAgent(): void {
     instructions: getSystemPrompt(),
     model,
     memory: agentMemory || undefined,
+    inputProcessors,
     tools: {
       // DPA Mom tools
       gitlab_cli: gitlabCliTool,
@@ -139,7 +141,7 @@ function initializeAgent(): void {
   });
 
   isInitializing = false;
-  console.log(`✅ [DpaMom] Agent initialized with 8 tools`);
+  console.log(`✅ [DpaMom] Agent initialized with 8 tools + ${inputProcessors.length} processors (TokenLimiter, ToolCallFilter)`);
 }
 
 /**

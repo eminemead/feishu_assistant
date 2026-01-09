@@ -11,7 +11,7 @@
 import { getOrCreateSupabaseUser } from '../lib/auth/feishu-supabase-auth';
 import { generateSupabaseJWT, createSupabaseClientWithUser } from '../lib/auth/supabase-jwt';
 import { getUserDataScope } from '../lib/auth/user-data-scope';
-import { createMastraMemory } from '../lib/memory-mastra';
+import { createAgentMemory } from '../lib/memory-factory';
 
 const testFeishuUserId = process.argv[2] || 'test-user-123';
 
@@ -61,11 +61,15 @@ async function runTests() {
     // Test 5: Create Mastra memory
     console.log('5️⃣  Testing Mastra memory creation...');
     try {
-      const memory = await createMastraMemory(testFeishuUserId);
+      const memory = createAgentMemory({
+        lastMessages: 20,
+        enableWorkingMemory: true,
+        enableSemanticRecall: true,
+      });
       if (memory) {
-        console.log('   ✅ Mastra memory created\n');
+        console.log('   ✅ Mastra memory created with working memory + semantic recall\n');
       } else {
-        console.log('   ⚠️  Mastra memory not available (fallback mode)\n');
+        console.log('   ⚠️  Mastra memory not available (Supabase not configured)\n');
       }
     } catch (error: any) {
       console.log(`   ⚠️  Memory creation warning: ${error.message}\n`);

@@ -13,7 +13,6 @@ import {
   handleButtonFollowup,
   extractButtonFollowupContext,
 } from "./lib/handle-button-followup";
-import { initializeMastraMemory } from "./lib/memory-mastra";
 import { getObservabilityStatus, mastra } from "./lib/observability-config";
 // Import observability config to ensure it's initialized
 import "./lib/observability-config";
@@ -1278,13 +1277,9 @@ async function startServer() {
     console.warn("⚠️ [Startup] Step 0a: Mastra Observability disabled (PHOENIX_ENDPOINT not set)");
   }
   
-  // Start memory initialization in background without awaiting
-  initializeMastraMemory().then(() => {
-    console.log("✅ [Startup] Step 0b: Mastra Memory initialized");
-  }).catch((error) => {
-    console.warn("⚠️ [Startup] Mastra Memory initialization warning:", error);
-    // Continue - memory is optional, agent can work without it
-  });
+  // Memory is now initialized automatically via createAgentMemory in agent construction
+  // No manual initialization needed - Mastra handles it when agent.stream() is called with memory config
+  console.log("✅ [Startup] Step 0b: Memory configured via memory-factory (lazy init on first use)");
   
   // Step 0c: Initialize Mastra Server (exposes agents/workflows/tools as HTTP endpoints + Studio)
   console.log("📋 [Startup] Step 0c: Initializing Mastra Server...");
