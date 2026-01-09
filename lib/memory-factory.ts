@@ -327,9 +327,23 @@ export async function ensureWorkingMemoryInitialized(
     }
     
     // First-time user: fetch info from Feishu and pre-populate
-    logger.info('MemoryFactory', `First interaction for ${feishuUserId}, fetching Feishu profile...`);
+    // Note: Feishu Contact API requires open_id format (ou_xxx), not user_id (ad account)
+    const isOpenId = feishuUserId.startsWith('ou_');
     
-    const userInfo = await getUserDepartmentInfoCached(feishuUserId);
+    let userInfo: UserDepartmentInfo | null = null;
+    if (isOpenId) {
+      logger.info('MemoryFactory', `First interaction for ${feishuUserId}, fetching Feishu profile...`);
+      userInfo = await getUserDepartmentInfoCached(feishuUserId);
+    } else {
+      // AD account username - can't call Feishu API, use minimal info
+      logger.info('MemoryFactory', `User ${feishuUserId} is AD account, using minimal profile`);
+      userInfo = {
+        user_id: feishuUserId,
+        name: feishuUserId.split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+        all_departments: [],
+      };
+    }
+    
     if (!userInfo) {
       logger.warn('MemoryFactory', `Could not fetch Feishu user info for ${feishuUserId}`);
       initializedUsers.add(resourceId); // Don't retry
