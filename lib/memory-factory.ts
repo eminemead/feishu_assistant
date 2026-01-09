@@ -132,6 +132,7 @@ export function getSharedVector(): PgVector | null {
 
 /**
  * Initialize vector tables (call once at startup)
+ * Note: PgVector doesn't require explicit init() - tables are created on first use
  */
 export async function initializeVector(): Promise<boolean> {
   if (vectorInitialized) return true;
@@ -139,16 +140,10 @@ export async function initializeVector(): Promise<boolean> {
   const vector = getSharedVector();
   if (!vector) return false;
   
-  try {
-    await vector.init();
-    vectorInitialized = true;
-    logger.success('MemoryFactory', 'PgVector tables initialized');
-    return true;
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    logger.fail('MemoryFactory', `Failed to init PgVector: ${errMsg}`);
-    return false;
-  }
+  // PgVector auto-initializes on first use, just mark as ready
+  vectorInitialized = true;
+  logger.success('MemoryFactory', 'PgVector ready (auto-init on first use)');
+  return true;
 }
 
 /**
@@ -183,7 +178,7 @@ export function createAgentMemory(options?: {
           template: WORKING_MEMORY_TEMPLATE,
         } : undefined,
         semanticRecall: false,
-        threads: { generateTitle: true },
+        generateTitle: true, // Moved to top-level in newer Mastra versions
       },
     };
 
