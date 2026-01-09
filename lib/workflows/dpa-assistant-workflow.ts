@@ -13,16 +13,15 @@
  * - doc_read: Read Feishu documents
  * - general_chat: Conversational AI (preserves agent behavior)
  * 
- * MODELS: Uses OpenRouter free models ONLY:
- * - nvidia/nemotron-3-nano-30b-a3b:free (primary)
- * - kwaipilot/kat-coder-pro:free (alternative)
+ * MODELS: Uses model-router for correct routing:
+ * - NVIDIA API (default when NVIDIA_API_TOKEN set)
+ * - OpenRouter free models (fallback)
  */
 
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import { generateText } from "ai";
-import { openrouter } from "../shared/config";
-import { FREE_MODELS } from "../shared/model-fallback";
+import { getMastraModelSingle } from "../shared/model-router";
 import { 
   createGitLabCliTool, 
   createFeishuChatHistoryTool, 
@@ -36,8 +35,8 @@ import { createFeishuTask } from "../services/feishu-task-service";
 import { getFeishuOpenId } from "../services/user-mapping-service";
 import { storeIssueThreadMapping } from "../services/issue-thread-mapping-service";
 
-// Free model instances - ONLY these models are used
-const freeModel = openrouter(FREE_MODELS[0]); // nvidia/nemotron-3-nano-30b-a3b:free
+// Free model instance - uses NVIDIA (default) or OpenRouter free models
+const freeModel = getMastraModelSingle(false); // Uses model-router for correct routing
 
 // Intent types
 const IntentEnum = z.enum([
@@ -228,7 +227,7 @@ Do not include any other text.`;
     
     try {
       const { text } = await generateText({
-        model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
+        model: freeModel, // Uses model-router
         prompt: classificationPrompt,
         temperature: 0,
       });
@@ -534,7 +533,7 @@ LABELS: <comma-separated labels or "none">
 ASSIGNEE: <username or "none">`;
 
     const { text } = await generateText({
-      model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free
+      model: freeModel, // Uses model-router
       prompt: parsePrompt,
       temperature: 0,
     });
@@ -1425,7 +1424,7 @@ const executeGeneralChatStep = createStep({
     
     try {
       // Create inline agent for conversational response
-      // Uses free model: nvidia/nemotron-3-nano-30b-a3b:free
+      // Uses model-router (NVIDIA or OpenRouter free)
       const dpaMomAgent = new Agent({
         id: "dpa-mom-chat",
         name: "dpa_mom_chat",
@@ -1443,7 +1442,7 @@ GUIDELINES:
 - Be helpful, concise, and friendly
 - Format responses in Markdown
 - Do not tag users (@)`,
-        model: freeModel, // nvidia/nemotron-3-nano-30b-a3b:free (OpenRouter free tier)
+        model: freeModel, // Uses model-router
       });
       
       const result = await dpaMomAgent.generate(query);

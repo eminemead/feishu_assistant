@@ -20,7 +20,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { generateText } from "ai";
 import { getFeishuClient } from "../feishu-utils";
-import { openrouter } from "../shared/config";
+import { getMastraModelSingle } from "../shared/model-router";
 
 const execAsync = promisify(exec);
 
@@ -220,7 +220,7 @@ Output ONLY the formatted changelog content (no title, no metadata).`;
 
     try {
       const result = await generateText({
-        model: openrouter("anthropic/claude-3.5-haiku"),
+        model: getMastraModelSingle(false), // Uses NVIDIA (default) or OpenRouter free models
         prompt,
       });
       
