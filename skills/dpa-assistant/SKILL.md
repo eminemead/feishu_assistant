@@ -12,6 +12,23 @@ keywords: ["dpa", "gitlab", "glab", "issue", "mr", "merge request", "聊天记�
 
 Workflow-based DPA team assistant that routes queries to specialized execution paths.
 
+## Command Syntax (Slash Commands)
+
+For explicit intent control, use slash commands:
+
+| Command | Action | Example |
+|---------|--------|---------|
+| `/创建` `/新` | Create GitLab issue | `/创建 数据管道失败` |
+| `/查看` `/列表` | List issues/MRs | `/查看 my issues` |
+| `/总结 #N` | Summarize issue | `/总结 #123` |
+| `/关闭 #N [url]` | Close with deliverable | `/关闭 #45 http://superset.nevint.com/...` |
+| `/关联 #N` | Link thread to issue | `/关联 #456` |
+| `/搜索` | Search chat history | `/搜索 部署讨论` |
+| `/文档` | Read Feishu doc | `/文档 https://feishu.cn/docs/xxx` |
+| `/帮助` | Show commands | `/帮助` |
+
+Without `/` prefix, the bot uses AI to understand intent (may occasionally misinterpret).
+
 ## Capabilities
 
 ### 1. GitLab Operations

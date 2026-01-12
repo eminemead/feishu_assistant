@@ -94,6 +94,75 @@ const classifyIntentOutputSchema = z.object({
   linkedIssue: linkedIssueSchema,
 });
 
+// Command-style triggers (slash commands) - explicit intent, no LLM needed
+// Exported for testing
+export const SLASH_COMMANDS: Record<string, Intent> = {
+  // GitLab ops
+  '/创建': 'gitlab_create',
+  '/新': 'gitlab_create',
+  '/create': 'gitlab_create',
+  '/new': 'gitlab_create',
+  '/查看': 'gitlab_list',
+  '/列表': 'gitlab_list',
+  '/list': 'gitlab_list',
+  '/总结': 'gitlab_summarize',
+  '/summarize': 'gitlab_summarize',
+  '/关闭': 'gitlab_close',
+  '/close': 'gitlab_close',
+  '/关联': 'gitlab_relink',
+  '/绑定': 'gitlab_relink',
+  '/link': 'gitlab_relink',
+  // Feishu ops
+  '/搜索': 'chat_search',
+  '/search': 'chat_search',
+  '/文档': 'doc_read',
+  '/doc': 'doc_read',
+};
+
+// Help command shows available commands
+export const HELP_COMMANDS = ['/帮助', '/help', '/?'];
+
+/**
+ * Parse slash command from query (exported for testing)
+ * Returns null if not a slash command or unknown command
+ */
+export function parseSlashCommand(query: string): {
+  intent: Intent | 'help' | null;
+  params?: Record<string, string>;
+  remainingQuery: string;
+} | null {
+  const slashMatch = query.match(/^\/([^\s]+)/);
+  if (!slashMatch) return null;
+  
+  const slashCmd = `/${slashMatch[1].toLowerCase()}`;
+  const remainingQuery = query.slice(slashMatch[0].length).trim();
+  
+  // Help command
+  if (HELP_COMMANDS.includes(slashCmd)) {
+    return { intent: 'help', remainingQuery };
+  }
+  
+  // Known command
+  const mappedIntent = SLASH_COMMANDS[slashCmd];
+  if (mappedIntent) {
+    // For commands that need issue number, extract it
+    if (['gitlab_summarize', 'gitlab_close', 'gitlab_relink'].includes(mappedIntent)) {
+      const issueMatch = remainingQuery.match(/#?(\d+)/);
+      if (issueMatch) {
+        return {
+          intent: mappedIntent,
+          params: { issueIid: issueMatch[1] },
+          remainingQuery,
+        };
+      }
+    }
+    return { intent: mappedIntent, remainingQuery };
+  }
+  
+  // Unknown slash command
+  return { intent: null, remainingQuery };
+}
+
 const classifyIntentStep = createStep({
   id: "classify-intent",
   // @ts-ignore - Mastra beta.20 has overload resolution issues with tsgo
@@ -124,6 +193,64 @@ const classifyIntentStep = createStep({
         userId,
         linkedIssue,
       };
+    }
+    
+    // SLASH COMMAND: Check for explicit /command syntax (highest priority after confirmations)
+    const slashMatch = query.match(/^\/([^\s]+)/);
+    if (slashMatch) {
+      const slashCmd = `/${slashMatch[1].toLowerCase()}`;
+      
+      // Help command - return special response
+      if (HELP_COMMANDS.includes(slashCmd)) {
+        console.log(`[DPA Workflow] Help command detected`);
+        return {
+          intent: "general_chat" as Intent,
+          params: { __helpCommand: "true" },
+          query,
+          chatId,
+          rootId,
+          userId,
+          linkedIssue,
+        };
+      }
+      
+      // Check if it's a known command
+      const mappedIntent = SLASH_COMMANDS[slashCmd];
+      if (mappedIntent) {
+        console.log(`[DPA Workflow] Slash command "${slashCmd}" → ${mappedIntent}`);
+        
+        // Extract remaining text (strip slash command prefix)
+        const remainingQuery = query.slice(slashMatch[0].length).trim();
+        
+        // For commands that need issue number, extract it
+        if (['gitlab_summarize', 'gitlab_close', 'gitlab_relink'].includes(mappedIntent)) {
+          const issueMatch = remainingQuery.match(/#?(\d+)/);
+          if (issueMatch) {
+            return {
+              intent: mappedIntent,
+              params: { issueIid: issueMatch[1] },
+              query: remainingQuery,
+              chatId,
+              rootId,
+              userId,
+              linkedIssue,
+            };
+          }
+        }
+        
+        return {
+          intent: mappedIntent,
+          params: undefined,
+          query: remainingQuery || query, // Use remaining text or original if empty
+          chatId,
+          rootId,
+          userId,
+          linkedIssue,
+        };
+      }
+      
+      // Unknown slash command - treat as general chat with hint
+      console.log(`[DPA Workflow] Unknown slash command "${slashCmd}", falling through to LLM`);
     }
     
     // Check for thread update keywords when linked issue exists
@@ -1411,14 +1538,44 @@ const executeGeneralChatStep = createStep({
     params: z.record(z.string()).optional(),
     query: z.string(),
     chatId: z.string().optional(),
+    rootId: z.string().optional(),
     userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
   }),
   outputSchema: z.object({
     result: z.string(),
     intent: IntentEnum,
   }),
   execute: async ({ inputData }) => {
-    const { query } = inputData;
+    const { query, params } = inputData;
+    
+    // Handle help command
+    if (params?.__helpCommand === "true") {
+      const helpText = `**📋 可用命令 / Available Commands**
+
+**GitLab操作**
+- \`/创建\` 或 \`/新\` — 创建Issue
+- \`/查看\` 或 \`/列表\` — 查看Issue/MR列表
+- \`/总结 #123\` — 总结Issue进展
+- \`/关闭 #123 [交付物链接]\` — 关闭Issue
+- \`/关联 #123\` — 关联当前话题到Issue
+
+**飞书操作**
+- \`/搜索 关键词\` — 搜索聊天记录
+- \`/文档 [链接]\` — 读取飞书文档
+
+**其他**
+- \`/帮助\` — 显示此帮助
+
+---
+
+💡 不带 \`/\` 前缀的消息将由AI自动理解意图`;
+
+      return {
+        result: helpText,
+        intent: "general_chat" as const,
+      };
+    }
     
     console.log(`[DPA Workflow] Executing general chat`);
     
@@ -1565,7 +1722,12 @@ export const dpaAssistantWorkflow = createWorkflow({
       async ({ inputData }) => inputData?.intent === "doc_read",
       executeDocReadStep
     ],
-    // NOTE: general_chat is NOT handled by workflow - falls back to agent
+    // Help command: general_chat with __helpCommand param → executeGeneralChatStep
+    [
+      async ({ inputData }) => inputData?.intent === "general_chat" && inputData?.params?.__helpCommand === "true",
+      executeGeneralChatStep
+    ],
+    // NOTE: general_chat without __helpCommand is NOT handled by workflow - falls back to agent
   ])
   // After branch, outputs are keyed by step ID - normalize them
   .map(async ({ inputData, getStepResult }) => {
@@ -1590,9 +1752,10 @@ export const dpaAssistantWorkflow = createWorkflow({
     const gitlabSummarize = getStepResult("execute-gitlab-summarize");
     const chatSearch = getStepResult("execute-chat-search");
     const docRead = getStepResult("execute-doc-read");
+    const generalChat = getStepResult("execute-general-chat");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead;
+    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead || generalChat;
     
     if (branchResult) {
       return {
