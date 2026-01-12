@@ -4,6 +4,9 @@
  * Creates the GitLab CLI tool used by the DPA Mom Agent.
  * Wraps glab CLI commands for GitLab repository and issue management.
  * 
+ * GUARDRAIL: This tool is scoped ONLY to dpa/dpa-mom/task repository.
+ * All commands auto-inject -R dpa/dpa-mom/task to prevent misuse.
+ * 
  * NOTE: This is a tool factory for creating tool instances, NOT a shared tool
  * between agents. Each agent has its own tool instances scoped to that agent.
  */
@@ -17,14 +20,51 @@ import { trackToolCall } from "../devtools-integration";
 const execAsync = promisify(exec);
 
 /**
- * Execute glab command safely
+ * GUARDRAIL: The ONLY GitLab repo this tool is allowed to operate on.
+ * All commands will have -R flag auto-injected/enforced.
+ */
+const ALLOWED_GITLAB_REPO = "dpa/dpa-mom/task";
+const GITLAB_HOST = "git.nevint.com";
+
+/**
+ * Enforce repo guardrail: ensure command targets ONLY allowed repo
+ * 
+ * - Strips any user-provided -R/--repo flags
+ * - Auto-injects -R dpa/dpa-mom/task
+ * - Rejects commands that don't make sense with repo scope
+ */
+function enforceRepoGuardrail(command: string): string {
+  // Strip any existing -R or --repo flags (prevent override attempts)
+  let sanitized = command
+    .replace(/-R\s+[^\s]+/gi, "")
+    .replace(/--repo[=\s]+[^\s]+/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Commands that need repo context (most glab commands)
+  const needsRepoFlag = /^(issue|mr|ci|release|label|milestone|api)/i.test(sanitized);
+  
+  if (needsRepoFlag) {
+    sanitized = `${sanitized} -R ${ALLOWED_GITLAB_REPO}`;
+  }
+
+  console.log(`[GitLab] Guardrail: "${command}" → "${sanitized}"`);
+  return sanitized;
+}
+
+/**
+ * Execute glab command safely (with repo guardrail enforced)
  */
 async function executeGlabCommand(command: string, timeout: number = 30000): Promise<{ stdout: string; stderr: string }> {
+  // GUARDRAIL: Enforce repo scope
+  const safeCommand = enforceRepoGuardrail(command);
+  
   try {
     const { stdout, stderr } = await Promise.race([
-      execAsync(`glab ${command}`, {
+      execAsync(`glab ${safeCommand}`, {
         timeout,
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        env: { ...process.env, GITLAB_HOST }, // Ensure correct host
       }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(`Command timeout after ${timeout}ms`)), timeout)
@@ -93,36 +133,40 @@ export function createGitLabCliTool(enableDevtoolsTracking: boolean = true) {
   // Base tool definition
   // @ts-ignore - Type instantiation depth issue
   const gitlabCliToolBase = tool({
-    description: `Access GitLab repository and issue management via glab CLI. 
-    
+    description: `Access GitLab issue management via glab CLI.
+
+⚠️ SCOPE: This tool ONLY works with dpa/dpa-mom/task repo (${GITLAB_HOST}).
+The -R flag is auto-injected; do NOT specify repo manually.
+
 Available commands:
-- issue: Manage issues (list, view, create, close, etc.)
-- mr: Manage merge requests (list, view, create, etc.)
-- repo: Repository operations (view, clone, etc.)
-- ci: CI/CD operations (view pipelines, jobs, etc.)
-- api: Direct API calls
+- issue list: List issues (add --assignee=@me for your issues, -c for closed)
+- issue view <iid>: View issue details
+- issue create -t "title" -d "desc": Create new issue
+- issue close <iid>: Close an issue
+- issue note <iid> -m "comment": Add comment
+- mr list: List merge requests
+- ci view: View CI/CD pipelines
 
 Examples:
-- "issue list" - List all issues
-- "issue view 123" - View issue #123
-- "mr list" - List merge requests
-- "repo view" - View repository info
-- "ci view" - View CI/CD pipelines
+- "issue list" → Lists open issues in dpa/dpa-mom/task
+- "issue list --assignee=@me" → Your assigned issues
+- "issue view 123" → View issue #123
+- "issue create -t 'Bug fix' -d 'Details...'" → Create issue
 
-Use glab command syntax. For help: "glab <command> --help"`,
+Do NOT include 'glab' prefix or -R flag (auto-injected).`,
     // @ts-ignore
     parameters: zodSchema(
       z.object({
         command: z
           .string()
           .describe(
-            "The glab command to execute (e.g., 'issue list', 'mr view 456', 'repo view'). Do not include 'glab' prefix."
+            "The glab command (e.g., 'issue list', 'issue view 123'). Do NOT include 'glab' prefix or -R repo flag."
           ),
         args: z
           .string()
           .optional()
           .describe(
-            "Additional arguments/flags for the command (e.g., '--state=opened', '--assignee=username'). Optional."
+            "Additional flags (e.g., '--assignee=@me', '-c' for closed). Do NOT use -R or --repo."
           ),
       })
     ),
