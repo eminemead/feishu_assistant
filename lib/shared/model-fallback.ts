@@ -82,15 +82,31 @@ export const FREE_MODELS_WITH_TOOLS = [
   "kwaipilot/kat-coder-pro:free", // Coding-focused alternative
 ] as const;
 
+// ============================================================================
+// GUARDRAIL: Validate all models are free at module load
+// This prevents accidental addition of paid models to the whitelist
+// ============================================================================
+[...FREE_MODELS, ...FREE_MODELS_WITH_TOOLS].forEach((model) => {
+  if (!model.endsWith(":free")) {
+    throw new Error(
+      `🚨 PAID MODEL DETECTED: "${model}" does not have :free suffix!\n` +
+      `Only free models are allowed in FREE_MODELS arrays.\n` +
+      `See AGENTS.md for model usage policy.`
+    );
+  }
+});
+
 /**
  * NVIDIA API Model Configuration (Direct API - Free)
  * 
  * Uses NVIDIA's integrate.api.nvidia.com endpoint directly.
  * This is OpenAI-compatible and free to use.
+ * 
+ * Model: z-ai/glm4.7 - GLM 4.7, supports tool calling
  */
 export const NVIDIA_MODEL_CONFIG = {
   url: process.env.NVIDIA_URL || "https://integrate.api.nvidia.com/v1",
-  id: "minimaxai/minimax-m2.1",
+  id: process.env.NVIDIA_MODEL_ID || "z-ai/glm4.7",
   apiKey: process.env.NVIDIA_API_TOKEN,
 } as const;
 

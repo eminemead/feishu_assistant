@@ -82,6 +82,18 @@ NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
 - Search recent issues: `bd list --json`
 - Create a task: `bd create "Question: ..." -t task -p 2`
 
+## Model Usage Policy
+
+**CRITICAL: Only free models allowed via OpenRouter.**
+
+- ✅ All models in `FREE_MODELS` array MUST have `:free` suffix
+- ✅ Primary: NVIDIA API (free tier via integrate.api.nvidia.com)
+- ✅ Fallback: OpenRouter free models only
+- ❌ NEVER add models without `:free` suffix to `lib/shared/model-fallback.ts`
+- ❌ NEVER commit paid model configs (use local env override for testing)
+
+The codebase has a compile-time guardrail that throws on startup if any non-free model is detected in the whitelist.
+
 
 ## Using bv as an AI sidecar
 

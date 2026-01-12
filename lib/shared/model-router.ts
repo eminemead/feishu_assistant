@@ -1,12 +1,10 @@
 /**
  * Model Router - Use AI SDK Provider with Explicit Free Models
  * 
- * TEMPORARY: Using NVIDIA API directly for minimaxai/minimax-m2.1 (free)
+ * Primary: NVIDIA API with z-ai/glm4.7 (free)
+ * Fallback: OpenRouter with :free suffix models
  * 
- * Previous behavior used OpenRouter with :free suffix models.
- * Now defaults to NVIDIA's integrate.api.nvidia.com endpoint.
- * 
- * Set USE_OPENROUTER=true to revert to OpenRouter behavior.
+ * Set USE_OPENROUTER=true to use OpenRouter instead.
  */
 
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
