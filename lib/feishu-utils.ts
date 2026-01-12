@@ -36,7 +36,7 @@ export function parseMessageContent(content: string): string {
       return contentObj.text;
     }
     
-    // Post format: { "content": [[{ "tag": "text", "text": "..." }, ...]] }
+    // Post format: { "content": [[{ "tag": "text", "text": "..." }, { "tag": "at", ... }, ...]] }
     if (contentObj.content && Array.isArray(contentObj.content)) {
       const textParts: string[] = [];
       
@@ -46,6 +46,16 @@ export function parseMessageContent(content: string): string {
           for (const element of elementGroup) {
             if (element.tag === "text" && element.text) {
               textParts.push(element.text);
+            } else if (element.tag === "at") {
+              // Preserve @mentions as @user_id format for downstream processing
+              // Use user_id if available, otherwise use the display text
+              const userId = element.user_id || element.open_id;
+              if (userId) {
+                textParts.push(`@${userId}`);
+              } else if (element.text) {
+                // Fallback to display text (e.g., "@张三")
+                textParts.push(element.text);
+              }
             }
           }
         }
@@ -254,9 +264,10 @@ export async function getThread(
   while (retries > 0) {
     try {
       // Wrap in Promise.race with timeout to prevent indefinite hangs
+      // Note: container_id_type should be "chat" (not "chat_id") per Feishu API docs
       const fetchPromise = client.im.message.list({
         params: {
-          container_id_type: "chat_id",
+          container_id_type: "chat",
           container_id: chatId,
           page_size: 50,
         },

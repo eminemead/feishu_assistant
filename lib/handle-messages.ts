@@ -9,6 +9,10 @@ import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { handleDocumentCommand } from "./handle-doc-commands";
 import { devtoolsTracker } from "./devtools-integration";
 import { logger } from "./logger";
+import { executeSkillWorkflow } from "./workflows";
+import { SLASH_COMMANDS, HELP_COMMANDS } from "./workflows/dpa-assistant-workflow";
+import { getLinkedIssue } from "./services/issue-thread-mapping-service";
+import { stripThinkingTags } from "./streaming/thinking-panel";
 
 /**
  * Format thinking/reasoning content as a collapsible-like section in markdown
@@ -45,11 +49,20 @@ export async function handleNewMessage(data: FeishuMessageData) {
 
   logger.info(`Handling new message: ${chatId} ${rootId}`);
 
-  // Remove bot mention from message text if present
-  let cleanText = messageText.replace(
-    /<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g,
-    ""
-  ).trim();
+  // Remove ONLY the bot mention from message text (preserve other @mentions for workflow)
+  // After server.ts mention resolution, bot mention appears as @ou_xxx or @cli_xxx
+  let cleanText = messageText
+    // Remove XML-style bot mention at start: <at user_id="bot_id">@Bot</at>
+    .replace(/^<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/, "")
+    // Remove resolved bot mention at start: @ou_xxx (open_id format)
+    .replace(/^@ou_[a-zA-Z0-9_-]+\s*/, "")
+    // Remove resolved bot mention at start: @cli_xxx (app_id format)
+    .replace(/^@cli_[a-zA-Z0-9_-]+\s*/, "")
+    // Remove plain text bot mention at start: @_user_1 (placeholder ID)
+    .replace(/^@_user_\d+\s*/, "")
+    // Remove @bot prefix if present
+    .replace(/^@bot\s+/i, "")
+    .trim();
 
   // Track in devtools
   devtoolsTracker.trackAgentCall("FeishuMessage", cleanText, {
@@ -95,6 +108,93 @@ export async function handleNewMessage(data: FeishuMessageData) {
       return; // Early exit - don't call generateResponse
     }
     logger.info(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
+  }
+
+  // Check for slash commands (e.g., /collect, /创建, /list) - route directly to workflow
+  const slashMatch = cleanText.match(/^\/([^\s]+)/);
+  if (slashMatch) {
+    const slashCmd = `/${slashMatch[1].toLowerCase()}`;
+    const isKnownSlashCommand = slashCmd in SLASH_COMMANDS || HELP_COMMANDS.includes(slashCmd);
+    
+    if (isKnownSlashCommand) {
+      logger.info(`[SlashCommand] ============================================`);
+      logger.info(`[SlashCommand] Intercepted: "${slashCmd}"`);
+      logger.info(`[SlashCommand] Full text: "${cleanText.substring(0, 100)}..."`);
+      logger.info(`[SlashCommand] Context: chatId="${chatId}", rootId="${rootId}", userId="${userId}"`);
+      logger.info(`[SlashCommand] ============================================`);
+      
+      devtoolsTracker.trackAgentCall("SlashCommand", cleanText, {
+        messageId,
+        rootId,
+        command: slashCmd,
+        commandIntercepted: true
+      });
+
+      // Create streaming card for slash command
+      const card = await createAndSendStreamingCard(chatId, "chat_id", {}, {
+        replyToMessageId: messageId,
+        replyInThread: true,
+      });
+
+      try {
+        // Check for linked GitLab issue
+        const linkedIssue = await getLinkedIssue(chatId, rootId);
+        if (linkedIssue) {
+          logger.info(`[SlashCommand] Thread linked to GitLab #${linkedIssue.issueIid}`);
+        }
+
+        // Execute DPA Assistant workflow directly with full context
+        const workflowResult = await executeSkillWorkflow("dpa-assistant", {
+          query: cleanText,
+          chatId,
+          rootId,
+          userId,
+          linkedIssue: linkedIssue || undefined,
+          onUpdate: async (text: string) => {
+            await updateCardElement(card.cardId, card.elementId, text);
+          },
+        });
+
+        logger.info(`[SlashCommand] Workflow result: success=${workflowResult.success}, needsConfirmation=${workflowResult.needsConfirmation}`);
+        
+        // Handle skip workflow signal (general_chat should fall through to agent)
+        if (workflowResult.skipWorkflow) {
+          logger.info(`[SlashCommand] Workflow returned skip signal, falling through to agent`);
+          // Don't return - continue to generateResponse below
+        } else {
+          // Finalize card with workflow response
+          const duration = Date.now() - startTime;
+          await finalizeCardWithFollowups(
+            card.cardId,
+            card.elementId,
+            workflowResult.response,
+            undefined,
+            undefined,
+            {
+              conversationId: chatId,
+              rootId: rootId,
+              threadId: rootId,
+              confirmationData: workflowResult.needsConfirmation ? workflowResult.confirmationData : undefined,
+            }
+          );
+
+          devtoolsTracker.trackResponse("SlashCommand", workflowResult.response, duration, {
+            threadId: rootId,
+            messageId,
+            command: slashCmd,
+            workflowId: "dpa-assistant",
+          });
+
+          logger.info(`[SlashCommand] Complete (duration=${duration}ms)`);
+          return; // Early exit - don't call generateResponse
+        }
+      } catch (workflowError) {
+        logger.error(`[SlashCommand] Workflow execution failed:`, workflowError);
+        // Fall through to agent on error
+      }
+    } else {
+      logger.info(`[SlashCommand] Unknown command "${slashCmd}", falling through to agent`);
+    }
   }
 
   // Create streaming card - reply in thread if this is a thread message
@@ -157,6 +257,15 @@ export async function handleNewMessage(data: FeishuMessageData) {
       reasoning = rawResult.reasoning;
       linkedIssue = rawResult.linkedIssue;
     }
+
+    // Always hide embedded <think>...</think> tags from rendered output
+    // (workflows + some models may include them in plain text).
+    const stripped = stripThinkingTags(result);
+    result = stripped.text;
+    // If a model embedded thinking tags, treat it as "reasoning" (hidden by default).
+    if (!reasoning && stripped.reasoning) {
+      reasoning = stripped.reasoning;
+    }
     
     // Add linkage indicator if thread has linked GitLab issue
     if (linkedIssue && !needsConfirmation) {
@@ -186,11 +295,11 @@ export async function handleNewMessage(data: FeishuMessageData) {
       logger.debug("Could not extract image_key from result");
     }
 
-    // Append thinking as collapsed section in markdown if reasoning is present
-    // Note: Feishu collapsible_panel doesn't work with streaming cards, so we use markdown formatting
-    if (reasoning && reasoning.length > 0) {
+    // Thinking/reasoning is hidden by default.
+    // Opt-in only (useful for debugging).
+    const showThinking = process.env.SHOW_THINKING_PROCESS === "true";
+    if (showThinking && reasoning && reasoning.length > 0) {
       logger.debug(`[Card] Appending thinking section with ${reasoning.length} chars of reasoning`);
-      // Format thinking as a dimmed/quoted section that users can scroll to see
       const thinkingSection = formatThinkingSection(reasoning);
       result = result + thinkingSection;
     }

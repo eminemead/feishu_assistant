@@ -23,6 +23,7 @@ For explicit intent control, use slash commands:
 | `/总结 #N` | Summarize issue | `/总结 #123` |
 | `/关闭 #N [url]` | Close with deliverable | `/关闭 #45 http://superset.nevint.com/...` |
 | `/关联 #N` | Link thread to issue | `/关联 #456` |
+| `/总结反馈 @user...` | Summarize user(s) feedback | `/总结反馈 @张三 @李四` |
 | `/搜索` | Search chat history | `/搜索 部署讨论` |
 | `/文档` | Read Feishu doc | `/文档 https://feishu.cn/docs/xxx` |
 | `/帮助` | Show commands | `/帮助` |
@@ -46,6 +47,11 @@ Without `/` prefix, the bot uses AI to understand intent (may occasionally misin
 - Provide help and guidance
 - General conversation
 
+### 4. Feedback Collection
+- **Summarize User Feedback**: "总结 @xxx @yyy 的反馈", supports multiple users
+- **Batch Feedback**: Collect feedback from multiple users in one command
+- **Create Issue from Feedback**: Confirmation button after summary to create GitLab issue
+
 ## Workflow Architecture
 
 ```
@@ -55,12 +61,12 @@ Query → Intent Classification (fast model)
     │ Branch  │
     └────┬────┘
          ↓
-  ┌──────┼──────┬──────┬──────┬──────┬──────┐
-  ↓      ↓      ↓      ↓      ↓      ↓      ↓
-gitlab  gitlab  gitlab  gitlab  chat   doc   general
-create  list   update  relink search  read   chat
-  ↓      ↓      ↓      ↓      ↓      ↓      ↓
-  └──────┴──────┴──────┴──────┴──────┴──────┘
+  ┌──────┼──────┬──────┬──────┬──────┬──────┬──────┐
+  ↓      ↓      ↓      ↓      ↓      ↓      ↓      ↓
+gitlab  gitlab  gitlab  gitlab  chat   doc  feedback general
+create  list   update  relink search  read  summary  chat
+  ↓      ↓      ↓      ↓      ↓      ↓      ↓      ↓
+  └──────┴──────┴──────┴──────┴──────┴──────┴──────┘
          ↓
     Format Response
 ```
@@ -74,6 +80,7 @@ create  list   update  relink search  read   chat
 | `gitlab_relink` | link to #123, 跟踪issue, 绑定 | Link current thread to existing issue |
 | `gitlab_summarize` | summarize #12, status #12, 总结 | Fetch issue + comments, LLM summary |
 | `gitlab_thread_update` | 补充, 更新, also (in linked thread) | Add note to linked issue |
+| `feedback_summarize` | 总结 @user1 @user2 反馈 | Summarize user(s) feedback from chat history |
 | `chat_search` | find messages, 查找聊天 | Search Feishu chat history |
 | `doc_read` | read doc, Feishu URL | Read Feishu document |
 | `general_chat` | everything else | Conversational agent |
@@ -105,6 +112,10 @@ create  list   update  relink search  read   chat
 "link to #456"
 → gitlab_relink → Link this thread to issue #456
 → Future replies auto-sync as GitLab comments
+
+"总结 @张三 @李四 的反馈"
+→ feedback_summarize → Summarize users' messages (supports multiple)
+→ Option to create GitLab issue from summary
 ```
 
 ## Migration from DPA Mom Agent

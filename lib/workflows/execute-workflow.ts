@@ -10,6 +10,7 @@
 
 import { getWorkflowRegistry } from "./registry";
 import type { WorkflowExecutionContext, BaseWorkflowInput, BaseWorkflowOutput } from "./types";
+import { stripThinkingTags } from "../streaming/thinking-panel";
 
 /**
  * Options for workflow execution
@@ -235,6 +236,10 @@ export async function executeSkillWorkflow(
     } else {
       response = String(result);
     }
+
+    // Hide model thinking tags in workflow outputs (user-facing Feishu cards)
+    // Workflows do not go through the agent streaming sanitizer, so we normalize here.
+    response = stripThinkingTags(response).text;
     
     const durationMs = Date.now() - startTime;
     console.log(`[Workflow] Completed ${workflowId} in ${durationMs}ms`);

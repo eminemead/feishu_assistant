@@ -22,12 +22,14 @@ import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import { generateText } from "ai";
 import { getMastraModelSingle } from "../shared/model-router";
+import { feishuCardOutputGuidelines } from "../shared/feishu-output-guidelines";
 import { 
   createGitLabCliTool, 
   createFeishuChatHistoryTool, 
   createFeishuDocsTool 
 } from "../tools";
 import { readAndSummarizeDocs, getAuthPromptIfNeeded } from "../tools/feishu-docs-user-tool";
+import { getChatMemberMapping } from "../tools/feishu-chat-history-tool";
 import { runDocumentReadWorkflow } from "./document-read-workflow";
 import { feishuIdToEmpAccount } from "../auth/feishu-account-mapping";
 import { Agent } from "@mastra/core/agent";
@@ -49,6 +51,8 @@ const IntentEnum = z.enum([
   "gitlab_summarize",  // Summarize issue with comments
   "chat_search",
   "doc_read",
+  "feedback_summarize",  // Summarize user feedback for issue creation
+  "feedback_update",  // Append feedback summary to existing issue
   "general_chat"
 ]);
 
@@ -61,6 +65,28 @@ type Intent = z.infer<typeof IntentEnum>;
 const gitlabTool = createGitLabCliTool(true);
 const chatHistoryTool = createFeishuChatHistoryTool(true);
 const docsTool = createFeishuDocsTool(true);
+
+/**
+ * Resolve @mention or _user_N format to Feishu user ID
+ * - "@_user_1" → Return as-is for Feishu API matching
+ * - "ou_xxx" → Use directly (open_id format)
+ * - "张三" → Return as-is (name matching handled downstream)
+ */
+function resolveFeishuUserId(mention: string): string | null {
+  if (!mention) return null;
+  
+  // Strip @ prefix if present
+  const cleaned = mention.replace(/^@/, '');
+  
+  // Already an open_id format
+  if (cleaned.startsWith('ou_')) {
+    return cleaned;
+  }
+  
+  // Feishu mention placeholder format (_user_1, etc.) or name
+  // Return as-is - chat history filter will handle matching
+  return cleaned;
+}
 
 /**
  * Step 1: Classify Intent
@@ -117,6 +143,14 @@ export const SLASH_COMMANDS: Record<string, Intent> = {
   '/search': 'chat_search',
   '/文档': 'doc_read',
   '/doc': 'doc_read',
+  // Feedback collection
+  '/总结反馈': 'feedback_summarize',
+  '/summarize-feedback': 'feedback_summarize',
+  '/collect': 'feedback_summarize',
+  // Feedback update (append to existing issue)
+  '/update': 'feedback_update',
+  '/更新': 'feedback_update',
+  '/追加': 'feedback_update',
 };
 
 // Help command shows available commands
@@ -238,6 +272,88 @@ const classifyIntentStep = createStep({
           }
         }
         
+        // For feedback_summarize, extract target users @mentions (supports multiple)
+        if (mappedIntent === 'feedback_summarize') {
+          console.log(`[DPA Workflow] feedback_summarize: remainingQuery="${remainingQuery}"`);
+          const userMentionMatches = remainingQuery.match(/@([^\s]+)/g);
+          console.log(`[DPA Workflow] feedback_summarize: userMentionMatches=${JSON.stringify(userMentionMatches)}`);
+          if (userMentionMatches && userMentionMatches.length > 0) {
+            const targetUsers = userMentionMatches.map(m => m.replace(/^@/, ''));
+            console.log(`[DPA Workflow] feedback_summarize: targetUsers=${targetUsers.join(',')}, chatId=${chatId}`);
+            return {
+              intent: mappedIntent,
+              params: { targetUsers: targetUsers.join(',') },
+              query: remainingQuery,
+              chatId,
+              rootId,
+              userId,
+              linkedIssue,
+            };
+          }
+          // No user mentioned - still route to step, which will show error
+          return {
+            intent: mappedIntent,
+            params: undefined,
+            query: remainingQuery,
+            chatId,
+            rootId,
+            userId,
+            linkedIssue,
+          };
+        }
+        
+        // For feedback_update, extract issue number AND target users
+        // Format: /update #123 @user1 @user2
+        if (mappedIntent === 'feedback_update') {
+          console.log(`[DPA Workflow] feedback_update: remainingQuery="${remainingQuery}"`);
+          
+          // Extract issue number
+          const issueMatch = remainingQuery.match(/#(\d+)/);
+          const issueIid = issueMatch?.[1];
+          
+          // Extract user mentions
+          const userMentionMatches = remainingQuery.match(/@([^\s]+)/g);
+          const targetUsers = userMentionMatches?.map(m => m.replace(/^@/, '')).join(',') || '';
+          
+          console.log(`[DPA Workflow] feedback_update: issueIid=${issueIid}, targetUsers=${targetUsers}`);
+          
+          if (!issueIid) {
+            // No issue number - return with error hint
+            return {
+              intent: mappedIntent,
+              params: { error: 'missing_issue' },
+              query: remainingQuery,
+              chatId,
+              rootId,
+              userId,
+              linkedIssue,
+            };
+          }
+          
+          if (!targetUsers) {
+            // No users mentioned - return with error hint
+            return {
+              intent: mappedIntent,
+              params: { issueIid, error: 'missing_users' },
+              query: remainingQuery,
+              chatId,
+              rootId,
+              userId,
+              linkedIssue,
+            };
+          }
+          
+          return {
+            intent: mappedIntent,
+            params: { issueIid, targetUsers },
+            query: remainingQuery,
+            chatId,
+            rootId,
+            userId,
+            linkedIssue,
+          };
+        }
+        
         return {
           intent: mappedIntent,
           params: undefined,
@@ -311,6 +427,24 @@ const classifyIntentStep = createStep({
       return {
         intent: "gitlab_summarize" as Intent,
         params: { issueIid: String(issueIid) },
+        query,
+        chatId,
+        rootId,
+        userId,
+        linkedIssue,
+      };
+    }
+    
+    // Check for feedback summarization: "总结 @xxx @yyy 的反馈", "summarize @user1 @user2's feedback"
+    const feedbackKeywords = /(?:总结|summarize|收集|collect).*(?:反馈|feedback|意见|建议|问题)/i;
+    const mentionMatches = query.match(/@([^\s]+)/g);
+    if (feedbackKeywords.test(query) && mentionMatches && mentionMatches.length > 0) {
+      // Extract all @mentions (strip @ prefix)
+      const targetUsers = mentionMatches.map(m => m.replace(/^@/, ''));
+      console.log(`[DPA Workflow] Feedback summarize keywords detected, target users: ${targetUsers.join(', ')}`);
+      return {
+        intent: "feedback_summarize" as Intent,
+        params: { targetUsers: targetUsers.join(',') },  // Comma-separated list
         query,
         chatId,
         rootId,
@@ -1130,7 +1264,8 @@ const executeGitLabSummarizeStep = createStep({
 Issue content:
 ${issueContent}
 
-IMPORTANT: Respond in ${language}. Be concise but comprehensive.`;
+${feishuCardOutputGuidelines({ language })}
+`;
 
       const { text: summary } = await generateText({
         model: freeModel,
@@ -1286,6 +1421,453 @@ const executeGitLabCloseStep = createStep({
       return {
         result: `❌ **GitLab Error**\n\n${error.message}`,
         intent: "gitlab_close" as const,
+      };
+    }
+  }
+});
+
+/**
+ * Step: Execute Feedback Summarize
+ * Summarizes specific users' feedback from chat history for issue creation
+ * Supports multiple users (comma-separated in params.targetUsers)
+ */
+const executeFeedbackSummarizeStep = createStep({
+  id: "execute-feedback-summarize",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+    needsConfirmation: z.boolean().optional(),
+    confirmationData: z.string().optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const { params, chatId, userId, rootId } = inputData;
+    const targetUsersRaw = params?.targetUsers;
+    
+    console.log(`[DPA Workflow] executeFeedbackSummarize: inputData keys=${Object.keys(inputData).join(',')}`);
+    console.log(`[DPA Workflow] executeFeedbackSummarize: chatId=${chatId}, userId=${userId}, params=${JSON.stringify(params)}`);
+    console.log(`[DPA Workflow] executeFeedbackSummarize: targetUsersRaw=${targetUsersRaw}`);
+    
+    // 1. Validate inputs
+    if (!chatId) {
+      return { 
+        result: "❌ 无法获取聊天ID", 
+        intent: "feedback_summarize" as const 
+      };
+    }
+    
+    if (!targetUsersRaw) {
+      return { 
+        result: "❌ 请指定要总结反馈的用户\n\n💡 示例:\n- `/总结反馈 @张三`\n- `/总结反馈 @张三 @李四 @王五`",
+        intent: "feedback_summarize" as const 
+      };
+    }
+    
+    // 2. Parse target users (comma-separated)
+    const targetUsers = targetUsersRaw.split(',').map(u => u.trim()).filter(Boolean);
+    console.log(`[DPA Workflow] Executing feedback summarize for ${targetUsers.length} user(s): ${targetUsers.join(', ')}`);
+    
+    try {
+      // 3. Fetch recent messages ONCE, then fan-out filter per user
+      const allUserMessages: { user: string; messages: any[] }[] = [];
+      const noMessagesUsers: string[] = [];
+      
+      // Calculate 4-hour time window (session-based)
+      const fourHoursAgo = Math.floor((Date.now() - 4 * 60 * 60 * 1000) / 1000);
+      const now = Math.floor(Date.now() / 1000);
+      const fourHoursAgoMs = fourHoursAgo * 1000;
+      const nowMs = now * 1000;
+      
+      // Helper: timeout wrapper for API calls
+      const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+        Promise.race([
+          promise,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms))
+        ]);
+      
+      // Get user_id → open_id mapping for this chat (cached)
+      const memberMapping = await getChatMemberMapping(chatId);
+      console.log(`[DPA Workflow] Got ${memberMapping.size} user_id→open_id mappings`);
+
+      // Fetch chat history once (limit=50). Filtering by time/user is done client-side.
+      let baseHistoryResult: { success: boolean; messages?: any[]; error?: string };
+      try {
+        baseHistoryResult = await withTimeout(
+          (chatHistoryTool.execute as any)({
+            chatId,
+            limit: 50, // Max allowed by Feishu API
+          }),
+          15000 // 15s timeout
+        );
+      } catch (timeoutError: any) {
+        console.error(`[DPA Workflow] Timeout/error fetching chat history: ${timeoutError.message}`);
+        return {
+          result: `❌ **无法读取群聊历史消息**\n\n获取群聊历史消息时超时。\n\n**可能原因:**\n1. 机器人缺少 \`im:message\` 权限\n2. 群聊未开启\"允许读取历史消息\"\n3. 飞书API暂时不可用\n\n**解决方案:**\n请联系管理员检查机器人权限设置。`,
+          intent: "feedback_summarize" as const,
+        };
+      }
+
+      console.log(
+        `[DPA Workflow] Base chat history: success=${baseHistoryResult.success}, totalMessages=${baseHistoryResult.messages?.length || 0}, error=${baseHistoryResult.error || "none"}`
+      );
+
+      if (!baseHistoryResult.success || !baseHistoryResult.messages) {
+        return {
+          result: `❌ **无法读取群聊历史消息**\n\n${baseHistoryResult.error || "未知错误"}`,
+          intent: "feedback_summarize" as const,
+        };
+      }
+
+      const baseMessages = baseHistoryResult.messages;
+      if (baseMessages.length) {
+        const sampleSenders = baseMessages.slice(0, 5).map((m: any) => m.sender?.id);
+        console.log(`[DPA Workflow] Sample sender IDs: ${JSON.stringify(sampleSenders)}`);
+      }
+
+      const getCreateTimeMs = (msg: any): number => {
+        const raw = parseInt(msg?.createTime || '0', 10);
+        if (!raw || Number.isNaN(raw)) return 0;
+        return raw > 1e12 ? raw : raw * 1000;
+      };
+
+      const normalizeMessageText = (text: string): string => {
+        // keep prompt small: one-line, trimmed, capped
+        return String(text || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 220);
+      };
+
+      const MAX_MESSAGES_PER_USER = 8;
+      
+      for (const targetUser of targetUsers) {
+        const targetUserId = resolveFeishuUserId(targetUser);
+        
+        // Resolve user_id to open_id if needed
+        const targetOpenId = targetUserId?.startsWith("ou_") 
+          ? targetUserId 
+          : memberMapping.get(targetUserId || "") || null;
+        
+        console.log(`[DPA Workflow] Fetching messages for user: "${targetUser}" → userId: "${targetUserId}" → openId: "${targetOpenId}"`);
+        console.log(`[DPA Workflow] Time range: ${fourHoursAgo} to ${now} (${new Date(fourHoursAgo * 1000).toISOString()} to ${new Date(now * 1000).toISOString()})`);
+
+        // Filter base messages by sender (match user_id OR open_id) and time range
+        const filteredMessages = baseMessages.filter((msg: any) => {
+          const senderId = msg.sender?.id;
+          const senderMatches = senderId === targetUserId || senderId === targetOpenId;
+          const createTimeMs = getCreateTimeMs(msg);
+          const inTimeRange = createTimeMs >= fourHoursAgoMs && createTimeMs <= nowMs;
+          return senderMatches && inTimeRange;
+        });
+
+        // Keep only most recent messages for prompt size control
+        const filteredSorted = filteredMessages
+          .slice()
+          .sort((a: any, b: any) => getCreateTimeMs(a) - getCreateTimeMs(b));
+        const trimmed = filteredSorted.slice(-MAX_MESSAGES_PER_USER).map((m: any) => ({
+          ...m,
+          content: normalizeMessageText(m.content),
+        })).filter((m: any) => Boolean(m.content));
+
+        console.log(`[DPA Workflow] Filtered to ${filteredMessages.length} msgs, using ${trimmed.length} (max ${MAX_MESSAGES_PER_USER}) for @${targetUser}`);
+
+        if (trimmed.length > 0) {
+          allUserMessages.push({ user: targetUser, messages: trimmed });
+          console.log(`[DPA Workflow] Using ${trimmed.length} messages from ${targetUser}`);
+        } else {
+          noMessagesUsers.push(targetUser);
+          console.log(`[DPA Workflow] No messages found for ${targetUser}`);
+        }
+      }
+      
+      // Check if we found any messages
+      if (allUserMessages.length === 0) {
+        const userList = targetUsers.map(u => `@${u}`).join(', ');
+        return {
+          result: `❌ 未找到 ${userList} 最近4小时内的消息\n\n可能原因:\n- 用户ID不匹配\n- 这些用户在过去4小时内无消息`,
+          intent: "feedback_summarize" as const
+        };
+      }
+      
+      // 4. Build combined message list for LLM
+      const totalMessageCount = allUserMessages.reduce((sum, u) => sum + u.messages.length, 0);
+      const userListDisplay = allUserMessages.map(u => `@${u.user}`).join(', ');
+      
+      // Format messages grouped by user
+      const messagesForPrompt = allUserMessages.map(({ user, messages }) => 
+        `### 来自 @${user} 的消息 (${messages.length} 条):\n${messages.map((m: any) => `- ${m.content}`).join('\n')}`
+      ).join('\n\n');
+      
+      // 5. Use LLM to categorize and summarize feedback
+      // NOTE: Avoid big markdown headers (##) in Feishu cards; use bold section titles + dividers.
+      const feedbackPrompt = `分析以下来自多位用户的消息，并按类别提取反馈:
+
+${messagesForPrompt}
+
+${feishuCardOutputGuidelines({ language: "Mandarin Chinese (中文)" })}
+
+请按以下格式整理反馈（使用中文；务必简洁；每个分类最多 5 条；每条都要标注来源用户；分类之间要有分隔线）:
+
+**🐛 问题反馈 (Bug Reports)**
+- **@用户**: ...
+- **@用户**: ...
+
+---
+
+**💡 功能建议 (Feature Requests)**
+- **@用户**: ...
+
+---
+
+**❓ 疑问 (Questions)**
+- **@用户**: ...
+
+---
+
+**📝 其他 (Other)**
+- **@用户**: ...
+
+如果某分类没有内容，写"无"。
+最后新增一行：
+**一句话总结**: ...`;
+
+      const { text: summary } = await generateText({
+        model: freeModel,
+        prompt: feedbackPrompt,
+        temperature: 0,
+      });
+      
+      // 6. Build confirmation preview for issue creation
+      const userNames = allUserMessages.map(u => u.user).join(', ');
+      const issueTitle = targetUsers.length === 1 
+        ? `[用户反馈] ${userNames} 的反馈总结`
+        : `[用户反馈] ${targetUsers.length}人反馈总结 (${userNames})`;
+      
+      const issueBody = `${summary}\n\n---\n📊 分析了 ${totalMessageCount} 条消息 (来自 ${allUserMessages.length} 位用户，最近4小时)\n📅 生成时间: ${new Date().toISOString().split('T')[0]}`;
+      
+      // Build labels for each user
+      const userLabels = allUserMessages.map(u => `from:${u.user}`).join(',');
+      const allLabels = `user-feedback,${userLabels}`;
+      
+      // 7. Return summary with confirmation option
+      const generatedDate = new Date().toISOString().split('T')[0];
+      let preview =
+        `**反馈总结**\n` +
+        `<font color="grey">范围: ${userListDisplay} ｜ 最近4小时 ｜ 消息: ${totalMessageCount} 条 ｜ 生成: ${generatedDate}</font>\n\n` +
+        `---\n\n` +
+        `${summary}`;
+      
+      // Note if some users had no messages
+      if (noMessagesUsers.length > 0) {
+        preview += `\n\n⚠️ 未找到以下用户的消息: ${noMessagesUsers.map(u => `@${u}`).join(', ')}`;
+      }
+      
+      preview += `\n\n---\n💡 回复 "创建issue" 将此反馈记录到GitLab`;
+      
+      const confirmationData = JSON.stringify({
+        title: issueTitle,
+        description: issueBody,
+        project: "dpa/dpa-mom/task",
+        labels: ["user-feedback", ...allUserMessages.map(u => `from:${u.user}`)],
+        glabCommand: `issue create -R dpa/dpa-mom/task -t "${issueTitle}" -d "${issueBody.replace(/"/g, '\\"')}" -l "${allLabels}"`,
+        chatId,
+        rootId,
+        createdBy: userId,
+      });
+      
+      return {
+        result: preview,
+        intent: "feedback_summarize" as const,
+        needsConfirmation: true,
+        confirmationData,
+      };
+    } catch (error: any) {
+      console.error(`[DPA Workflow] Feedback summarize error:`, error);
+      return {
+        result: `❌ **总结失败**\n\n${error.message}`,
+        intent: "feedback_summarize" as const,
+      };
+    }
+  }
+});
+
+/**
+ * Step: Execute Feedback Update
+ * Collects feedback from specified users and appends to an existing GitLab issue
+ * Format: /update #123 @user1 @user2
+ */
+const executeFeedbackUpdateStep = createStep({
+  id: "execute-feedback-update",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+    needsConfirmation: z.boolean().optional(),
+    confirmationData: z.string().optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const { params, chatId, rootId, userId } = inputData;
+    
+    console.log(`[DPA Workflow] executeFeedbackUpdate: params=${JSON.stringify(params)}`);
+    
+    // Check for parsing errors
+    if (params?.error === 'missing_issue') {
+      return {
+        result: `❌ **缺少Issue编号**\n\n请使用格式: \`/update #123 @用户名\`\n\n例如: \`/update #42 @yi.huang3 @grace.yu3\``,
+        intent: "feedback_update" as const,
+      };
+    }
+    
+    if (params?.error === 'missing_users') {
+      return {
+        result: `❌ **缺少用户名**\n\n请使用格式: \`/update #${params.issueIid} @用户名\`\n\n例如: \`/update #${params.issueIid} @yi.huang3\``,
+        intent: "feedback_update" as const,
+      };
+    }
+    
+    const issueIid = params?.issueIid;
+    const targetUsersRaw = params?.targetUsers;
+    
+    if (!issueIid || !targetUsersRaw || !chatId) {
+      return {
+        result: `❌ **参数不完整**\n\n请使用格式: \`/update #123 @用户名\``,
+        intent: "feedback_update" as const,
+      };
+    }
+    
+    const targetUsers = targetUsersRaw.split(',').filter(Boolean);
+    console.log(`[DPA Workflow] Updating issue #${issueIid} with feedback from: ${targetUsers.join(', ')}`);
+    
+    try {
+      // 1. Fetch existing issue to verify it exists
+      const issueResult = await (gitlabTool.execute as any)({
+        operation: "view",
+        issueIid,
+      }) as { success: boolean; data?: any; error?: string };
+      
+      if (!issueResult.success || !issueResult.data) {
+        return {
+          result: `❌ **Issue #${issueIid} 不存在或无法访问**\n\n${issueResult.error || '请检查Issue编号是否正确'}`,
+          intent: "feedback_update" as const,
+        };
+      }
+      
+      const existingIssue = issueResult.data;
+      console.log(`[DPA Workflow] Found issue: "${existingIssue.title}"`);
+      
+      // 2. Collect feedback (reuse logic from feedback_summarize)
+      const fourHoursAgo = Math.floor((Date.now() - 4 * 60 * 60 * 1000) / 1000);
+      const now = Math.floor(Date.now() / 1000);
+      const allUserMessages: { user: string; messages: any[] }[] = [];
+      
+      // Get user mapping
+      const memberMapping = await getChatMemberMapping(chatId);
+      
+      for (const targetUser of targetUsers) {
+        const targetUserId = resolveFeishuUserId(targetUser);
+        const targetOpenId = targetUserId?.startsWith("ou_") 
+          ? targetUserId 
+          : memberMapping.get(targetUserId || "") || null;
+        
+        const historyResult = await (chatHistoryTool.execute as any)({
+          chatId,
+          limit: 50,
+        }) as { success: boolean; messages?: any[]; error?: string };
+        
+        if (historyResult.success && historyResult.messages) {
+          const fourHoursAgoMs = fourHoursAgo * 1000;
+          const nowMs = now * 1000;
+          
+          const filteredMessages = historyResult.messages.filter((msg: any) => {
+            const senderId = msg.sender?.id;
+            const senderMatches = senderId === targetUserId || senderId === targetOpenId;
+            const createTime = parseInt(msg.createTime || '0', 10);
+            const createTimeMs = createTime > 1e12 ? createTime : createTime * 1000;
+            const inTimeRange = createTimeMs >= fourHoursAgoMs && createTimeMs <= nowMs;
+            return senderMatches && inTimeRange;
+          });
+          
+          if (filteredMessages.length > 0) {
+            allUserMessages.push({ user: targetUser, messages: filteredMessages });
+          }
+        }
+      }
+      
+      if (allUserMessages.length === 0) {
+        return {
+          result: `❌ **未找到反馈消息**\n\n在过去4小时内未找到 ${targetUsers.map(u => `@${u}`).join(', ')} 的消息`,
+          intent: "feedback_update" as const,
+        };
+      }
+      
+      // 3. Generate summary using LLM
+      const totalMessageCount = allUserMessages.reduce((sum, u) => sum + u.messages.length, 0);
+      const messagesForPrompt = allUserMessages.map(({ user, messages }) => 
+        `### 来自 @${user} 的消息 (${messages.length} 条):\n${messages.map((m: any) => `- ${m.content}`).join('\n')}`
+      ).join('\n\n');
+      
+      const feedbackPrompt = `分析以下用户消息，生成简洁的反馈更新:
+
+${messagesForPrompt}
+
+${feishuCardOutputGuidelines({ language: "Mandarin Chinese (中文)" })}
+
+请用以下格式生成更新内容（简洁、专业，用于追加到现有Issue；避免大标题；要点之间留清晰层次）:
+
+**反馈更新 (${new Date().toISOString().split('T')[0]})**
+- ...
+- ...
+
+如果消息主要是闲聊，写"无实质性反馈"。`;
+
+      const { text: summary } = await generateText({
+        model: freeModel,
+        prompt: feedbackPrompt,
+        temperature: 0.3,
+      });
+      
+      // 4. Build the update
+      const updateSection = `\n\n---\n${summary}\n\n> 📊 来自 ${allUserMessages.map(u => `@${u.user}`).join(', ')} 的 ${totalMessageCount} 条消息`;
+      
+      const preview = `📝 **准备更新 Issue #${issueIid}**\n\n**现有标题:** ${existingIssue.title}\n\n**将追加内容:**\n${summary}\n\n---\n💡 确认后将追加到 Issue #${issueIid} 的描述中`;
+      
+      const confirmationData = JSON.stringify({
+        action: 'update_issue',
+        issueIid,
+        appendContent: updateSection,
+        project: "dpa/dpa-mom/task",
+        chatId,
+        rootId,
+        updatedBy: userId,
+      });
+      
+      return {
+        result: preview,
+        intent: "feedback_update" as const,
+        needsConfirmation: true,
+        confirmationData,
+      };
+    } catch (error: any) {
+      console.error(`[DPA Workflow] Feedback update error:`, error);
+      return {
+        result: `❌ **更新失败**\n\n${error.message}`,
+        intent: "feedback_update" as const,
       };
     }
   }
@@ -1722,6 +2304,14 @@ export const dpaAssistantWorkflow = createWorkflow({
       async ({ inputData }) => inputData?.intent === "doc_read",
       executeDocReadStep
     ],
+    [
+      async ({ inputData }) => inputData?.intent === "feedback_summarize",
+      executeFeedbackSummarizeStep
+    ],
+    [
+      async ({ inputData }) => inputData?.intent === "feedback_update",
+      executeFeedbackUpdateStep
+    ],
     // Help command: general_chat with __helpCommand param → executeGeneralChatStep
     [
       async ({ inputData }) => inputData?.intent === "general_chat" && inputData?.params?.__helpCommand === "true",
@@ -1752,10 +2342,12 @@ export const dpaAssistantWorkflow = createWorkflow({
     const gitlabSummarize = getStepResult("execute-gitlab-summarize");
     const chatSearch = getStepResult("execute-chat-search");
     const docRead = getStepResult("execute-doc-read");
+    const feedbackSummarize = getStepResult("execute-feedback-summarize");
+    const feedbackUpdate = getStepResult("execute-feedback-update");
     const generalChat = getStepResult("execute-general-chat");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead || generalChat;
+    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead || feedbackSummarize || feedbackUpdate || generalChat;
     
     if (branchResult) {
       return {

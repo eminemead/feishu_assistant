@@ -533,8 +533,9 @@ eventDispatcher.register({
             
             for (const pattern of patterns) {
               if (messageText.includes(pattern)) {
-                console.log(`🔄 [WebSocket] Resolving mention: ${pattern} → ${actualUserId} (${mention.name || 'unknown'})`);
-                messageText = messageText.split(pattern).join(actualUserId);
+                console.log(`🔄 [WebSocket] Resolving mention: ${pattern} → @${actualUserId} (${mention.name || 'unknown'})`);
+                // Preserve @ prefix for mentions so downstream can identify them
+                messageText = messageText.split(pattern).join(`@${actualUserId}`);
               }
             }
           }

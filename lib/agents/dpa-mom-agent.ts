@@ -66,6 +66,7 @@ Use execute_workflow when you need:
 - **dpa-assistant**: GitLab issue creation with confirmation buttons
 - **okr-analysis**: Complete OKR analysis with data + charts + insights
 - **document-tracking**: Set up document change tracking
+- **feedback-collection**: Summarize user feedback and create issues (e.g., "总结 @xxx 的反馈")
 
 DIRECT TOOL USAGE:
 Use tools directly for:

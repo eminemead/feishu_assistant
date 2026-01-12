@@ -554,12 +554,15 @@ export function trackToolCall<T extends (...args: any[]) => Promise<any>>(
 ): T {
     return (async (...args: Parameters<T>) => {
         const startTime = Date.now();
-        devtoolsTracker.trackToolCall(toolName, args, startTime);
 
         try {
             const result = await fn(...args);
+            // Track tool call AFTER completion so duration is accurate
+            devtoolsTracker.trackToolCall(toolName, args, startTime);
             return result;
         } catch (error) {
+            // Still record duration for failed tool calls
+            devtoolsTracker.trackToolCall(toolName, args, startTime);
             devtoolsTracker.trackError(
                 toolName,
                 error instanceof Error ? error : new Error(String(error)),

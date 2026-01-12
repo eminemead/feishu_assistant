@@ -21,6 +21,7 @@ import { promisify } from "util";
 import { generateText } from "ai";
 import { getFeishuClient } from "../feishu-utils";
 import { getMastraModelSingle } from "../shared/model-router";
+import { feishuCardOutputGuidelines } from "../shared/feishu-output-guidelines";
 
 const execAsync = promisify(exec);
 
@@ -202,6 +203,8 @@ const generateChangelogStep = createStep({
     const prompt = `You are writing release notes for ${projectName || "a software project"} ${version}.
 
 Based on these GitLab issues, generate a concise, well-formatted changelog in Chinese.
+
+${feishuCardOutputGuidelines({ language: "Mandarin Chinese (中文)" })}
 
 Group items by type:
 - ✨ 新功能 (Features) - new capabilities

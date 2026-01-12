@@ -9,6 +9,10 @@ import {
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { devtoolsTracker } from "./devtools-integration";
 import { handleDocumentCommand } from "./handle-doc-commands";
+import { executeSkillWorkflow } from "./workflows";
+import { SLASH_COMMANDS, HELP_COMMANDS } from "./workflows/dpa-assistant-workflow";
+import { getLinkedIssue } from "./services/issue-thread-mapping-service";
+import { stripThinkingTags } from "./streaming/thinking-panel";
 
 /**
  * Format thinking/reasoning content as a collapsible-like section in markdown
@@ -41,17 +45,25 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     const startTime = Date.now();
 
     console.log("Handling app mention");
+    console.log(`[DEBUG] Original messageText: "${messageText.substring(0, 200)}"`);
 
-    // Remove bot mention from message text
-    // Handle both XML format (<at ...>) and plain text format (@_user_1, @user_id, etc.)
+    // Remove ONLY the bot mention from message text (preserve other @mentions for workflow)
+    // The bot mention is typically at the start of the message
+    // After server.ts mention resolution, bot mention appears as @ou_xxx or @cli_xxx
     let cleanText = messageText
-        // Remove XML-style mentions: <at user_id="...">...</at>
-        .replace(/<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/g, "")
-        // Remove plain text mentions: @_user_1, @user_id, etc. (at start of message)
-        .replace(/^@[^\s]+\s+/, "")
-        // Remove @bot prefix if present (could be from second mention or explicit @bot)
+        // Remove XML-style bot mention at start: <at user_id="bot_id">@Bot</at>
+        .replace(/^<at (user_id|open_id)="[^"]+">.*?<\/at>\s*/, "")
+        // Remove resolved bot mention at start: @ou_xxx (open_id format)
+        .replace(/^@ou_[a-zA-Z0-9_-]+\s*/, "")
+        // Remove resolved bot mention at start: @cli_xxx (app_id format)
+        .replace(/^@cli_[a-zA-Z0-9_-]+\s*/, "")
+        // Remove plain text bot mention at start: @_user_1 (placeholder ID)
+        .replace(/^@_user_\d+\s*/, "")
+        // Remove @bot prefix if present
         .replace(/^@bot\s+/i, "")
         .trim();
+
+    console.log(`[DEBUG] cleanText after mention removal: "${cleanText.substring(0, 200)}"`);
 
     // Track in devtools
     devtoolsTracker.trackAgentCall("FeishuMention", cleanText, {
@@ -137,6 +149,90 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             console.log(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
         }
 
+        // Check for slash commands (e.g., /collect, /创建, /list) - route directly to workflow
+        console.log(`[DEBUG] cleanText for slash check: "${cleanText.substring(0, 100)}"`);
+        console.log(`[DEBUG] cleanText starts with /: ${cleanText.startsWith('/')}`);
+        const slashMatch = cleanText.match(/^\/([^\s]+)/);
+        console.log(`[DEBUG] slashMatch: ${JSON.stringify(slashMatch)}`);
+        if (slashMatch) {
+            const slashCmd = `/${slashMatch[1].toLowerCase()}`;
+            const isKnownSlashCommand = slashCmd in SLASH_COMMANDS || HELP_COMMANDS.includes(slashCmd);
+            
+            if (isKnownSlashCommand) {
+                console.log(`[SlashCommand] ============================================`);
+                console.log(`[SlashCommand] Intercepted: "${slashCmd}"`);
+                console.log(`[SlashCommand] Full text: "${cleanText.substring(0, 100)}..."`);
+                console.log(`[SlashCommand] Context: chatId="${chatId}", rootId="${rootId}", userId="${userId}"`);
+                console.log(`[SlashCommand] ============================================`);
+                
+                devtoolsTracker.trackAgentCall("SlashCommand", cleanText, {
+                    messageId,
+                    rootId,
+                    command: slashCmd,
+                    commandIntercepted: true
+                });
+
+                try {
+                    // Check for linked GitLab issue
+                    const linkedIssue = await getLinkedIssue(chatId, rootId);
+                    if (linkedIssue) {
+                        console.log(`[SlashCommand] Thread linked to GitLab #${linkedIssue.issueIid}`);
+                    }
+
+                    // Execute DPA Assistant workflow directly with full context
+                    const workflowResult = await executeSkillWorkflow("dpa-assistant", {
+                        query: cleanText,
+                        chatId,
+                        rootId,
+                        userId,
+                        linkedIssue: linkedIssue || undefined,
+                        onUpdate: async (text: string) => {
+                            await updateCardElement(card.cardId, card.elementId, text);
+                        },
+                    });
+
+                    console.log(`[SlashCommand] Workflow result: success=${workflowResult.success}, needsConfirmation=${workflowResult.needsConfirmation}`);
+                    
+                    // Handle skip workflow signal (general_chat should fall through to agent)
+                    if (workflowResult.skipWorkflow) {
+                        console.log(`[SlashCommand] Workflow returned skip signal, falling through to agent`);
+                        // Don't return - continue to generateResponse below
+                    } else {
+                        // Finalize card with workflow response
+                        const duration = Date.now() - startTime;
+                        await finalizeCardWithFollowups(
+                            card.cardId,
+                            card.elementId,
+                            workflowResult.response,
+                            undefined,
+                            undefined,
+                            {
+                                conversationId: chatId,
+                                rootId: rootId,
+                                threadId: rootId,
+                                confirmationData: workflowResult.needsConfirmation ? workflowResult.confirmationData : undefined,
+                            }
+                        );
+
+                        devtoolsTracker.trackResponse("SlashCommand", workflowResult.response, duration, {
+                            threadId: rootId,
+                            messageId,
+                            command: slashCmd,
+                            workflowId: "dpa-assistant",
+                        });
+
+                        console.log(`[SlashCommand] Complete (duration=${duration}ms)`);
+                        return; // Early exit - don't call generateResponse
+                    }
+                } catch (workflowError) {
+                    console.error(`[SlashCommand] Workflow execution failed:`, workflowError);
+                    // Fall through to agent on error
+                }
+            } else {
+                console.log(`[SlashCommand] Unknown command "${slashCmd}", falling through to agent`);
+            }
+        }
+
         // Generate response with streaming and memory context
         console.log(`[FeishuMention] Generating response...`);
         const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
@@ -155,6 +251,13 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             needsConfirmation = rawResult.needsConfirmation || false;
             confirmationData = rawResult.confirmationData;
         }
+
+        // Always hide embedded <think>...</think> tags from rendered output
+        const stripped = stripThinkingTags(result);
+        result = stripped.text;
+        if (!reasoning && stripped.reasoning) {
+            reasoning = stripped.reasoning;
+        }
         console.log(`[FeishuMention] Response generated:`);
         console.log(`  - length=${result?.length || 0}`);
         console.log(`  - reasoning=${reasoning?.length || 0}`);
@@ -163,8 +266,9 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         console.log(`  - confirmationDataLength=${confirmationData?.length || 0}`);
         console.log(`  - result preview: "${result?.substring(0, 100) || 'N/A'}..."`);
 
-        // Append thinking as markdown section if reasoning is present
-        if (reasoning && reasoning.length > 0) {
+        // Thinking/reasoning is hidden by default; opt-in for debugging.
+        const showThinking = process.env.SHOW_THINKING_PROCESS === "true";
+        if (showThinking && reasoning && reasoning.length > 0) {
             console.log(`[Card] Appending thinking section with ${reasoning.length} chars of reasoning`);
             const thinkingSection = formatThinkingSection(reasoning);
             result = result + thinkingSection;
