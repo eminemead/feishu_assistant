@@ -35,7 +35,17 @@ import { logger } from "./lib/logger";
 
 // Global error handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
-  logger.fail('Process', 'Unhandled Promise Rejection', { reason, promise: String(promise) });
+  // Properly extract error info - Error objects serialize to {} by default
+  const errorInfo =
+    reason instanceof Error
+      ? {
+          name: reason.name,
+          message: reason.message,
+          stack: reason.stack,
+          ...Object.fromEntries(Object.entries(reason)), // capture any enumerable props
+        }
+      : reason;
+  logger.fail('Process', 'Unhandled Promise Rejection', { reason: errorInfo, promise: String(promise) });
 });
 
 process.on('uncaughtException', (error) => {
@@ -376,6 +386,14 @@ eventDispatcher.register({
       }
     },
   } as any);
+
+// Silently ignore task tenant updates (not relevant to our use case)
+eventDispatcher.register({
+  "task.task.update_tenant_v1": async () => {
+    // No-op: Feishu sends these for workspace-level task config changes
+    // We only care about individual task updates (task.task.updated_v1)
+  },
+} as any);
 
 // Handle Feishu task status changes (for GitLab-Feishu task sync)
 eventDispatcher.register({
