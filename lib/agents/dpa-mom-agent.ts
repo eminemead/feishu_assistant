@@ -223,6 +223,7 @@ export async function dpaMomAgent(
   chatId?: string,
   rootId?: string,
   userId?: string,
+  memoryRootId?: string,
 ): Promise<string | DpaMomResult> {
   // Lazy initialize (async to ensure storage is ready)
   await initializeAgentAsync();
@@ -233,13 +234,17 @@ export async function dpaMomAgent(
 
   // Build memory config
   const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
-  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
+  // In Feishu, many non-thread interactions have rootId === messageId (unique per message),
+  // which fragments memory into "one thread per trigger". Allow callers to provide a stable
+  // memoryRootId (e.g. "main") for non-thread chats.
+  const effectiveRootId = memoryRootId || rootId;
+  const memoryThread = chatId && effectiveRootId ? getMemoryThreadId(chatId, effectiveRootId) : undefined;
   
   const memoryConfig = memoryResource && memoryThread ? {
     resource: memoryResource,
     thread: {
       id: memoryThread,
-      metadata: { chatId, rootId, userId },
+      metadata: { chatId, rootId, userId, memoryRootId: memoryRootId || undefined },
       title: `Feishu Chat ${chatId}`,
     },
   } : undefined;
@@ -268,8 +273,23 @@ export async function dpaMomAgent(
   try {
     devtoolsTracker.trackAgentCall("dpa_mom", query, { chatId, rootId });
 
+    // Provide execution context (chat/thread IDs) to the model so it can call tools like
+    // feishu_chat_history without guessing identifiers.
+    const contextualMessages: CoreMessage[] = (chatId || rootId || userId)
+      ? [
+          {
+            role: "system",
+            content:
+              `Context (internal): chatId=${chatId || "unknown"}, rootId=${rootId || "unknown"}, ` +
+              `memoryRootId=${(memoryRootId || rootId) || "unknown"}, userId=${userId || "unknown"}. ` +
+              `If you need recent group chat context, call feishu_chat_history with chatId=${chatId || "unknown"} and an appropriate limit.`,
+          },
+          ...messages,
+        ]
+      : messages;
+
     // Stream response
-    const stream = await dpaMomInstance!.stream(messages, {
+    const stream = await dpaMomInstance!.stream(contextualMessages, {
       memory: memoryConfig,
     });
 

@@ -122,11 +122,16 @@ async function fetchChatMessagesNative(params: {
 }): Promise<{ code: number; msg?: string; data?: { items: any[] } }> {
   const token = await getAccessToken();
   
+  // Feishu im/v1/messages has strict validation. In practice page_size > 50 can be rejected.
+  const requested = params.limit || 50;
+  const pageSize = Math.min(Math.max(requested, 1), 50);
+
   const queryParams = new URLSearchParams({
     container_id_type: "chat",
     container_id: params.chatId,
-    page_size: String(params.limit || 50),
-    sort_type: "ByCreateTimeDesc",  // Get newest messages first!
+    page_size: String(pageSize),
+    // NOTE: keep sort_type, but we’ll retry without it if validation fails.
+    sort_type: "ByCreateTimeDesc",
   });
   
   if (params.startTime) queryParams.append("start_time", params.startTime);
@@ -147,6 +152,27 @@ async function fetchChatMessagesNative(params: {
   if (data.code !== 0) {
     console.log(`[ChatHistory] API error: code=${data.code}, msg=${data.msg}`);
   }
+
+  // Some tenants reject sort_type or other params with "field validation failed".
+  // Retry once with minimal params to improve robustness.
+  if (data.code === 99992402 && queryParams.has("sort_type")) {
+    console.log(`[ChatHistory] Retrying without sort_type due to validation failure...`);
+    queryParams.delete("sort_type");
+    const retryUrl = `https://open.feishu.cn/open-apis/im/v1/messages?${queryParams}`;
+    const retryResp = await fetch(retryUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const retryData = await retryResp.json() as any;
+    if (retryData.code !== 0) {
+      console.log(`[ChatHistory] Retry API error: code=${retryData.code}, msg=${retryData.msg}`);
+    }
+    return retryData;
+  }
+
   return data;
 }
 
@@ -247,6 +273,21 @@ async function fetchChatHistoryImpl({ chatId, limit, startTime, endTime, senderI
   }
 }
 
+/**
+ * Programmatic API (non-tool) for server-side prefetch.
+ * This lets request handlers fetch recent messages and inject them into the agent prompt,
+ * so "analyze last N messages" works even if we didn't ingest those messages as events.
+ */
+export async function fetchChatHistory(params: {
+  chatId: string;
+  limit?: number;
+  startTime?: string;
+  endTime?: string;
+  senderId?: string;
+}) {
+  return fetchChatHistoryImpl(params);
+}
+
 export function createFeishuChatHistoryTool(enableDevtoolsTracking: boolean = true) {
   const executeFn = enableDevtoolsTracking
     ? trackToolCall("feishu_chat_history", fetchChatHistoryImpl)
@@ -275,7 +316,7 @@ Use senderId to filter messages from a specific user (e.g., "ou_xxx").`,
         limit: z
           .number()
           .optional()
-          .describe("Maximum number of messages to retrieve (default: 50, max: 100)"),
+          .describe("Maximum number of messages to retrieve (default: 20, max: 50). Feishu may reject > 50."),
         startTime: z
           .string()
           .optional()

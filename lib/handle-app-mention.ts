@@ -1,5 +1,6 @@
 import { getThread } from "./feishu-utils";
 import { generateResponse } from "./generate-response";
+import { maybeInjectRecentChatHistory } from "./chat-history-prefetch";
 import {
   createAndSendStreamingCard,
   updateCardElement,
@@ -86,6 +87,11 @@ export async function handleNewAppMention(data: FeishuMentionData) {
     };
 
     try {
+        // Stabilize memory threading for non-thread mentions:
+        // rootId === messageId means "not in a thread" (unique per trigger),
+        // so use a stable "main" memory thread for continuity.
+        const memoryRootId = rootId === messageId ? "main" : rootId;
+
         // Get thread messages if this is a thread reply
         let messages;
         if (rootId !== messageId) {
@@ -107,6 +113,14 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             console.log(`[Thread] New mention (messageId === rootId), starting fresh conversation`);
             messages = [{ role: "user" as const, content: cleanText }];
         }
+
+        // Symptom fix: if user asks "analyze last N messages / sentiment / context",
+        // prefetch recent group chat history and inject it into the prompt.
+        messages = await maybeInjectRecentChatHistory({
+            chatId,
+            userText: cleanText,
+            existingMessages: messages,
+        });
 
         // Validate messages before sending to agent
         if (messages.length === 0) {
@@ -235,7 +249,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
 
         // Generate response with streaming and memory context
         console.log(`[FeishuMention] Generating response...`);
-        const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
+        const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId, memoryRootId);
         
         // Handle structured result (with reasoning, confirmation) or plain string
         let result: string;

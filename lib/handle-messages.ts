@@ -1,5 +1,6 @@
 import { getThread } from "./feishu-utils";
 import { generateResponse } from "./generate-response";
+import { maybeInjectRecentChatHistory } from "./chat-history-prefetch";
 import {
   createAndSendStreamingCard,
   updateCardElement,
@@ -218,6 +219,11 @@ export async function handleNewMessage(data: FeishuMessageData) {
   };
 
   try {
+    // Stabilize memory threading:
+    // - In Feishu non-thread messages, rootId === messageId (unique per trigger)
+    // - Use a stable "main" memory thread so the bot can remember prior turns in the chat
+    const memoryRootId = rootId === messageId ? "main" : rootId;
+
     // Get thread messages if this is a thread reply
     let messages;
     if (rootId !== messageId) {
@@ -238,8 +244,16 @@ export async function handleNewMessage(data: FeishuMessageData) {
       messages = [{ role: "user" as const, content: cleanText }];
     }
 
+    // Symptom fix: if user asks "analyze last N messages / sentiment / context",
+    // prefetch recent group chat history and inject it into the prompt.
+    messages = await maybeInjectRecentChatHistory({
+      chatId,
+      userText: cleanText,
+      existingMessages: messages,
+    });
+
     // Generate response with streaming and memory context
-    const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId);
+    const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId, memoryRootId);
     
     // Handle structured result (with confirmation data, reasoning) or plain string
     let result: string;

@@ -43,6 +43,7 @@ export const generateResponse = async (
   chatId?: string,
   rootId?: string,
   userId?: string,
+  memoryRootId?: string,
 ): Promise<string | GenerateResponseResult> => {
-  return await dpaMomAgent(messages, updateStatus, chatId, rootId, userId);
+  return await dpaMomAgent(messages, updateStatus, chatId, rootId, userId, memoryRootId);
 };
