@@ -10,15 +10,25 @@
  */
 
 import { Mastra } from "@mastra/core";
+import { Agent } from "@mastra/core/agent";
 import { ArizeExporter } from "@mastra/arize";
 import { Observability } from "@mastra/observability";
-import { getDpaMomAgent } from "./agents/dpa-mom-agent";
+// Note: Production uses dpaMomAgent() from ./agents/dpa-mom-agent.ts with full async memory
 import { okrAnalysisWorkflow } from "./workflows/okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./workflows/document-tracking-workflow";
 import { documentReadWorkflow } from "./workflows/document-read-workflow";
 import { dpaAssistantWorkflow } from "./workflows/dpa-assistant-workflow";
 import { initializeWorkflows } from "./workflows";
 import { getSharedStorage } from "./memory-factory";
+import { getMastraModelSingle } from "./shared/model-router";
+import { 
+  createGitLabCliTool, 
+  createFeishuChatHistoryTool, 
+  createFeishuDocsTool,
+  createOkrReviewTool,
+  chartGenerationTool,
+  createExecuteWorkflowTool,
+} from "./tools";
 
 // Environment configuration
 const PHOENIX_ENDPOINT = process.env.PHOENIX_ENDPOINT || "http://localhost:6006/v1/traces";
@@ -54,13 +64,52 @@ const observability = new Observability({
 } as any);
 
 /**
- * Registered agents placeholder - actual agent initialized lazily at first request
- * This avoids sync init issues with storage that needs async init
+ * Create DPA Mom agent for Mastra Studio
+ * 
+ * This is a sync version without memory (for Studio exploration).
+ * Production uses dpaMomAgent() from dpa-mom-agent.ts with full async memory.
  */
-const registeredAgents: Record<string, any> = {};
+function createDpaMomAgentForStudio(): Agent {
+  const model = getMastraModelSingle(true); // requireTools=true
+  
+  return new Agent({
+    id: "dpa_mom",
+    name: "DPA Mom",
+    instructions: `You are a Feishu/Lark AI assistant that helps users with OKR analysis, team coordination, and data operations.
 
-// Agent will be registered when first accessed via dpaMomAgent() function
-// This allows storage to be properly initialized before agent creation
+IDENTITY:
+- You are dpa_mom, the caring chief-of-staff for the DPA (Data Product & Analytics) team
+- Ian is the team lead; you support both Ian and every team member
+- Be warm, professional, and proactive
+
+AVAILABLE TOOLS:
+1. gitlab_cli: GitLab operations (issues, MRs, CI/CD)
+2. feishu_chat_history: Search Feishu group chat histories
+3. feishu_docs: Read Feishu documents
+4. mgr_okr_review: Fetch OKR metrics data
+5. chart_generation: Generate Mermaid/Vega-Lite charts
+6. execute_workflow: Execute deterministic workflows
+
+Current date: ${new Date().toISOString().split("T")[0]}`,
+    model,
+    tools: {
+      gitlab_cli: createGitLabCliTool(false),
+      feishu_chat_history: createFeishuChatHistoryTool(false),
+      feishu_docs: createFeishuDocsTool(false),
+      mgr_okr_review: createOkrReviewTool(false, true, 60 * 60 * 1000),
+      chart_generation: chartGenerationTool,
+      execute_workflow: createExecuteWorkflowTool(),
+    },
+  });
+}
+
+/**
+ * Registered agents for Mastra Studio
+ * Agent is created synchronously for Studio exploration
+ */
+const registeredAgents: Record<string, Agent> = {
+  dpa_mom: createDpaMomAgentForStudio(),
+};
 
 /**
  * Registered workflows for Mastra instance
