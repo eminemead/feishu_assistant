@@ -251,20 +251,16 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         console.log(`[FeishuMention] Generating response...`);
         const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId, memoryRootId);
         
-        // Handle structured result (with reasoning, confirmation) or plain string
+        // Structured result (with reasoning, confirmation)
         let result: string;
         let reasoning: string | undefined;
         let needsConfirmation = false;
         let confirmationData: string | undefined;
         
-        if (typeof rawResult === "string") {
-            result = rawResult;
-        } else {
-            result = rawResult.text;
-            reasoning = rawResult.reasoning;
-            needsConfirmation = rawResult.needsConfirmation || false;
-            confirmationData = rawResult.confirmationData;
-        }
+        result = rawResult.text;
+        reasoning = rawResult.reasoning;
+        needsConfirmation = rawResult.needsConfirmation || false;
+        confirmationData = rawResult.confirmationData;
 
         // Always hide embedded <think>...</think> tags from rendered output
         const stripped = stripThinkingTags(result);

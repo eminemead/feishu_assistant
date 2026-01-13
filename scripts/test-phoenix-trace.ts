@@ -6,12 +6,15 @@
  * Requires: Phoenix reachable at PHOENIX_ENDPOINT (see .env.example)
  */
 
-import { mastra } from "../lib/observability-config";
-import { getDpaMomAgent } from "../lib/agents/dpa-mom-agent";
+import { getMastraAsync } from "../lib/observability-config";
 
 async function main() {
   // Ensure Mastra + observability are initialized
-  const agent = getDpaMomAgent();
+  const mastra = await getMastraAsync();
+  const agent = mastra.getAgent("dpa_mom");
+  if (!agent) {
+    throw new Error("DPA Mom agent not found in Mastra instance (id=dpa_mom)");
+  }
 
   console.log("🚀 Running DPA Mom agent smoke test...");
   const stream = await agent.stream([

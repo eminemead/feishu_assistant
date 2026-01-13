@@ -18,15 +18,16 @@ const dpaMomAgent = getDpaMomAgent();
 
 **After** (Through Mastra instance - TRACED):
 ```typescript
-import { mastra } from "../observability-config";
+import { getMastraAsync } from "../observability-config";
 // ...
+const mastra = await getMastraAsync();
 const okrAgent = mastra.getAgent("okrReviewer");
-const dpaMomAgent = mastra.getAgent("dpaMom");
+const dpaMomAgent = mastra.getAgent("dpa_mom");
 ```
 
 ### All Agent Calls Updated
 
-1. ✅ DPA Mom Agent: `mastra.getAgent("dpaMom")`
+1. ✅ DPA Mom Agent: `mastra.getAgent("dpa_mom")`
 2. ✅ OKR Reviewer Agent: `mastra.getAgent("okrReviewer")`
 3. ✅ Alignment Agent: `mastra.getAgent("alignment")`
 4. ✅ P&L Agent: `mastra.getAgent("pnl")`
@@ -58,6 +59,6 @@ You should now see traces for:
 ## Notes
 
 - `getManagerAgent()` export is kept for backward compatibility (used in `observability-config.ts`)
-- No circular dependency issues - `mastra` is created after agents are initialized
+- No circular dependency issues - Mastra is created after agents are initialized
 - All routing paths now use Mastra instance for observability
 

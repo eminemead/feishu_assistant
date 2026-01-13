@@ -6,7 +6,7 @@
  * Sends test queries and checks if traces appear in Phoenix.
  */
 
-import { mastra } from "../lib/observability-config";
+import { getMastraAsync } from "../lib/observability-config";
 import { CoreMessage } from "ai";
 
 const PHOENIX_ENDPOINT = process.env.PHOENIX_ENDPOINT || "http://localhost:6006/v1/traces";
@@ -25,6 +25,7 @@ async function testAgentCall(agentName: string, query: string) {
   console.log(`\n🧪 Testing ${agentName} with query: "${query}"`);
   
   try {
+    const mastra = await getMastraAsync();
     const agent = mastra.getAgent(agentName);
     if (!agent) {
       console.error(`❌ Agent ${agentName} not found in Mastra instance`);

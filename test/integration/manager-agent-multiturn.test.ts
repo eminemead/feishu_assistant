@@ -3,8 +3,8 @@ import { CoreMessage } from "ai";
 import { dpaMomAgent, DpaMomResult } from "../../lib/agents/dpa-mom-agent";
 import { getMemoryThreadId, getMemoryResourceId } from "../../lib/memory-factory";
 
-function getResponseText(response: string | DpaMomResult): string {
-  return typeof response === "string" ? response : response.text;
+function getResponseText(response: DpaMomResult): string {
+  return response.text;
 }
 
 function buildMemoryConfig(chatId: string, rootId: string, userId: string) {

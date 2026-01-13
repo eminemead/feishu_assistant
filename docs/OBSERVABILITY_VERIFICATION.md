@@ -8,30 +8,25 @@
 - **Location**: `lib/observability-config.ts`
 - **Configuration**: Mastra instance with observability enabled
 - **Exporter**: Arize Phoenix (OSS)
-- **Agents Registered**: manager, okrReviewer, alignment, pnl, dpaMom
+- **Agents Registered**: `dpa_mom` (production)
 
 ### Agent Call Pattern
-- **Current**: Agents called directly via `agent.stream()`
-- **Registered**: Same agent instances registered in Mastra instance
-- **Routing**: Skill-based routing via `routeQuery()` → direct agent calls
+- **Required**: Retrieve agent from Mastra and call `agent.stream()` / `agent.generate()`
 
 ## Potential Issue
 
-**Question**: Does Mastra observability trace direct `agent.stream()` calls, or only calls through `mastra.agents.*.stream()`?
+**Question**: Does Mastra observability trace direct `agent.stream()` calls, or only calls through an agent retrieved from the Mastra instance?
 
-**Current Pattern**:
+**Correct Pattern**:
 ```typescript
-// In manager-agent-mastra.ts
-const dpaMomAgent = getDpaMomAgent(); // Returns same instance registered in Mastra
-const result = await dpaMomAgent.stream({ messages, executionContext });
+import { getMastraAsync } from "../observability-config";
+
+const mastra = await getMastraAsync();
+const agent = mastra.getAgent("dpa_mom");
+const result = await agent.stream({ messages, executionContext });
 ```
 
-**Alternative Pattern** (if needed):
-```typescript
-// Would need to import mastra and use:
-import { mastra } from "../observability-config";
-const result = await mastra.agents.dpaMom.stream({ messages, executionContext });
-```
+> Note: `getMastraAsync()` is required because the production `dpa_mom` agent uses async memory init.
 
 ## Verification Steps
 
@@ -71,7 +66,7 @@ const result = await mastra.agents.dpaMom.stream({ messages, executionContext })
 
 ## Fix (if needed)
 
-If direct calls aren't traced, update routing code to use Mastra instance:
+If direct calls aren't traced, update routing code to retrieve the agent from Mastra:
 
 ```typescript
 // Instead of:
@@ -79,8 +74,10 @@ const okrAgent = getOkrReviewerAgent();
 const result = await okrAgent.stream({ messages, executionContext });
 
 // Use:
-import { mastra } from "../observability-config";
-const result = await mastra.agents.okrReviewer.stream({ messages, executionContext });
+import { getMastraAsync } from "../observability-config";
+const mastra = await getMastraAsync();
+const okrAgent = mastra.getAgent("okrReviewer");
+const result = await okrAgent.stream({ messages, executionContext });
 ```
 
 ## AgentFS Impact

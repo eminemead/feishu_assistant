@@ -44,7 +44,8 @@ const result = await okrAgent.stream({ messages }); // Direct call
 
 ```typescript
 // Should use Mastra instance
-import { mastra } from "../observability-config";
+import { getMastraAsync } from "../observability-config";
+const mastra = await getMastraAsync();
 const okrAgent = mastra.getAgent("okrReviewer"); // Through Mastra
 const result = await okrAgent.stream({ messages }); // Traced call
 ```

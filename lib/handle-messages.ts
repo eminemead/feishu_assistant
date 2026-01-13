@@ -255,22 +255,18 @@ export async function handleNewMessage(data: FeishuMessageData) {
     // Generate response with streaming and memory context
     const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId, memoryRootId);
     
-    // Handle structured result (with confirmation data, reasoning) or plain string
+    // Structured result (with confirmation data, reasoning)
     let result: string;
     let needsConfirmation = false;
     let confirmationData: string | undefined;
     let reasoning: string | undefined;
     let linkedIssue: { issueIid: number; issueUrl: string; project: string } | undefined;
     
-    if (typeof rawResult === "string") {
-      result = rawResult;
-    } else {
-      result = rawResult.text;
-      needsConfirmation = rawResult.needsConfirmation || false;
-      confirmationData = rawResult.confirmationData;
-      reasoning = rawResult.reasoning;
-      linkedIssue = rawResult.linkedIssue;
-    }
+    result = rawResult.text;
+    needsConfirmation = rawResult.needsConfirmation || false;
+    confirmationData = rawResult.confirmationData;
+    reasoning = rawResult.reasoning;
+    linkedIssue = rawResult.linkedIssue;
 
     // Always hide embedded <think>...</think> tags from rendered output
     // (workflows + some models may include them in plain text).

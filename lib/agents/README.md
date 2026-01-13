@@ -64,7 +64,7 @@ export async function dpaMomAgent(
   chatId?: string,
   rootId?: string,
   userId?: string,
-): Promise<string | DpaMomResult>
+): Promise<DpaMomResult>
 
 // Get agent instance (for Mastra registration)
 export function getDpaMomAgent(): Agent

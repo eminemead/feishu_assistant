@@ -13,9 +13,7 @@ import {
   handleButtonFollowup,
   extractButtonFollowupContext,
 } from "./lib/handle-button-followup";
-import { getObservabilityStatus, mastra } from "./lib/observability-config";
-// Import observability config to ensure it's initialized
-import "./lib/observability-config";
+import { getMastraAsync, getObservabilityStatus } from "./lib/observability-config";
 import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
 import { handleDagsterWebhook } from "./lib/handlers/dagster-webhook-handler";
 import { handleTaskUpdatedEvent, TaskUpdatedEvent } from "./lib/handlers/feishu-task-webhook-handler";
@@ -1330,14 +1328,10 @@ async function startServer() {
     console.warn("⚠️ [Startup] Step 0b: Memory initialization partial", { storageOk, vectorOk });
   }
   
-  // Step 0c: Initialize Mastra Server (exposes agents/workflows/tools as HTTP endpoints + Studio)
-  console.log("📋 [Startup] Step 0c: Initializing Mastra Server...");
-  const mastraServer = new MastraServer({
-    app,
-    mastra,
-    prefix: "/mastra",
-    openapiPath: "/openapi.json",
-  });
+  // Step 0c: Initialize Mastra (agents/workflows) and Mastra Server routes
+  console.log("📋 [Startup] Step 0c: Initializing Mastra instance...");
+  const mastra = await getMastraAsync();
+  console.log("✅ [Startup] Step 0c: Mastra instance ready");
   
   // Step 1: Initialize WebSocket for Subscription Mode
   if (useSubscriptionMode) {
@@ -1398,6 +1392,12 @@ async function startServer() {
   // Step 1.5: Initialize Mastra Server routes (must be done before HTTP server starts)
   console.log("📋 [Startup] Step 1.5: Initializing Mastra Server routes...");
   try {
+    const mastraServer = new MastraServer({
+      app,
+      mastra,
+      prefix: "/mastra",
+      openapiPath: "/openapi.json",
+    });
     await mastraServer.init();
     console.log("✅ [Startup] Step 1.5: Mastra Server routes initialized");
     console.log("   Available at: /mastra/api/agents, /mastra/api/workflows, etc.");

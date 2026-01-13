@@ -11,8 +11,8 @@ import { createTestMessages } from "../helpers/test-utils";
 /**
  * Helper to extract text from agent response
  */
-function getResponseText(response: string | { text: string }): string {
-  return typeof response === "string" ? response : response.text;
+function getResponseText(response: { text: string }): string {
+  return response.text;
 }
 
 describe("DPA Mom Agent", () => {

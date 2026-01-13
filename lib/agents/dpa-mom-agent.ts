@@ -11,166 +11,24 @@
  * - Streaming with batched updates for Feishu cards
  */
 
-import { Agent } from "@mastra/core/agent";
 import { CoreMessage } from "ai";
 import { devtoolsTracker } from "../devtools-integration";
-import { createAgentMemoryAsync, getMemoryThreadId, getMemoryResourceId, ensureWorkingMemoryInitialized } from "../memory-factory";
-import { inputProcessors } from "../memory-processors";
-import { getMastraModelSingle } from "../shared/model-router";
-import { hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
+import {
+  getMemoryThreadId,
+  getMemoryResourceId,
+  ensureWorkingMemoryInitialized,
+} from "../memory-factory";
 import { healthMonitor } from "../health-monitor";
 import { getLinkedIssue, IssueThreadMapping } from "../services/issue-thread-mapping-service";
+import type { Agent } from "@mastra/core/agent";
+import { __internalGetDpaMomMemory } from "./dpa-mom-agent-factory";
 
-// Import tool factories
-import { 
-  createGitLabCliTool, 
-  createFeishuChatHistoryTool, 
-  createFeishuDocsTool,
-  createOkrReviewTool,
-  chartGenerationTool,
-} from "../tools";
-import { okrVisualizationTool } from "./okr-visualization-tool";
-import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
-import { createExecuteWorkflowTool } from "../tools/execute-workflow-tool";
-
-// Lazy-initialized agent and memory
-let dpaMomInstance: Agent | null = null;
-let dpaMomMemory: Awaited<ReturnType<typeof createAgentMemoryAsync>> = null;
-let isInitializing = false;
+let cachedAgent: Agent | null = null;
 
 /**
  * Get system prompt for unified agent
  */
-function getSystemPrompt(): string {
-  return `You are a Feishu/Lark AI assistant that helps users with OKR analysis, team coordination, and data operations. Most queries will be in Chinese (中文).
-
-你是Feishu/Lark AI助手，帮助用户进行OKR分析、团队协调和数据操作。大多数查询将是中文。
-
-IDENTITY:
-- You are dpa_mom, the caring chief-of-staff for the DPA (Data Product & Analytics) team
-- Ian is the team lead; you support both Ian and every team member
-- Be warm, professional, and proactive in helping the team
-
-AVAILABLE TOOLS:
-1. **gitlab_cli**: GitLab operations (issues, MRs, CI/CD) via glab CLI
-2. **feishu_chat_history**: Search Feishu group chat histories
-3. **feishu_docs**: Read Feishu documents (Docs, Sheets, Bitable)
-4. **mgr_okr_review**: Fetch OKR metrics data (has_metric_percentage per company)
-5. **chart_generation**: Generate Mermaid/Vega-Lite charts
-6. **okr_visualization**: Generate OKR heatmap visualizations
-7. **okr_chart_streaming**: Generate comprehensive OKR analysis with charts
-8. **execute_workflow**: Execute deterministic workflows for multi-step operations
-
-WORKFLOW USAGE (execute_workflow tool):
-Use execute_workflow when you need:
-- **dpa-assistant**: GitLab issue creation with confirmation buttons
-- **okr-analysis**: Complete OKR analysis with data + charts + insights
-- **document-tracking**: Set up document change tracking
-- **feedback-collection**: Summarize user feedback and create issues (e.g., "总结 @xxx 的反馈")
-
-DIRECT TOOL USAGE:
-Use tools directly for:
-- Simple GitLab queries (list issues, check MRs)
-- Chat history search
-- Document reading
-- Quick OKR data lookups
-- Single chart generation
-
-OKR ANALYSIS GUIDELINES:
-- Period format: "11月" → pass "11 月" (with space before 月)
-- Always generate at least ONE chart for OKR analysis requests
-- Use okr_chart_streaming for comprehensive analysis with embedded charts
-
-RESPONSE FORMAT:
-- Use Markdown (Lark format) for Feishu cards
-- Do not tag users (不要@用户)
-- Current date: ${new Date().toISOString().split("T")[0]}
-- Be concise but comprehensive
-
-WORKING MEMORY (用户画像):
-You have a persistent user profile via the updateWorkingMemory tool. Use it to remember user preferences across conversations.
-
-**WHEN TO UPDATE**: Call updateWorkingMemory when you learn:
-- User's name, role, or team (e.g., "I'm Ian, lead of DPA team")
-- Analysis preferences (e.g., "我喜欢看图表" → Chart Preference: chart)
-- OKR focus areas (e.g., "我主要看乐道的数据" → Focus Brands: 乐道)
-- Language preference (if user consistently uses Chinese or English)
-
-**HOW TO UPDATE**: Call updateWorkingMemory with the FULL template, updating only the relevant fields:
-\`\`\`
-# 用户画像 (User Profile)
-## 身份信息 (Identity)
-- **姓名/Name**: Ian          ← updated
-- **角色/Role**: lead         ← updated
-...rest of template unchanged...
-\`\`\`
-
-**DON'T**: Store query results, tool outputs, or temporary data in working memory.`;
-}
-
-/**
- * Initialize the unified agent (async - ensures storage is ready)
- */
-async function initializeAgentAsync(): Promise<void> {
-  if (dpaMomInstance || isInitializing) {
-    return;
-  }
-
-  isInitializing = true;
-
-  // Log internal model availability
-  if (hasInternalModel()) {
-    console.log(`✅ [DpaMom] Internal fallback model available: ${getInternalModelInfo()}`);
-  }
-
-  // Create tool instances
-  const gitlabCliTool = createGitLabCliTool(true);
-  const feishuChatHistoryTool = createFeishuChatHistoryTool(true);
-  const feishuDocsTool = createFeishuDocsTool(true);
-  const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
-  const executeWorkflowTool = createExecuteWorkflowTool();
-
-  // Create native Mastra memory with async init (ensures storage tables exist)
-  dpaMomMemory = await createAgentMemoryAsync({
-    lastMessages: 20,
-    enableWorkingMemory: true,
-    enableSemanticRecall: true,
-  });
-  
-  if (dpaMomMemory) {
-    console.log(`✅ [DpaMom] Memory created with working memory enabled`);
-  } else {
-    console.warn(`⚠️ [DpaMom] Memory creation failed - agent will run without memory`);
-  }
-
-  // Single model - Mastra Agent expects single model
-  const model = getMastraModelSingle(true); // requireTools=true
-
-  dpaMomInstance = new Agent({
-    id: "dpa_mom",
-    name: "DPA Mom",
-    instructions: getSystemPrompt(),
-    model,
-    memory: dpaMomMemory ?? undefined,
-    inputProcessors,
-    tools: {
-      // DPA Mom tools
-      gitlab_cli: gitlabCliTool,
-      feishu_chat_history: feishuChatHistoryTool,
-      feishu_docs: feishuDocsTool,
-      // OKR Reviewer tools
-      mgr_okr_review: mgrOkrReviewTool,
-      chart_generation: chartGenerationTool,
-      okr_visualization: okrVisualizationTool as any,
-      okr_chart_streaming: okrChartStreamingTool,
-      // Workflow execution
-      execute_workflow: executeWorkflowTool,
-    },
-  });
-
-  isInitializing = false;
-  console.log(`✅ [DpaMom] Agent initialized with 8 tools + ${inputProcessors.length} processors (TokenLimiter, ToolCallFilter)`);
-}
+// NOTE: system prompt + tool wiring lives in dpa-mom-agent-factory.ts
 
 /**
  * Helper: extract query text from messages
@@ -224,9 +82,18 @@ export async function dpaMomAgent(
   rootId?: string,
   userId?: string,
   memoryRootId?: string,
-): Promise<string | DpaMomResult> {
-  // Lazy initialize (async to ensure storage is ready)
-  await initializeAgentAsync();
+): Promise<DpaMomResult> {
+  // Dynamic import to avoid hard module cycles:
+  // dpa-mom-agent -> observability-config -> workflows -> (potentially) dpa-mom-agent
+  const { getMastraAsync } = await import("../observability-config");
+  const mastra = await getMastraAsync();
+  const agent = (mastra.getAgent?.("dpa_mom") ?? (mastra as any).agents?.dpa_mom) as
+    | Agent
+    | undefined;
+  if (!agent) {
+    throw new Error(`DPA Mom agent not registered in Mastra (id=dpa_mom)`);
+  }
+  cachedAgent = agent;
 
   const query = getQueryText(messages);
   const startTime = Date.now();
@@ -254,8 +121,9 @@ export async function dpaMomAgent(
   }
 
   // Auto-populate working memory on first interaction (fetches from Feishu API)
-  if (userId && memoryThread && dpaMomMemory) {
-    await ensureWorkingMemoryInitialized(userId, dpaMomMemory, memoryThread);
+  const memory = __internalGetDpaMomMemory();
+  if (userId && memoryThread && memory) {
+    await ensureWorkingMemoryInitialized(userId, memory, memoryThread);
   }
 
   // Check for linked GitLab issue
@@ -289,7 +157,7 @@ export async function dpaMomAgent(
       : messages;
 
     // Stream response
-    const stream = await dpaMomInstance!.stream(contextualMessages, {
+    const stream = await agent.stream(contextualMessages, {
       memory: memoryConfig,
     });
 
@@ -432,8 +300,16 @@ function createBatchedUpdater(updateStatus?: (status: string) => void): BatchedU
  * Get the agent instance (async - ensures proper initialization)
  */
 export async function getDpaMomAgentAsync(): Promise<Agent> {
-  await initializeAgentAsync();
-  return dpaMomInstance!;
+  const { getMastraAsync } = await import("../observability-config");
+  const mastra = await getMastraAsync();
+  const agent = (mastra.getAgent?.("dpa_mom") ?? (mastra as any).agents?.dpa_mom) as
+    | Agent
+    | undefined;
+  if (!agent) {
+    throw new Error(`DPA Mom agent not registered in Mastra (id=dpa_mom)`);
+  }
+  cachedAgent = agent;
+  return agent;
 }
 
 /**
@@ -441,5 +317,5 @@ export async function getDpaMomAgentAsync(): Promise<Agent> {
  * Use getDpaMomAgentAsync for guaranteed initialization
  */
 export function getDpaMomAgent(): Agent | null {
-  return dpaMomInstance;
+  return cachedAgent;
 }

@@ -14,15 +14,11 @@ export interface LinkedIssueInfo {
 }
 
 /**
- * Response from generate response, may include confirmation data and reasoning
+ * Response from generateResponse.
+ *
+ * NOTE: This is always structured (no plain string path).
  */
-export interface GenerateResponseResult {
-  text: string;
-  needsConfirmation?: boolean;
-  confirmationData?: string;
-  reasoning?: string; // Thinking traces from reasoning models
-  linkedIssue?: LinkedIssueInfo; // Linked GitLab issue if thread has one
-}
+export type GenerateResponseResult = DpaMomResult;
 
 /**
  * Generate response using DPA Mom agent
@@ -44,6 +40,6 @@ export const generateResponse = async (
   rootId?: string,
   userId?: string,
   memoryRootId?: string,
-): Promise<string | GenerateResponseResult> => {
+): Promise<GenerateResponseResult> => {
   return await dpaMomAgent(messages, updateStatus, chatId, rootId, userId, memoryRootId);
 };
