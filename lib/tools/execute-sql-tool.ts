@@ -213,7 +213,7 @@ export function createExecuteSqlTool(
     description: `Execute a SQL query against the analytics database and return results.
 
 IMPORTANT:
-- Use bash_exec first to explore /semantic-layer/ and understand the schema
+- Use bash first to explore /semantic-layer/ and understand the schema
 - Always include appropriate WHERE clauses to limit data
 - Results are limited to ${MAX_ROWS} rows
 - For large datasets, use aggregations (GROUP BY, SUM, COUNT)

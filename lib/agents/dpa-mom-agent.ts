@@ -22,6 +22,7 @@ import { healthMonitor } from "../health-monitor";
 import { getLinkedIssue, IssueThreadMapping } from "../services/issue-thread-mapping-service";
 import type { Agent } from "@mastra/core/agent";
 import { __internalGetDpaMomMemory } from "./dpa-mom-agent-factory";
+import { runWithRequestContext } from "../runtime-context";
 
 let cachedAgent: Agent | null = null;
 
@@ -150,16 +151,21 @@ export async function dpaMomAgent(
             content:
               `Context (internal): chatId=${chatId || "unknown"}, rootId=${rootId || "unknown"}, ` +
               `memoryRootId=${(memoryRootId || rootId) || "unknown"}, userId=${userId || "unknown"}. ` +
-              `If you need recent group chat context, call feishu_chat_history with chatId=${chatId || "unknown"} and an appropriate limit.`,
+              `If you need recent group chat context, call feishu_chat_history with chatId=${chatId || "unknown"} and an appropriate limit. ` +
+              `For filesystem exploration, use bash/readFile/writeFile. /semantic-layer is mounted, and /state + /workspace persist per thread automatically.`,
           },
           ...messages,
         ]
       : messages;
 
-    // Stream response
-    const stream = await agent.stream(contextualMessages, {
-      memory: memoryConfig,
-    });
+    // Stream response (wrap in request context so bash tools can persist per-thread)
+    const stream = await runWithRequestContext(
+      { userId, chatId, rootId, memoryRootId },
+      async () =>
+        await agent.stream(contextualMessages, {
+          memory: memoryConfig,
+        }),
+    );
 
     // Process stream with thinking tag stripping
     let rawText = "";

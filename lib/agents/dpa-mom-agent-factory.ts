@@ -20,6 +20,7 @@ import {
   createGitLabCliTool,
   createFeishuChatHistoryTool,
   createFeishuDocsTool,
+  createBashToolkitTools,
   createOkrReviewTool,
   chartGenerationTool,
 } from "../tools";
@@ -45,11 +46,14 @@ AVAILABLE TOOLS:
 1. **gitlab_cli**: GitLab operations (issues, MRs, CI/CD) via glab CLI
 2. **feishu_chat_history**: Search Feishu group chat histories
 3. **feishu_docs**: Read Feishu documents (Docs, Sheets, Bitable)
-4. **mgr_okr_review**: Fetch OKR metrics data (has_metric_percentage per company)
-5. **chart_generation**: Generate Mermaid/Vega-Lite charts
-6. **okr_visualization**: Generate OKR heatmap visualizations
-7. **okr_chart_streaming**: Generate comprehensive OKR analysis with charts
-8. **execute_workflow**: Execute deterministic workflows for multi-step operations
+4. **bash**: Execute bash commands in a sandboxed workspace (mounts /semantic-layer)
+5. **readFile**: Read a file from the sandbox
+6. **writeFile**: Write a file to the sandbox
+7. **mgr_okr_review**: Fetch OKR metrics data (has_metric_percentage per company)
+8. **chart_generation**: Generate Mermaid/Vega-Lite charts
+9. **okr_visualization**: Generate OKR heatmap visualizations
+10. **okr_chart_streaming**: Generate comprehensive OKR analysis with charts
+11. **execute_workflow**: Execute deterministic workflows for multi-step operations
 
 WORKFLOW USAGE (execute_workflow tool):
 Use execute_workflow when you need:
@@ -113,6 +117,7 @@ async function createDpaMomAgentInternalAsync(): Promise<{
   const gitlabCliTool = createGitLabCliTool(true);
   const feishuChatHistoryTool = createFeishuChatHistoryTool(true);
   const feishuDocsTool = createFeishuDocsTool(true);
+  const bashTools = await createBashToolkitTools(true);
   const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
   const executeWorkflowTool = createExecuteWorkflowTool();
 
@@ -144,6 +149,9 @@ async function createDpaMomAgentInternalAsync(): Promise<{
       gitlab_cli: gitlabCliTool,
       feishu_chat_history: feishuChatHistoryTool,
       feishu_docs: feishuDocsTool,
+      bash: bashTools.bash,
+      readFile: bashTools.readFile,
+      writeFile: bashTools.writeFile,
       // OKR Reviewer tools
       mgr_okr_review: mgrOkrReviewTool,
       chart_generation: chartGenerationTool,
@@ -155,7 +163,7 @@ async function createDpaMomAgentInternalAsync(): Promise<{
   });
 
   console.log(
-    `✅ [DpaMom] Agent created (8 tools + ${inputProcessors.length} processors)`,
+    `✅ [DpaMom] Agent created (11 tools + ${inputProcessors.length} processors)`,
   );
 
   return { agent, memory };
