@@ -1,30 +1,18 @@
 /**
- * OKR Reviewer Agent - Mastra Implementation
+ * OKR Data Analysis Functions
  * 
- * Replaces the AI SDK Tools implementation with Mastra framework.
- * Specialized in OKR (Objectives and Key Results) analysis.
+ * Provides OKR metrics analysis via StarRocks (primary) or DuckDB (fallback).
+ * Used by the mgr_okr_review tool attached to dpa_mom agent.
  * 
- * KEY CHANGES FROM AI SDK TOOLS:
- * 1. Uses Mastra's Agent instead of @ai-sdk-tools/agents
- * 2. Native model fallback array instead of dual agents
- * 3. Tool definitions use Mastra's format
- * 4. Streaming API identical (textStream)
- * 5. Custom execution context via options (threadId, resourceId)
+ * ARCHITECTURE: Single-agent design
+ * - All OKR analysis goes through dpa_mom agent
+ * - This file provides data functions, NOT a separate agent
+ * - Tools are defined in lib/tools/okr-review-tool.ts
  */
 
-import { Agent } from "@mastra/core/agent";
-import { CoreMessage } from "ai";
 import * as duckdb from "duckdb";
-import { okrVisualizationTool } from "./okr-visualization-tool";
-import { getMastraModel } from "../shared/model-router";
-import { createOkrReviewTool } from "../tools";
-import { chartGenerationTool } from "../tools/chart-generation-tool";
-import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
 import { getUserDataScope } from "../auth/user-data-scope";
 import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
-import { devtoolsTracker } from "../devtools-integration";
-import { getSupabaseUserId } from "../auth/feishu-supabase-id";
-import { createAgentMemory, getMemoryThreadId, getMemoryResourceId } from "../memory-factory";
 
 const OKR_DB_PATH = "/Users/xiaofei.yin/dspy/OKR_reviewer/okr_metrics.db";
 
@@ -234,56 +222,19 @@ export async function analyzeHasMetricPercentage(period: string, userId?: string
 }
 
 /**
- * Get query text from messages
+ * OKR analysis instructions (used in dpa_mom system prompt and tests)
+ * 
+ * This is kept for reference and testing - the actual agent uses these
+ * instructions as part of dpa_mom's unified system prompt.
  */
-function getQueryText(messages: CoreMessage[]): string {
-  const lastMessage = messages[messages.length - 1];
-  if (lastMessage && lastMessage.role === "user" && typeof lastMessage.content === "string") {
-    return lastMessage.content;
-  }
-  return "";
-}
-
-// Create tools
-const mgrOkrReviewTool = createOkrReviewTool(
-  true,  // enableCaching
-  true,  // enableDevtoolsTracking
-  60 * 60 * 1000  // cacheTTL: 1 hour (OKR data doesn't change frequently)
-);
-
-// Lazy-initialized agent
-let okrReviewerAgentInstance: Agent | null = null;
-let isInitializing = false;
-
-/**
- * Initialize the OKR reviewer agent (lazy - called on first request)
- */
-function initializeAgent(): void {
-  if (okrReviewerAgentInstance || isInitializing) {
-    return;
-  }
-
-  isInitializing = true;
-
-  // Create native Mastra memory for this agent
-  const agentMemory = createAgentMemory({
-    lastMessages: 20,
-    enableWorkingMemory: true,
-    enableSemanticRecall: true,
-  });
-
-  // Create agent with Mastra framework
-  okrReviewerAgentInstance = new Agent({
-    id: "okr_reviewer",
-    name: "okr_reviewer",
-    memory: agentMemory || undefined,
-    instructions: `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
+export function getOkrReviewerAgentInstructions(now: Date = new Date()): string {
+  return `You are a Feishu/Lark AI assistant specialized in OKR (Objectives and Key Results) review and analysis. Most user queries will be in Chinese (中文).
 
 你是专门负责OKR（目标和关键结果）评审和分析的Feishu/Lark AI助手。大多数用户查询将是中文。
 
 CRITICAL INSTRUCTIONS:
 - Do not tag users. 不要@用户。
-- Current date is: ${new Date().toISOString().split("T")[0]}
+- Current date is: ${now.toISOString().split("T")[0]}
 - Format your responses using Markdown syntax (Lark Markdown format), which will be rendered in Feishu cards.
 
 ANALYSIS WORKFLOW:
@@ -316,138 +267,5 @@ IMPORTANT: Every OKR analysis response should include:
 - 使用chart_generation工具生成可视化（条形图、饼图）展示数据。
 - 使用okr_chart_streaming工具生成完整的OKR分析报告（包含图表和洞察）。
 - 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。
-- 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用okr_chart_streaming工具。`,
-    // Use native Mastra model router with free models that support tool calling
-    // OKR reviewer uses tools, so we need models that support tool calling
-    model: getMastraModel(true), // requireTools=true (returns array of "openrouter/..." strings)
-    tools: {
-      mgr_okr_review: mgrOkrReviewTool,
-      okr_visualization: okrVisualizationTool as any,
-      chart_generation: chartGenerationTool,
-      okr_chart_streaming: okrChartStreamingTool,
-    },
-  });
-
-  isInitializing = false;
-}
-
-/**
- * Main OKR Reviewer Agent function - Mastra implementation
- * 
- * @param messages - Conversation history
- * @param updateStatus - Optional callback for streaming updates
- * @param chatId - Feishu chat ID
- * @param rootId - Feishu thread root ID
- * @param userId - Feishu user ID
- * @returns Promise<string> - Agent response text
- */
-export async function okrReviewerAgent(
-  messages: CoreMessage[],
-  updateStatus?: (status: string) => void,
-  chatId?: string,
-  rootId?: string,
-  userId?: string,
-): Promise<string> {
-  // Lazy initialize agent
-  initializeAgent();
-
-  const query = getQueryText(messages);
-  const startTime = Date.now();
-  console.log(`[OKR] Received query: "${query}"`);
-
-  // Set up memory scoping using Mastra-native helpers
-  const memoryThread = chatId && rootId ? getMemoryThreadId(chatId, rootId) : undefined;
-  const memoryResource = userId ? getMemoryResourceId(userId) : undefined;
-
-  console.log(
-    `[OKR] Memory context: thread=${memoryThread}, resource=${memoryResource}`
-  );
-
-  // Batch updates to avoid spamming Feishu
-  const BATCH_DELAY_MS = 1000; // Batch every 1 second for better performance
-  const MIN_CHARS_PER_UPDATE = 50; // Minimum characters to trigger update
-
-  const accumulatedText: string[] = [];
-  let pendingTimeout: NodeJS.Timeout | null = null;
-  let lastUpdateLength = 0;
-
-  const updateCardBatched = async (text: string): Promise<void> => {
-    if (!updateStatus) {
-      return;
-    }
-
-    // Clear pending update
-    if (pendingTimeout) {
-      clearTimeout(pendingTimeout);
-      pendingTimeout = null;
-    }
-
-    const newChars = text.length - lastUpdateLength;
-
-    // If we have enough new text, update immediately
-    if (newChars >= MIN_CHARS_PER_UPDATE) {
-      updateStatus(text);
-      lastUpdateLength = text.length;
-    } else {
-      // Otherwise, batch the update
-      pendingTimeout = setTimeout(() => {
-        if (updateStatus) {
-          updateStatus(text);
-        }
-        lastUpdateLength = text.length;
-        pendingTimeout = null;
-      }, BATCH_DELAY_MS);
-    }
-  };
-
-  try {
-     // Track agent call for devtools monitoring
-     devtoolsTracker.trackAgentCall("okr_reviewer", query);
-
-     // Build memory config for agent calls (native Mastra pattern)
-     const memoryConfig = memoryResource && memoryThread ? {
-       resource: memoryResource,
-       thread: {
-         id: memoryThread,
-         metadata: { chatId, rootId, userId },
-       },
-     } : undefined;
-
-     // MASTRA STREAMING: Call OKR reviewer agent with streaming
-     const stream = await okrReviewerAgentInstance!.stream(messages, {
-       memory: memoryConfig,
-     });
-
-    let text = "";
-    for await (const chunk of stream.textStream) {
-      text += chunk;
-      accumulatedText.push(chunk);
-      await updateCardBatched(text);
-    }
-
-    const duration = Date.now() - startTime;
-    devtoolsTracker.trackResponse("okr_reviewer", text, duration);
-
-    console.log(
-      `[OKR] Response complete (length=${text.length}, duration=${duration}ms)`
-    );
-    return text;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[OKR] Error during streaming:`, errorMsg);
-
-    devtoolsTracker.trackError(
-      "OKR Reviewer",
-      error instanceof Error ? error : new Error(errorMsg)
-    );
-    throw error;
-  }
-}
-
-/**
- * Export helper to get OKR reviewer agent (for internal use)
- */
-export function getOkrReviewerAgent(): Agent {
-  initializeAgent();
-  return okrReviewerAgentInstance!;
+- 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用okr_chart_streaming工具。`;
 }

@@ -1,16 +1,13 @@
 /**
  * Type definitions for agent architecture.
  * 
- * Note: We're using @ai-sdk-tools/agents Agent class directly,
- * so these types are mainly for reference/documentation.
+ * ARCHITECTURE: Single-agent design
+ * - dpa_mom is the only production agent
+ * - All capabilities are tools on the unified agent
+ * - No multi-agent routing or specialist agents
  */
 
-export type AgentName = 
-  | "okr_reviewer"
-  | "alignment_agent"
-  | "pnl_agent"
-  | "dpa_mom"
-  | "Manager";
+export type AgentName = "dpa_mom";
 
-// Re-export Agent type from @ai-sdk-tools/agents for convenience
-export type { Agent } from "@ai-sdk-tools/agents";
+// Re-export Agent type from Mastra for convenience
+export type { Agent } from "@mastra/core/agent";

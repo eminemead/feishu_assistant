@@ -82,8 +82,11 @@ let mastraInitPromise: Promise<Mastra> | null = null;
 /**
  * Async Mastra initializer.
  *
- * IMPORTANT: we register the real production `dpa_mom` Agent instance here so
- * observability hooks apply to all executions (no out-of-registry agent singletons).
+ * IMPORTANT: Single-agent architecture - only `dpa_mom` is registered.
+ * All OKR, GitLab, and other capabilities are tools on the unified agent.
+ * 
+ * Registered agents:
+ * - dpa_mom: The unified agent (chief-of-staff with all tools)
  */
 export async function getMastraAsync(): Promise<Mastra> {
   if (mastraInstance) return mastraInstance;
@@ -93,6 +96,8 @@ export async function getMastraAsync(): Promise<Mastra> {
       initializeWorkflows();
 
       const { agent: dpaMom } = await __internalGetDpaMomAgentAndMemoryAsync();
+
+      console.log(`✅ [Mastra] Registering agent: dpa_mom`);
 
       const mastra = new Mastra({
         agents: { dpa_mom: dpaMom },

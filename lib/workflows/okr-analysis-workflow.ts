@@ -4,17 +4,21 @@
  * Orchestrates OKR analysis using Mastra workflows:
  * 1. Query DB → Get OKR metrics
  * 2. Generate Charts → Create visualizations
- * 3. Analyze → Agent generates insights
+ * 3. Analyze → Generate insights via LLM
  * 4. Format Response → Combine into final report
  * 
- * Uses Mastra v1 beta workflow pattern for deterministic multi-step processes
+ * Uses Mastra v1 beta workflow pattern for deterministic multi-step processes.
+ * 
+ * NOTE: This workflow uses generateText directly for the analysis step
+ * (single-agent architecture - no separate OKR Reviewer Agent).
  */
 
 import { createWorkflow, createStep } from "@mastra/core/workflows";
+import { generateText } from "ai";
 import { z } from "zod";
 import { analyzeHasMetricPercentage } from "../agents/okr-reviewer-agent";
 import { chartGenerationTool, ChartResponse } from "../tools/chart-generation-tool";
-import { getOkrReviewerAgent } from "../agents/okr-reviewer-agent";
+import { getMastraModelSingle } from "../shared/model-router";
 
 /**
  * Step 1: Query OKR Data
@@ -155,8 +159,8 @@ const generateChartsStep = createStep({
 });
 
 /**
- * Step 3: Analyze with Agent
- * Uses OKR Reviewer Agent to generate insights
+ * Step 3: Analyze with LLM
+ * Uses generateText to create insights (single-agent architecture)
  */
 const analyzeStep = createStep({
   id: "analyze",
@@ -182,13 +186,11 @@ const analyzeStep = createStep({
   execute: async ({ inputData }) => {
     const { charts, metrics, period } = inputData;
     
-    console.log(`[OKR Workflow] Generating analysis with OKR Reviewer Agent`);
-    
-    // Get OKR Reviewer Agent
-    const okrAgent = getOkrReviewerAgent();
+    console.log(`[OKR Workflow] Generating analysis via generateText`);
     
     // Create analysis prompt
-    const analysisPrompt = `Analyze the following OKR metrics for period ${period}:
+    const analysisPrompt = `You are an OKR analyst. Analyze the following OKR metrics for period ${period}.
+Respond in Markdown format suitable for Feishu cards.
 
 Overall Statistics:
 - Total Companies: ${metrics.total_companies}
@@ -202,15 +204,18 @@ Generate a comprehensive analysis with:
 2. Top performing companies
 3. Companies needing attention
 4. Recommendations for improvement
-5. Trends and patterns
+5. Trends and patterns`;
 
-Format your response in Markdown.`;
-
-    // Generate analysis
-    const result = await okrAgent.generate(analysisPrompt);
+    // Generate analysis using model router
+    const model = getMastraModelSingle(false);
+    const { text: analysis } = await generateText({
+      model,
+      prompt: analysisPrompt,
+      temperature: 0.3,
+    });
     
     return {
-      analysis: result.text,
+      analysis,
       charts,
       metrics,
       period
