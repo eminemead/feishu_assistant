@@ -12,7 +12,7 @@
  * - Feishu image upload integration
  */
 
-import { tool } from 'ai';
+import { createTool } from "@mastra/core/tools";
 import { z } from 'zod';
 import { getVisualizationService, RenderMode } from '../services/visualization-service';
 
@@ -54,7 +54,8 @@ const TableDataSchema = z.array(z.object({
  * 
  * Use this tool to generate charts and visualizations in any agent.
  */
-export const visualizationTool = tool({
+export const visualizationTool = createTool({
+  id: "visualization",
   description: `Generate charts and visualizations. Returns markdown with the chart embedded.
 
 Supported chart types:
@@ -78,7 +79,7 @@ Examples:
 - Pie chart: { chartType: "pie", data: [{ label: "A", value: 30 }], title: "Share" }
 - Heatmap: { chartType: "heatmap", data: [{ row: "Co1", metrics: [{ column: "M1", value: 80 }] }] }`,
 
-  parameters: z.object({
+  inputSchema: z.object({
     chartType: z.enum(['bar', 'pie', 'line', 'heatmap', 'table', 'stats', 'sparkline'])
       .describe('Type of chart to generate'),
     
@@ -101,7 +102,13 @@ Examples:
       .describe('Rendering mode. Default: auto (best available)'),
   }),
 
-  execute: async ({ chartType, data, title, options = {}, renderMode = 'auto' }) => {
+execute: async (inputData, context) => {
+    // Support abort signal
+    if (context?.abortSignal?.aborted) {
+      return { success: false, markdown: '', mode: 'ascii', error: 'Aborted' };
+    }
+    
+    const { chartType, data, title, options = {}, renderMode = 'auto' } = inputData;
     const viz = getVisualizationService();
     const mode = renderMode as RenderMode;
 

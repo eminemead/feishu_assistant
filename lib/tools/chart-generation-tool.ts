@@ -9,7 +9,7 @@
  * - Client renders the chart in real-time
  */
 
-import { tool } from 'ai';
+import { createTool } from "@mastra/core/tools";
 import { z } from 'zod';
 import * as mermaidCharts from '../visualization/mermaid-charts';
 import * as vegaLiteCharts from '../visualization/vega-lite-charts';
@@ -319,11 +319,8 @@ function generateVegaLiteChart(request: ChartRequest, options: any): ChartRespon
   };
 }
 
-/**
- * AI Tool Definition - Chart Generation
- * This tool is used by agents to generate charts for Feishu responses
- */
-export const chartGenerationTool = tool({
+export const chartGenerationTool = createTool({
+  id: "chart_generation",
   description: `Generate charts (Mermaid diagrams or Vega-Lite visualizations) as markdown for streaming in Feishu cards.
 
 IMPORTANT: All outputs from this tool are fully streamable in Feishu.
@@ -352,10 +349,24 @@ Supported Vega-Lite charts (data-driven, 50+ types):
 - waterfall: Cumulative effect
 - bubble: Multi-dimensional data`,
 
-  parameters: ChartRequestSchema,
+  inputSchema: ChartRequestSchema,
 
-  execute: async (params: ChartRequest): Promise<ChartResponse> => {
-    return generateChart(params);
+  execute: async (inputData: ChartRequest, context): Promise<ChartResponse> => {
+    // Support abort signal
+    if (context?.abortSignal?.aborted) {
+      return {
+        success: false,
+        markdown: 'Chart generation aborted',
+        type: inputData.chartType,
+        subType: inputData.subType,
+        title: inputData.title,
+        description: inputData.description,
+        rendererHint: 'fallback-markdown',
+        streamable: true,
+      };
+    }
+    
+    return generateChart(inputData);
   },
 });
 

@@ -8,7 +8,7 @@
  * between agents. Each agent has its own tool instances scoped to that agent.
  */
 
-import { tool, zodSchema } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getFeishuClient } from "../feishu-utils";
 import { trackToolCall } from "../devtools-integration";
@@ -33,6 +33,159 @@ function extractDocToken(input: string): string {
 }
 
 /**
+ * Feishu docs result type
+ */
+interface FeishuDocsResult {
+  success: boolean;
+  docToken: string;
+  docType?: string;
+  content?: string;
+  title?: string;
+  metadata?: {
+    name?: string;
+    token?: string;
+    type?: string;
+    size?: number;
+    createdAt?: string;
+    updatedAt?: string;
+    ownerId?: string;
+  };
+  sheets?: Array<{ sheetId: string; title: string }>;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Extract text from document content structure
+ */
+function extractTextFromContent(content: any): string {
+  if (typeof content === "string") return content;
+  if (content.text) return content.text;
+  if (content.children) {
+    return content.children.map(extractTextFromContent).join("");
+  }
+  return "";
+}
+
+/**
+ * Core execution logic for Feishu docs
+ */
+async function executeFeishuDocs(params: {
+  docToken: string;
+  docType?: "doc" | "sheet" | "bitable";
+  action?: "read" | "metadata";
+}): Promise<FeishuDocsResult> {
+  const client = getFeishuClient() as any;
+  const token = extractDocToken(params.docToken);
+  const type = params.docType || "doc";
+  const operation = params.action || "read";
+  
+  try {
+    if (operation === "metadata") {
+      const resp = await client.drive.v1.file.get({
+        path: { file_token: token },
+        params: { token_type: type },
+      });
+      
+      const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+      
+      if (!isSuccess) {
+        return {
+          success: false,
+          error: `Failed to get document metadata: ${JSON.stringify(resp)}`,
+          docToken: token,
+        };
+      }
+      
+      return {
+        success: true,
+        docToken: token,
+        docType: type,
+        metadata: {
+          name: resp.data?.file?.name,
+          token: resp.data?.file?.token,
+          type: resp.data?.file?.type,
+          size: resp.data?.file?.size,
+          createdAt: resp.data?.file?.created_time,
+          updatedAt: resp.data?.file?.modified_time,
+          ownerId: resp.data?.file?.owner_id,
+        },
+      };
+    }
+    
+    // Read document content
+    if (type === "doc") {
+      const resp = await client.docx.v1.document.content({
+        path: { document_id: token },
+      });
+      
+      const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+      
+      if (!isSuccess) {
+        return {
+          success: false,
+          error: `Failed to read document: ${JSON.stringify(resp)}`,
+          docToken: token,
+        };
+      }
+      
+      const textContent = resp.data?.content 
+        ? extractTextFromContent(resp.data.content)
+        : "";
+      
+      return {
+        success: true,
+        docToken: token,
+        docType: type,
+        content: textContent || "Document is empty or content could not be extracted",
+        title: resp.data?.title || "Untitled",
+      };
+    }
+    
+    if (type === "sheet") {
+      const resp = await client.sheets.v2.spreadsheet.get({
+        path: { spreadsheet_token: token },
+      });
+      
+      const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
+      
+      if (!isSuccess) {
+        return {
+          success: false,
+          error: `Failed to read sheet: ${JSON.stringify(resp)}`,
+          docToken: token,
+        };
+      }
+      
+      return {
+        success: true,
+        docToken: token,
+        docType: type,
+        title: resp.data?.spreadsheet?.title || "Untitled",
+        sheets: resp.data?.spreadsheet?.sheets?.map((s: any) => ({
+          sheetId: s.sheet_id,
+          title: s.title,
+        })) || [],
+        message: "Sheet metadata retrieved. Use specific sheet APIs for detailed content.",
+      };
+    }
+    
+    // Bitable
+    return {
+      success: false,
+      error: "Bitable reading not yet implemented. Please use Feishu API directly.",
+      docToken: token,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || "Failed to access document",
+      docToken: token,
+    };
+  }
+}
+
+/**
  * Creates the Feishu docs access tool
  * 
  * Used by:
@@ -42,266 +195,8 @@ function extractDocToken(input: string): string {
  * @returns Configured Feishu docs tool instance
  */
 export function createFeishuDocsTool(enableDevtoolsTracking: boolean = true) {
-  const executeFn = enableDevtoolsTracking
-    ? trackToolCall(
-        "feishu_docs",
-        async ({ docToken, docType, action }: { 
-          docToken: string; 
-          docType?: "doc" | "sheet" | "bitable";
-          action?: "read" | "metadata";
-        }) => {
-          const client = getFeishuClient();
-          const token = extractDocToken(docToken);
-          const type = docType || "doc";
-          const operation = action || "read";
-          
-          try {
-            if (operation === "metadata") {
-              // Get document metadata
-              const resp = await client.drive.v1.file.get({
-                path: {
-                  file_token: token,
-                },
-                params: {
-                  token_type: type,
-                },
-              });
-              
-              const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-              
-              if (!isSuccess) {
-                return {
-                  success: false,
-                  error: `Failed to get document metadata: ${JSON.stringify(resp)}`,
-                  docToken: token,
-                };
-              }
-              
-              return {
-                success: true,
-                docToken: token,
-                docType: type,
-                metadata: {
-                  name: resp.data?.file?.name,
-                  token: resp.data?.file?.token,
-                  type: resp.data?.file?.type,
-                  size: resp.data?.file?.size,
-                  createdAt: resp.data?.file?.created_time,
-                  updatedAt: resp.data?.file?.modified_time,
-                  ownerId: resp.data?.file?.owner_id,
-                },
-              };
-            } else {
-              // Read document content
-              if (type === "doc") {
-                const resp = await client.docx.v1.document.content({
-                  path: {
-                    document_id: token,
-                  },
-                });
-                
-                const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-                
-                if (!isSuccess) {
-                  return {
-                    success: false,
-                    error: `Failed to read document: ${JSON.stringify(resp)}`,
-                    docToken: token,
-                  };
-                }
-                
-                // Extract text content from document structure
-                let textContent = "";
-                if (resp.data?.content) {
-                  const extractText = (node: any): string => {
-                    if (typeof node === "string") return node;
-                    if (node.text) return node.text;
-                    if (node.children) {
-                      return node.children.map(extractText).join("");
-                    }
-                    return "";
-                  };
-                  
-                  textContent = extractText(resp.data.content);
-                }
-                
-                return {
-                  success: true,
-                  docToken: token,
-                  docType: type,
-                  content: textContent || "Document is empty or content could not be extracted",
-                  title: resp.data?.title || "Untitled",
-                };
-              } else if (type === "sheet") {
-                // For sheets, get basic info (full content reading requires more complex API)
-                const resp = await client.sheets.v2.spreadsheet.get({
-                  path: {
-                    spreadsheet_token: token,
-                  },
-                });
-                
-                const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-                
-                if (!isSuccess) {
-                  return {
-                    success: false,
-                    error: `Failed to read sheet: ${JSON.stringify(resp)}`,
-                    docToken: token,
-                  };
-                }
-                
-                return {
-                  success: true,
-                  docToken: token,
-                  docType: type,
-                  title: resp.data?.spreadsheet?.title || "Untitled",
-                  sheets: resp.data?.spreadsheet?.sheets?.map((s: any) => ({
-                    sheetId: s.sheet_id,
-                    title: s.title,
-                  })) || [],
-                  message: "Sheet metadata retrieved. Use specific sheet APIs for detailed content.",
-                };
-              } else {
-                // Bitable
-                return {
-                  success: false,
-                  error: "Bitable reading not yet implemented. Please use Feishu API directly.",
-                  docToken: token,
-                };
-              }
-            }
-          } catch (error: any) {
-            return {
-              success: false,
-              error: error.message || "Failed to access document",
-              docToken: token,
-            };
-          }
-        }
-      )
-    : async ({ docToken, docType, action }: { 
-        docToken: string; 
-        docType?: "doc" | "sheet" | "bitable";
-        action?: "read" | "metadata";
-      }) => {
-        const client = getFeishuClient();
-        const token = extractDocToken(docToken);
-        const type = docType || "doc";
-        const operation = action || "read";
-        
-        try {
-          if (operation === "metadata") {
-            const resp = await client.drive.v1.file.get({
-              path: { file_token: token },
-              params: { token_type: type },
-            });
-            
-            const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-            
-            if (!isSuccess) {
-              return {
-                success: false,
-                error: `Failed to get document metadata: ${JSON.stringify(resp)}`,
-                docToken: token,
-              };
-            }
-            
-            return {
-              success: true,
-              docToken: token,
-              docType: type,
-              metadata: {
-                name: resp.data?.file?.name,
-                token: resp.data?.file?.token,
-                type: resp.data?.file?.type,
-                size: resp.data?.file?.size,
-                createdAt: resp.data?.file?.created_time,
-                updatedAt: resp.data?.file?.modified_time,
-                ownerId: resp.data?.file?.owner_id,
-              },
-            };
-          } else {
-            if (type === "doc") {
-              const resp = await client.docx.v1.document.content({
-                path: { document_id: token },
-              });
-              
-              const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-              
-              if (!isSuccess) {
-                return {
-                  success: false,
-                  error: `Failed to read document: ${JSON.stringify(resp)}`,
-                  docToken: token,
-                };
-              }
-              
-              let textContent = "";
-              if (resp.data?.content) {
-                const extractText = (node: any): string => {
-                  if (typeof node === "string") return node;
-                  if (node.text) return node.text;
-                  if (node.children) {
-                    return node.children.map(extractText).join("");
-                  }
-                  return "";
-                };
-                textContent = extractText(resp.data.content);
-              }
-              
-              return {
-                success: true,
-                docToken: token,
-                docType: type,
-                content: textContent || "Document is empty or content could not be extracted",
-                title: resp.data?.title || "Untitled",
-              };
-            } else if (type === "sheet") {
-              const resp = await client.sheets.v2.spreadsheet.get({
-                path: { spreadsheet_token: token },
-              });
-              
-              const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
-              
-              if (!isSuccess) {
-                return {
-                  success: false,
-                  error: `Failed to read sheet: ${JSON.stringify(resp)}`,
-                  docToken: token,
-                };
-              }
-              
-              return {
-                success: true,
-                docToken: token,
-                docType: type,
-                title: resp.data?.spreadsheet?.title || "Untitled",
-                sheets: resp.data?.spreadsheet?.sheets?.map((s: any) => ({
-                  sheetId: s.sheet_id,
-                  title: s.title,
-                })) || [],
-                message: "Sheet metadata retrieved. Use specific sheet APIs for detailed content.",
-              };
-            } else {
-              return {
-                success: false,
-                error: "Bitable reading not yet implemented.",
-                docToken: token,
-              };
-            }
-          }
-        } catch (error: any) {
-          return {
-            success: false,
-            error: error.message || "Failed to access document",
-            docToken: token,
-          };
-        }
-      };
-
-  // Base tool definition
-  // @ts-ignore - Type instantiation depth issue
-  const feishuDocsToolBase = tool({
+  return createTool({
+    id: "feishu_docs",
     description: `Access and read Feishu documents (Docs, Sheets, Bitable).
     
 Use this to:
@@ -318,25 +213,43 @@ Supported doc types:
 - doc: Feishu Docs (rich text documents)
 - sheet: Feishu Sheets (spreadsheets)
 - bitable: Feishu Bitable (databases)`,
-    // @ts-ignore
-    parameters: zodSchema(
-      z.object({
-        docToken: z
-          .string()
-          .describe("The Feishu document token or URL (e.g., 'doccnxxxxx' or full Feishu doc URL)"),
-        docType: z
-          .enum(["doc", "sheet", "bitable"])
-          .optional()
-          .describe("Document type (default: 'doc'). Use 'sheet' for spreadsheets, 'bitable' for databases."),
-        action: z
-          .enum(["read", "metadata"])
-          .optional()
-          .describe("Action to perform: 'read' to get content, 'metadata' to get document info (default: 'read')"),
-      })
-    ),
-    execute: executeFn,
+    inputSchema: z.object({
+      docToken: z
+        .string()
+        .describe(
+          "The Feishu document token or URL (e.g., 'doccnxxxxx' or full Feishu doc URL)",
+        ),
+      docType: z
+        .enum(["doc", "sheet", "bitable"])
+        .optional()
+        .describe(
+          "Document type (default: 'doc'). Use 'sheet' for spreadsheets, 'bitable' for databases.",
+        ),
+      action: z
+        .enum(["read", "metadata"])
+        .optional()
+        .describe(
+          "Action to perform: 'read' to get content, 'metadata' to get document info (default: 'read')",
+        ),
+    }),
+execute: async (inputData, context): Promise<FeishuDocsResult> => {
+      // Support abort signal
+      if (context?.abortSignal?.aborted) {
+        return { success: false, docToken: inputData.docToken, error: "Request aborted" };
+      }
+      
+      const params = {
+        docToken: inputData.docToken,
+        docType: inputData.docType,
+        action: inputData.action,
+      };
+      
+      if (enableDevtoolsTracking) {
+        return trackToolCall("feishu_docs", executeFeishuDocs)(params);
+      }
+      
+      return executeFeishuDocs(params);
+    },
   });
-
-  return feishuDocsToolBase;
 }
 

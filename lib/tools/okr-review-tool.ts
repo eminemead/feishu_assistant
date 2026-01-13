@@ -10,11 +10,37 @@
  * NOT between different agents.
  */
 
-import { tool, zodSchema } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { cached, createCachedWithTTL } from "../cache";
 import { devtoolsTracker } from "../devtools-integration";
 import { analyzeHasMetricPercentage } from "../agents/okr-reviewer-agent";
+
+/**
+ * OKR review result type
+ */
+interface OkrReviewResult {
+  period: string;
+  total_companies?: number;
+  overall_average?: number;
+  companies?: Array<{ name: string; percentage: number }>;
+  error?: string;
+}
+
+/**
+ * Core execution logic (single source of truth)
+ */
+async function executeOkrReview(period: string): Promise<OkrReviewResult> {
+  try {
+    const analysis = await analyzeHasMetricPercentage(period);
+    return analysis;
+  } catch (error: any) {
+    return {
+      error: error.message || "Failed to analyze OKR metrics",
+      period,
+    };
+  }
+}
 
 /**
  * Creates the OKR review tool
@@ -33,56 +59,45 @@ export function createOkrReviewTool(
   enableDevtoolsTracking: boolean = true,
   cacheTTL?: number
 ) {
-  // Execute function with optional devtools tracking
-  const executeFn = enableDevtoolsTracking
-    ? async ({ period }: { period: string }): Promise<any> => {
+  const mgrOkrReviewToolBase = createTool({
+    id: "mgr_okr_review",
+    description:
+      "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries StarRocks (or DuckDB as fallback) to analyze if management criteria are met by managers of different levels across different city companies. Results are automatically filtered by user permissions (RLS).",
+    inputSchema: z.object({
+      period: z
+        .string()
+        .describe(
+          "The period to analyze (e.g., '10 月', '11 月', '9 月'). Defaults to current month if not specified.",
+        ),
+    }),
+execute: async (inputData, context) => {
+      // Support abort signal
+      if (context?.abortSignal?.aborted) {
+        return { period: inputData.period, error: "Analysis aborted" };
+      }
+      
+      const { period } = inputData;
+      
+      if (enableDevtoolsTracking) {
         const startTime = Date.now();
         devtoolsTracker.trackToolCall("mgr_okr_review", { period }, startTime);
         
         try {
-          const analysis = await analyzeHasMetricPercentage(period);
-          return analysis;
+          const result = await executeOkrReview(period);
+          return result;
         } catch (error: any) {
           devtoolsTracker.trackError(
             "mgr_okr_review",
             error instanceof Error ? error : new Error(String(error)),
             { toolName: "mgr_okr_review", params: { period } }
           );
-          return {
-            error: error.message || "Failed to analyze OKR metrics",
-            period,
-          };
+          throw error;
         }
       }
-    : async ({ period }: { period: string }) => {
-        try {
-          const analysis = await analyzeHasMetricPercentage(period);
-          return analysis;
-        } catch (error: any) {
-          return {
-            error: error.message || "Failed to analyze OKR metrics",
-            period,
-          };
-        }
-      };
-
-  // Base tool definition
-  // @ts-ignore - Type instantiation depth issue
-  const mgrOkrReviewToolBase = tool({
-    description:
-      "Analyze manager OKR metrics by checking has_metric_percentage per city company. This tool queries StarRocks (or DuckDB as fallback) to analyze if management criteria are met by managers of different levels across different city companies. Results are automatically filtered by user permissions (RLS).",
-    // @ts-ignore
-    parameters: zodSchema(
-      z.object({
-        period: z
-          .string()
-          .describe(
-            "The period to analyze (e.g., '10 月', '11 月', '9 月'). Defaults to current month if not specified."
-          ),
-      })
-    ),
-    execute: executeFn,
-  }) as any; // Type assertion to work around deep type instantiation issue
+      
+      return executeOkrReview(period);
+    },
+  });
 
   // Return cached or uncached version
   if (!enableCaching) {

@@ -11,11 +11,11 @@
  * between agents. Each agent has its own tool instances scoped to that agent.
  */
 
-import { tool, zodSchema } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { trackToolCall } from "../devtools-integration";
+import { devtoolsTracker } from "../devtools-integration";
 
 const execAsync = promisify(exec);
 
@@ -80,6 +80,38 @@ async function executeGlabCommand(command: string, timeout: number = 30000): Pro
 }
 
 /**
+ * GitLab CLI result type
+ */
+interface GitLabCliResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+  command: string;
+}
+
+/**
+ * Core execution logic
+ */
+async function executeGitLabCli(command: string, args?: string): Promise<GitLabCliResult> {
+  const fullCommand = args ? `${command} ${args}` : command;
+  const { stdout, stderr } = await executeGlabCommand(fullCommand);
+  
+  if (stderr && !stdout) {
+    return {
+      success: false,
+      error: stderr,
+      command: fullCommand,
+    };
+  }
+  
+  return {
+    success: true,
+    output: stdout,
+    command: fullCommand,
+  };
+}
+
+/**
  * Creates the GitLab CLI tool
  * 
  * Used by:
@@ -89,50 +121,8 @@ async function executeGlabCommand(command: string, timeout: number = 30000): Pro
  * @returns Configured GitLab CLI tool instance
  */
 export function createGitLabCliTool(enableDevtoolsTracking: boolean = true) {
-  const executeFn = enableDevtoolsTracking
-    ? trackToolCall(
-        "gitlab_cli",
-        async ({ command, args }: { command: string; args?: string }) => {
-          const fullCommand = args ? `${command} ${args}` : command;
-          const { stdout, stderr } = await executeGlabCommand(fullCommand);
-          
-          if (stderr && !stdout) {
-            return {
-              success: false,
-              error: stderr,
-              command: fullCommand,
-            };
-          }
-          
-          return {
-            success: true,
-            output: stdout,
-            command: fullCommand,
-          };
-        }
-      )
-    : async ({ command, args }: { command: string; args?: string }) => {
-        const fullCommand = args ? `${command} ${args}` : command;
-        const { stdout, stderr } = await executeGlabCommand(fullCommand);
-        
-        if (stderr && !stdout) {
-          return {
-            success: false,
-            error: stderr,
-            command: fullCommand,
-          };
-        }
-        
-        return {
-          success: true,
-          output: stdout,
-          command: fullCommand,
-        };
-      };
-
-  // Base tool definition
-  // @ts-ignore - Type instantiation depth issue
-  const gitlabCliToolBase = tool({
+  return createTool({
+    id: "gitlab_cli",
     description: `Access GitLab issue management via glab CLI.
 
 ⚠️ SCOPE: This tool ONLY works with dpa/dpa-mom/task repo (${GITLAB_HOST}).
@@ -154,25 +144,36 @@ Examples:
 - "issue create -t 'Bug fix' -d 'Details...'" → Create issue
 
 Do NOT include 'glab' prefix or -R flag (auto-injected).`,
-    // @ts-ignore
-    parameters: zodSchema(
-      z.object({
-        command: z
-          .string()
-          .describe(
-            "The glab command (e.g., 'issue list', 'issue view 123'). Do NOT include 'glab' prefix or -R repo flag."
-          ),
-        args: z
-          .string()
-          .optional()
-          .describe(
-            "Additional flags (e.g., '--assignee=@me', '-c' for closed). Do NOT use -R or --repo."
-          ),
-      })
-    ),
-    execute: executeFn,
+    inputSchema: z.object({
+      command: z
+        .string()
+        .describe(
+          "The glab command (e.g., 'issue list', 'issue view 123'). Do NOT include 'glab' prefix or -R repo flag.",
+        ),
+      args: z
+        .string()
+        .optional()
+        .describe(
+          "Additional flags (e.g., '--assignee=@me', '-c' for closed). Do NOT use -R or --repo.",
+        ),
+    }),
+execute: async (inputData, context) => {
+      // Support abort signal
+      if (context?.abortSignal?.aborted) {
+        return { success: false, error: "Command aborted", command: inputData.command };
+      }
+      
+      const { command, args } = inputData;
+      const startTime = Date.now();
+      
+      const result = await executeGitLabCli(command, args);
+      
+      if (enableDevtoolsTracking) {
+        devtoolsTracker.trackToolCall("gitlab_cli", { command, args }, startTime);
+      }
+      
+      return result;
+    },
   });
-
-  return gitlabCliToolBase;
 }
 

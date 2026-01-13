@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
   searchDocumentsBySemantic,
@@ -6,18 +6,39 @@ import {
 } from "../rag/document-rag";
 
 /**
+ * Semantic search result type
+ */
+interface SemanticSearchResult {
+  success: boolean;
+  hits?: any[];
+  formatted?: string;
+  mode?: string;
+  error?: string;
+}
+
+/**
  * Semantic-ish search tool over tracked documents.
  * Future: swap implementation to true vector search without changing callers.
  */
-export const documentSemanticSearchTool = tool({
+export const documentSemanticSearchTool = createTool({
+  id: "semantic_doc_search",
   description:
     "Search tracked documents semantically and return the best matches for the user.",
-  parameters: z.object({
-    query: z.string().min(2, "query too short"),
+  inputSchema: z.object({
+    query: z.string().min(2, "query too short").describe("Search query"),
     userId: z.string().default("unknown").describe("Feishu user id for RLS"),
-    limit: z.number().int().min(1).max(10).optional().default(5),
+    limit: z.number().int().min(1).max(10).optional().default(5).describe("Max results"),
   }),
-  execute: async ({ query, userId, limit = 5 }) => {
+  execute: async (inputData, context): Promise<SemanticSearchResult> => {
+    // Support abort signal
+    if (context?.abortSignal?.aborted) {
+      return { success: false, error: "Search aborted" };
+    }
+    
+    const { query, limit = 5 } = inputData;
+    // Get userId from requestContext if available, fallback to input
+    const userId = inputData.userId ?? context?.requestContext?.get("userId") as string ?? "unknown";
+    
     try {
       const hits = await searchDocumentsBySemantic({ query, userId, limit });
       return {

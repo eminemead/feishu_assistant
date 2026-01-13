@@ -1,4 +1,5 @@
-import { tool, generateText, generateObject } from "ai";
+import { generateText, generateObject } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getMastraModelSingle } from "../shared/model-router";
 
@@ -6,10 +7,11 @@ import { getMastraModelSingle } from "../shared/model-router";
  * Generates 2-3 follow-up questions or recommendations based on agent response
  * These will be rendered as interactive buttons on Feishu cards for user selection
  */
-export const generateFollowupsTool = tool({
+export const generateFollowupsTool = createTool({
   description:
     "Generate follow-up questions or recommendations based on the agent response for user interaction via card buttons",
-  parameters: z.object({
+  id: "generate_followups",
+  inputSchema: z.object({
     response: z.string().describe("The agent's response text"),
     context: z
       .string()
@@ -132,13 +134,10 @@ export async function generateFollowupQuestions(
      }
 
     // Create a timeout promise for safety (30 seconds max)
-    const timeoutPromise = new Promise((_, reject) => {
+    const timeoutPromise: Promise<never> = new Promise((_, reject) => {
       setTimeout(() => reject(new Error("generateText timeout after 30 seconds")), 30000);
     });
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate-followups-tool.ts:138',message:'Generating follow-ups',data:{responseLength:response.length,contextLength:context?.length||0,maxOptions},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     // Use generateText with JSON parsing instead of generateObject
     const resultPromise = generateText({
       model,
@@ -174,7 +173,7 @@ Return ONLY a JSON array with this exact structure. No markdown, no code blocks,
 Types must be: "question", "recommendation", or "action"`,
     });
 
-    const result = await Promise.race([resultPromise, timeoutPromise]);
+    const result: any = await Promise.race([resultPromise, timeoutPromise]);
 
     // Extract text from result - handle multiple response formats
     if (!result) {
@@ -182,7 +181,7 @@ Types must be: "question", "recommendation", or "action"`,
       throw new Error("generateText returned no result");
     }
 
-    const text = typeof result === 'string' ? result : (result?.text || '');
+    const text = typeof result === "string" ? result : (result?.text || "");
     
     if (!text || text.length === 0) {
       console.error(`❌ [Followups] generateText returned empty result`);
@@ -233,9 +232,6 @@ Types must be: "question", "recommendation", or "action"`,
       };
     });
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/123f91e6-ddc1-4f3e-81a7-3f3fdad928ed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'generate-followups-tool.ts:218',message:'Follow-ups generated',data:{count:followupsWithMetadata.length,followups:followupsWithMetadata.map(f=>({text:f.text,type:f.type}))},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     console.log(`✅ [Followups] Generated ${followupsWithMetadata.length} follow-up options with metadata`);
     return followupsWithMetadata;
   } catch (error) {

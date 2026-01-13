@@ -11,7 +11,7 @@
  * 4. Credential Isolation - Server-side credentials only
  */
 
-import { tool, zodSchema } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import * as duckdb from "duckdb";
 import { queryStarrocks, hasStarrocksConfig } from "../starrocks/client";
@@ -204,12 +204,12 @@ export function createExecuteSqlTool(
   enableCaching: boolean = false,
   enableDevtoolsTracking: boolean = true
 ) {
-  const executeFn = enableDevtoolsTracking
-    ? trackToolCall("execute_sql", executeQuery)
-    : executeQuery;
+  const executeCore = async (input: ExecuteSqlInput): Promise<ExecuteSqlOutput> => {
+    return executeQuery(input);
+  };
 
-  // @ts-ignore - Type instantiation depth issue
-  const executeSqlToolBase = tool({
+  const executeSqlToolBase = createTool({
+    id: "execute_sql",
     description: `Execute a SQL query against the analytics database and return results.
 
 IMPORTANT:
@@ -221,28 +221,42 @@ IMPORTANT:
 Available tables: Query /semantic-layer/entities/ using bash to discover tables.
 
 Security: Your query will be validated. Only SELECT/WITH statements allowed.`,
-    // @ts-ignore
-    parameters: zodSchema(
-      z.object({
-        sql: z.string().describe("SQL query to execute"),
-        database: z
-          .enum(["starrocks", "duckdb"])
-          .default("starrocks")
-          .describe("Target database"),
-        userId: z
-          .string()
-          .optional()
-          .describe("User ID for RLS filtering"),
-        format: z
-          .enum(["json", "csv", "markdown"])
-          .default("json")
-          .describe("Output format"),
-      })
-    ),
-    execute: executeFn,
+    inputSchema: z.object({
+      sql: z.string().describe("SQL query to execute"),
+      database: z
+        .enum(["starrocks", "duckdb"])
+        .default("starrocks")
+        .describe("Target database"),
+      userId: z.string().optional().describe("User ID for RLS filtering"),
+      format: z
+        .enum(["json", "csv", "markdown"])
+        .default("json")
+        .describe("Output format"),
+    }),
+execute: async (inputData, context) => {
+      // Support abort signal for long-running queries
+      if (context?.abortSignal?.aborted) {
+        return { success: false, error: "Query aborted" };
+      }
+      
+      // Get userId from requestContext if not provided in input
+      const userId = inputData.userId ?? context?.requestContext?.get("userId") as string | undefined;
+      
+      const input: ExecuteSqlInput = {
+        sql: inputData.sql,
+        database: inputData.database,
+        userId,
+        format: inputData.format,
+      };
+      
+      if (enableDevtoolsTracking) {
+        return trackToolCall("execute_sql", executeCore)(input);
+      }
+      return executeCore(input);
+    },
   });
 
-  return enableCaching ? cached(executeSqlToolBase as any) : executeSqlToolBase;
+  return enableCaching ? cached(executeSqlToolBase) : executeSqlToolBase;
 }
 
 // Export raw functions for testing

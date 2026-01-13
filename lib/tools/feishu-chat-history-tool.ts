@@ -7,7 +7,7 @@
  * NOTE: Uses native fetch instead of Feishu SDK to avoid axios/bun compatibility issues.
  */
 
-import { tool, zodSchema } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { parseMessageContent } from "../feishu-utils";
 import { trackToolCall } from "../devtools-integration";
@@ -288,14 +288,26 @@ export async function fetchChatHistory(params: {
   return fetchChatHistoryImpl(params);
 }
 
-export function createFeishuChatHistoryTool(enableDevtoolsTracking: boolean = true) {
-  const executeFn = enableDevtoolsTracking
-    ? trackToolCall("feishu_chat_history", fetchChatHistoryImpl)
-    : fetchChatHistoryImpl;
+/**
+ * Chat history result type
+ */
+interface ChatHistoryResult {
+  success: boolean;
+  chatId: string;
+  messageCount?: number;
+  messages?: Array<{
+    messageId: string;
+    sender: { id: string; idType: string; type: string; name: string };
+    content: string;
+    createTime: string;
+    isBot: boolean;
+  }>;
+  error?: string;
+}
 
-  // Base tool definition
-  // @ts-ignore - Type instantiation depth issue
-  const feishuChatHistoryToolBase = tool({
+export function createFeishuChatHistoryTool(enableDevtoolsTracking: boolean = true) {
+  return createTool({
+    id: "feishu_chat_history",
     description: `Access Feishu group chat histories and message threads. 
     
 Use this to:
@@ -307,33 +319,55 @@ Use this to:
 The chatId is typically in format: "oc_xxxxx" (group chat) or "ou_xxxxx" (private chat).
 Time format: Unix timestamp in seconds (e.g., "1703001600" for 2023-12-20).
 Use senderId to filter messages from a specific user (e.g., "ou_xxx").`,
-    // @ts-ignore
-    parameters: zodSchema(
-      z.object({
-        chatId: z
-          .string()
-          .describe("The Feishu chat ID (group chat or private chat ID, e.g., 'oc_xxxxx')"),
-        limit: z
-          .number()
-          .optional()
-          .describe("Maximum number of messages to retrieve (default: 20, max: 50). Feishu may reject > 50."),
-        startTime: z
-          .string()
-          .optional()
-          .describe("Start time filter (Unix timestamp in seconds, e.g., '1703001600')"),
-        endTime: z
-          .string()
-          .optional()
-          .describe("End time filter (Unix timestamp in seconds, e.g., '1703088000')"),
-        senderId: z
-          .string()
-          .optional()
-          .describe("Filter messages by sender's user_id or open_id (e.g., 'ou_xxx')"),
-      })
-    ),
-    execute: executeFn,
+    inputSchema: z.object({
+      chatId: z
+        .string()
+        .describe(
+          "The Feishu chat ID (group chat or private chat ID, e.g., 'oc_xxxxx')",
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe(
+          "Maximum number of messages to retrieve (default: 20, max: 50). Feishu may reject > 50.",
+        ),
+      startTime: z
+        .string()
+        .optional()
+        .describe(
+          "Start time filter (Unix timestamp in seconds, e.g., '1703001600')",
+        ),
+      endTime: z
+        .string()
+        .optional()
+        .describe(
+          "End time filter (Unix timestamp in seconds, e.g., '1703088000')",
+        ),
+      senderId: z
+        .string()
+        .optional()
+        .describe("Filter messages by sender's user_id or open_id (e.g., 'ou_xxx')"),
+    }),
+execute: async (inputData, context): Promise<ChatHistoryResult> => {
+      // Support abort signal
+      if (context?.abortSignal?.aborted) {
+        return { success: false, chatId: inputData.chatId, error: "Request aborted" };
+      }
+      
+      const params = {
+        chatId: inputData.chatId,
+        limit: inputData.limit,
+        startTime: inputData.startTime,
+        endTime: inputData.endTime,
+        senderId: inputData.senderId,
+      };
+      
+      if (enableDevtoolsTracking) {
+        return trackToolCall("feishu_chat_history", fetchChatHistoryImpl)(params);
+      }
+      
+      return fetchChatHistoryImpl(params);
+    },
   });
-
-  return feishuChatHistoryToolBase;
 }
 
