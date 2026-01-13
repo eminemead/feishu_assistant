@@ -59,7 +59,7 @@
     "hono": "^4.5.0",
     "jsdom": "^27.2.0",
     "jsonwebtoken": "^9.0.2",
-    "just-bash": "^1.0.1",
+    "just-bash": "^2.4.1",
     "mysql2": "^3.15.3",
     "postgres": "^3.4.7",
     "postgres-js": "^0.1.0",

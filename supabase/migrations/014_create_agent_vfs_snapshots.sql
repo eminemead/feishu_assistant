@@ -24,10 +24,7 @@ CREATE TABLE IF NOT EXISTS agent_vfs_snapshots (
   UNIQUE(feishu_user_id, thread_id)
 );
 
--- Indexes for fast lookup
-CREATE INDEX IF NOT EXISTS idx_agent_vfs_snapshots_user_thread
-  ON agent_vfs_snapshots (feishu_user_id, thread_id);
-
+-- Index for updated_at queries (UNIQUE constraint already indexes feishu_user_id, thread_id)
 CREATE INDEX IF NOT EXISTS idx_agent_vfs_snapshots_updated_at
   ON agent_vfs_snapshots (updated_at);
 

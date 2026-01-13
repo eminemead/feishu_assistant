@@ -70,8 +70,8 @@ export async function getSemanticLayerFileMap(): Promise<VfsFileMap> {
     const vfsPath = `/semantic-layer/${rel}`;
     try {
       map[vfsPath] = await readFile(abs, "utf8");
-    } catch {
-      // ignore unreadable file
+    } catch (err) {
+      console.debug(`[semantic-layer] Failed to read ${abs}:`, err);
     }
   }
 

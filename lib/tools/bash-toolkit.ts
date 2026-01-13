@@ -9,6 +9,7 @@
  * Persistence:
  * - Per (userId, chatId, effectiveRootId) snapshot in Supabase
  * - Only /state and /workspace are persisted
+ * - Shared Bash env per request to avoid race conditions between tool calls
  *
  * Mounts:
  * - /semantic-layer (from repo checked-in files) is mounted on every call
@@ -20,7 +21,11 @@ import type { CommandResult, Sandbox } from "bash-tool";
 import { Bash } from "just-bash";
 import { trackToolCall } from "../devtools-integration";
 import { getSemanticLayerFileMap } from "../semantic-layer-filemap";
-import { getRequestContext } from "../runtime-context";
+import {
+  getRequestContext,
+  markBashEnvDirty,
+  type RequestContextInternal,
+} from "../runtime-context";
 import { loadVfsSnapshot, saveVfsSnapshot, type VfsFileMap } from "../vfs-snapshot-store";
 
 const DESTINATION = "/workspace";
@@ -60,35 +65,57 @@ async function exportPersistedFiles(env: Bash): Promise<VfsFileMap> {
       const st = await env.fs.stat(p);
       if (!st.isFile) continue;
       out[p] = await env.fs.readFile(p, "utf8");
-    } catch {
-      // ignore
+    } catch (err) {
+      // Log but continue - file may have been deleted or is unreadable
+      console.debug(`[bash-toolkit] Failed to export file ${p}:`, err);
     }
   }
   return out;
 }
 
-async function createEnvForCurrentRequest(): Promise<{
+/**
+ * Get or create the shared Bash environment for the current request.
+ * Stores the env in AsyncLocalStorage so all tool calls share it.
+ */
+async function getOrCreateBashEnv(): Promise<{
   env: Bash;
   canPersist: boolean;
   feishuUserId?: string;
   threadId?: string;
   snapshotVersion: number;
 }> {
-  const ctx = getRequestContext() || {};
-  const feishuUserId = ctx.userId;
-  const root = effectiveRootId(ctx.rootId, ctx.memoryRootId);
-  const threadId = buildThreadId(ctx.chatId, root);
+  const ctx = getRequestContext();
+
+  // If we already have a bash env for this request, return it
+  if (ctx?.bashEnv) {
+    return {
+      env: ctx.bashEnv,
+      canPersist: ctx.bashEnvCanPersist ?? false,
+      feishuUserId: ctx.bashEnvUserId,
+      threadId: ctx.bashEnvThreadId,
+      snapshotVersion: ctx.bashEnvVersion ?? 0,
+    };
+  }
+
+  // Create new env
+  const feishuUserId = ctx?.userId;
+  const root = effectiveRootId(ctx?.rootId, ctx?.memoryRootId);
+  const threadId = buildThreadId(ctx?.chatId, root);
   const canPersist = !!(feishuUserId && threadId);
 
   let snapshotVersion = 0;
   let persisted: VfsFileMap = {};
   if (canPersist) {
-    const loaded = await loadVfsSnapshot({
-      feishuUserId: feishuUserId!,
-      threadId: threadId!,
-    });
-    snapshotVersion = loaded.version;
-    persisted = loaded.files || {};
+    try {
+      const loaded = await loadVfsSnapshot({
+        feishuUserId: feishuUserId!,
+        threadId: threadId!,
+      });
+      snapshotVersion = loaded.version;
+      persisted = loaded.files || {};
+    } catch (err) {
+      console.warn(`[bash-toolkit] Failed to load VFS snapshot, starting fresh:`, err);
+    }
   }
 
   const semanticFiles = await getSemanticLayerFileMap();
@@ -114,23 +141,34 @@ async function createEnvForCurrentRequest(): Promise<{
     },
   });
 
+  // Store in context for reuse by subsequent tool calls
+  if (ctx) {
+    ctx.bashEnv = env;
+    ctx.bashEnvVersion = snapshotVersion;
+    ctx.bashEnvCanPersist = canPersist;
+    ctx.bashEnvThreadId = threadId || undefined;
+    ctx.bashEnvUserId = feishuUserId;
+    ctx.bashEnvDirty = false;
+  }
+
   return { env, canPersist, feishuUserId, threadId: threadId || undefined, snapshotVersion };
 }
 
-async function persistIfNeeded(params: {
-  env: Bash;
-  canPersist: boolean;
-  feishuUserId?: string;
-  threadId?: string;
-  expectedVersion: number;
-}): Promise<void> {
-  const { env, canPersist, feishuUserId, threadId, expectedVersion } = params;
-  if (!canPersist || !feishuUserId || !threadId) return;
+/**
+ * Persist the current bash env state to Supabase.
+ * Uses last-write-wins to avoid race conditions between parallel tool calls.
+ */
+async function persistBashEnv(): Promise<void> {
+  const ctx = getRequestContext();
+  if (!ctx?.bashEnv || !ctx.bashEnvCanPersist || !ctx.bashEnvUserId || !ctx.bashEnvThreadId) {
+    return;
+  }
 
-  let files = await exportPersistedFiles(env);
+  let files = await exportPersistedFiles(ctx.bashEnv);
 
   // Fail-soft size control: if too big, keep only /state.
   if (Object.keys(files).length > MAX_PERSIST_FILES || estimateBytes(files) > MAX_PERSIST_BYTES) {
+    console.warn(`[bash-toolkit] VFS too large (${Object.keys(files).length} files), keeping only /state`);
     const reduced: VfsFileMap = {};
     for (const [k, v] of Object.entries(files)) {
       if (k.startsWith("/state/")) reduced[k] = v;
@@ -138,98 +176,75 @@ async function persistIfNeeded(params: {
     files = reduced;
   }
 
-  await saveVfsSnapshot({
-    feishuUserId,
-    threadId,
-    files,
-    expectedVersion,
-  });
+  try {
+    // Use last-write-wins mode (no expectedVersion) to avoid race conditions
+    // between parallel tool calls within the same request
+    await saveVfsSnapshot({
+      feishuUserId: ctx.bashEnvUserId,
+      threadId: ctx.bashEnvThreadId,
+      files,
+      // Omit expectedVersion for LWW mode
+    });
+    ctx.bashEnvDirty = false;
+  } catch (err) {
+    console.error(`[bash-toolkit] Failed to persist VFS snapshot:`, err);
+    // Don't throw - persistence failure shouldn't break the tool
+  }
+}
+
+/**
+ * Execute a bash command in the shared environment.
+ */
+async function executeCommandImpl(command: string): Promise<CommandResult> {
+  const { env } = await getOrCreateBashEnv();
+  const result = await env.exec(command, { cwd: "/" });
+  markBashEnvDirty();
+  await persistBashEnv();
+  return {
+    stdout: result.stdout || "",
+    stderr: result.stderr || "",
+    exitCode: result.exitCode,
+  };
+}
+
+/**
+ * Read a file from the shared environment.
+ */
+async function readFileImpl(path: string): Promise<string> {
+  const { env } = await getOrCreateBashEnv();
+  return await env.fs.readFile(path, "utf8");
+}
+
+/**
+ * Write files to the shared environment.
+ */
+async function writeFilesImpl(
+  files: Array<{ path: string; content: string | Buffer }>,
+): Promise<void> {
+  const { env } = await getOrCreateBashEnv();
+  for (const f of files) {
+    const dir = nodePath.posix.dirname(f.path);
+    try {
+      await env.fs.mkdir(dir, { recursive: true });
+    } catch (err) {
+      console.debug(`[bash-toolkit] mkdir ${dir} failed (may already exist):`, err);
+    }
+    await env.fs.writeFile(f.path, f.content as any);
+  }
+  markBashEnvDirty();
+  await persistBashEnv();
 }
 
 function createDynamicSandbox(enableDevtoolsTracking: boolean): Sandbox {
+  // Wrap implementations with optional devtools tracking
+  const wrapFn = <T extends (...args: any[]) => any>(name: string, fn: T): T => {
+    return (enableDevtoolsTracking ? trackToolCall(name, fn) : fn) as T;
+  };
+
   return {
-    executeCommand: enableDevtoolsTracking
-      ? trackToolCall("bash", async (command: string): Promise<CommandResult> => {
-          const { env, canPersist, feishuUserId, threadId, snapshotVersion } =
-            await createEnvForCurrentRequest();
-          const result = await env.exec(command, { cwd: "/" });
-          await persistIfNeeded({
-            env,
-            canPersist,
-            feishuUserId,
-            threadId,
-            expectedVersion: snapshotVersion,
-          });
-          return { stdout: result.stdout || "", stderr: result.stderr || "", exitCode: result.exitCode };
-        })
-      : async (command: string): Promise<CommandResult> => {
-          const { env, canPersist, feishuUserId, threadId, snapshotVersion } =
-            await createEnvForCurrentRequest();
-          const result = await env.exec(command, { cwd: "/" });
-          await persistIfNeeded({
-            env,
-            canPersist,
-            feishuUserId,
-            threadId,
-            expectedVersion: snapshotVersion,
-          });
-          return { stdout: result.stdout || "", stderr: result.stderr || "", exitCode: result.exitCode };
-        },
-
-    readFile: enableDevtoolsTracking
-      ? trackToolCall("readFile", async (path: string): Promise<string> => {
-          const { env } = await createEnvForCurrentRequest();
-          return await env.fs.readFile(path, "utf8");
-        })
-      : async (path: string): Promise<string> => {
-          const { env } = await createEnvForCurrentRequest();
-          return await env.fs.readFile(path, "utf8");
-        },
-
-    writeFiles: enableDevtoolsTracking
-      ? trackToolCall(
-          "writeFile",
-          async (files: Array<{ path: string; content: string | Buffer }>): Promise<void> => {
-            const { env, canPersist, feishuUserId, threadId, snapshotVersion } =
-              await createEnvForCurrentRequest();
-            for (const f of files) {
-              const dir = nodePath.posix.dirname(f.path);
-              try {
-                await env.fs.mkdir(dir, { recursive: true });
-              } catch {
-                // ignore
-              }
-              await env.fs.writeFile(f.path, f.content as any);
-            }
-            await persistIfNeeded({
-              env,
-              canPersist,
-              feishuUserId,
-              threadId,
-              expectedVersion: snapshotVersion,
-            });
-          },
-        )
-      : async (files: Array<{ path: string; content: string | Buffer }>): Promise<void> => {
-          const { env, canPersist, feishuUserId, threadId, snapshotVersion } =
-            await createEnvForCurrentRequest();
-          for (const f of files) {
-            const dir = nodePath.posix.dirname(f.path);
-            try {
-              await env.fs.mkdir(dir, { recursive: true });
-            } catch {
-              // ignore
-            }
-            await env.fs.writeFile(f.path, f.content as any);
-          }
-          await persistIfNeeded({
-            env,
-            canPersist,
-            feishuUserId,
-            threadId,
-            expectedVersion: snapshotVersion,
-          });
-        },
+    executeCommand: wrapFn("bash", executeCommandImpl),
+    readFile: wrapFn("readFile", readFileImpl),
+    writeFiles: wrapFn("writeFile", writeFilesImpl),
   };
 }
 
@@ -264,4 +279,3 @@ export async function createBashToolkitTools(enableDevtoolsTracking: boolean = t
 
   return toolkit.tools;
 }
-

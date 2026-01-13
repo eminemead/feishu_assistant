@@ -184,27 +184,62 @@ export async function saveVfsSnapshot(params: {
     );
   }
 
-  // No expectedVersion: upsert (last write wins).
-  const { data, error } = await supabase
+  // No expectedVersion: last-write-wins mode.
+  // We need to handle insert vs update separately since upsert doesn't support version increment.
+
+  // First, try to get existing row to determine if insert or update
+  const { data: existing } = await supabase
     .from("agent_vfs_snapshots")
-    .upsert(
-      {
-        feishu_user_id: feishuUserId,
-        thread_id: threadId,
-        // Keep version semantics simple for LWW mode: bump via COALESCE not supported here.
-        // We'll set version=1 for inserts; updates keep existing version unless overwritten by db.
+    .select("version")
+    .eq("feishu_user_id", feishuUserId)
+    .eq("thread_id", threadId)
+    .maybeSingle();
+
+  if (existing) {
+    // Update existing row, increment version
+    const nextVersion = ((existing as any).version ?? 0) + 1;
+    const { data, error } = await supabase
+      .from("agent_vfs_snapshots")
+      .update({
+        version: nextVersion,
         file_count: fileCount,
         files_size_bytes: filesSizeBytes,
         files_sha256: filesSha256,
         files_gzip: gz,
-      } as any,
-      { onConflict: "feishu_user_id,thread_id" }
-    )
+      })
+      .eq("feishu_user_id", feishuUserId)
+      .eq("thread_id", threadId)
+      .select("version")
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update VFS snapshot: ${error.message}`);
+    }
+    return { version: (data as any).version ?? nextVersion };
+  }
+
+  // Insert new row
+  const { data, error } = await supabase
+    .from("agent_vfs_snapshots")
+    .insert({
+      feishu_user_id: feishuUserId,
+      thread_id: threadId,
+      version: 1,
+      file_count: fileCount,
+      files_size_bytes: filesSizeBytes,
+      files_sha256: filesSha256,
+      files_gzip: gz,
+    })
     .select("version")
     .single();
 
   if (error) {
-    throw new Error(`Failed to upsert VFS snapshot: ${error.message}`);
+    // Handle race condition: another request inserted while we were checking
+    if (error.code === "23505") {
+      // Unique violation - retry as update
+      return saveVfsSnapshot({ feishuUserId, threadId, files });
+    }
+    throw new Error(`Failed to insert VFS snapshot: ${error.message}`);
   }
 
   return { version: (data as any).version ?? 1 };
