@@ -20,6 +20,26 @@ import { SLASH_COMMANDS, HELP_COMMANDS } from "../workflows/dpa-assistant-workfl
 import { getLinkedIssue } from "../services/issue-thread-mapping-service";
 import { devtoolsTracker } from "../devtools-integration";
 
+class AgentFallbackAttemptedError extends Error {
+  public readonly agentFallbackAttempted = true;
+  public readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "AgentFallbackAttemptedError";
+    this.cause = cause;
+  }
+}
+
+function isAgentFallbackAttemptedError(err: unknown): err is AgentFallbackAttemptedError {
+  return Boolean(
+    err &&
+      typeof err === "object" &&
+      ((err as any).agentFallbackAttempted === true ||
+        (err as any).name === "AgentFallbackAttemptedError")
+  );
+}
+
 /**
  * Router result - unified response format
  */
@@ -52,6 +72,8 @@ export interface RouterResult {
 export interface RouterContext {
   chatId?: string;
   rootId?: string;
+  /** Optional stable memory thread root (e.g. "main" for non-thread mentions) */
+  memoryRootId?: string;
   userId?: string;
   botUserId?: string;
   /** Callback for streaming updates */
@@ -110,6 +132,27 @@ export async function routeQuery(
       targetType: classification.target.type,
     });
 
+    // Best-effort fallback: if a workflow/tool/doc/slash handler fails, try agent.
+    // Avoid double agent calls:
+    // - Do not retry if the classified target is already agent
+    // - Do not retry if a handler already attempted agent fallback and it threw
+    if (classification.target.type !== "agent" && !isAgentFallbackAttemptedError(error)) {
+      try {
+        console.log(`[Router] Falling back to agent after error (best-effort)`);
+        const fallback = await executeAgentFallback(query, messages, context, classification, startTime);
+        return fallback;
+      } catch (fallbackErr) {
+        const fallbackMsg =
+          fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        return {
+          response: `❌ Error: ${errorMsg}\n\n(Agent fallback also failed: ${fallbackMsg})`,
+          routedVia: "agent",
+          classification,
+          durationMs: Date.now() - startTime,
+        };
+      }
+    }
+
     return {
       response: `❌ Error: ${errorMsg}`,
       routedVia: "agent",
@@ -145,8 +188,22 @@ async function executeTarget(
         botUserId: context.botUserId || "",
       });
 
+      // Preserve previous behavior: if pattern matched but handler didn't handle it,
+      // fall through to agent for flexible interpretation.
+      if (!handled) {
+        console.log(`[Router] Doc command not handled by handler, falling back to agent`);
+        try {
+          return await executeAgentFallback(query, messages, context, classification, startTime);
+        } catch (err) {
+          throw new AgentFallbackAttemptedError(
+            "Agent fallback failed after doc-command was not handled",
+            err
+          );
+        }
+      }
+
       return {
-        response: handled ? "✅ Command executed" : "❌ Command failed",
+        response: "✅ Command executed",
         routedVia: "doc-command",
         classification,
         durationMs: Date.now() - startTime,
@@ -164,7 +221,14 @@ async function executeTarget(
       const isKnown = slashCmd in SLASH_COMMANDS || HELP_COMMANDS.includes(slashCmd);
       if (!isKnown) {
         console.log(`[Router] Unknown slash command, falling back to agent`);
-        return executeAgentFallback(query, messages, context, classification, startTime);
+        try {
+          return await executeAgentFallback(query, messages, context, classification, startTime);
+        } catch (err) {
+          throw new AgentFallbackAttemptedError(
+            "Agent fallback failed after unknown slash command",
+            err
+          );
+        }
       }
 
       // Get linked issue for context
@@ -185,7 +249,14 @@ async function executeTarget(
       // Handle skip signal (general_chat should fall through)
       if (workflowResult.skipWorkflow) {
         console.log(`[Router] Workflow returned skip signal, falling back to agent`);
-        return executeAgentFallback(query, messages, context, classification, startTime);
+        try {
+          return await executeAgentFallback(query, messages, context, classification, startTime);
+        } catch (err) {
+          throw new AgentFallbackAttemptedError(
+            "Agent fallback failed after slash-command workflow requested skip",
+            err
+          );
+        }
       }
 
       return {
@@ -224,7 +295,14 @@ async function executeTarget(
       // Handle skip signal
       if (workflowResult.skipWorkflow) {
         console.log(`[Router] Workflow returned skip signal, falling back to agent`);
-        return executeAgentFallback(query, messages, context, classification, startTime);
+        try {
+          return await executeAgentFallback(query, messages, context, classification, startTime);
+        } catch (err) {
+          throw new AgentFallbackAttemptedError(
+            `Agent fallback failed after workflow "${workflowId}" requested skip`,
+            err
+          );
+        }
       }
 
       return {
@@ -300,7 +378,8 @@ async function executeAgentFallback(
     updateStatus,
     context.chatId,
     context.rootId,
-    context.userId
+    context.userId,
+    context.memoryRootId
   );
 
   return {

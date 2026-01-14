@@ -134,6 +134,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         const routerResult: RouterResult = await routeQuery(cleanText, messages, {
             chatId,
             rootId,
+            memoryRootId,
             userId,
             botUserId,
             onUpdate: async (text: string) => {
