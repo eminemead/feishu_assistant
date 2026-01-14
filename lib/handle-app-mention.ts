@@ -1,5 +1,4 @@
 import { getThread } from "./feishu-utils";
-import { generateResponse } from "./generate-response";
 import { maybeInjectRecentChatHistory } from "./chat-history-prefetch";
 import {
   createAndSendStreamingCard,
@@ -9,11 +8,8 @@ import {
 } from "./feishu-utils";
 import { finalizeCardWithFollowups } from "./finalize-card-with-buttons";
 import { devtoolsTracker } from "./devtools-integration";
-import { handleDocumentCommand } from "./handle-doc-commands";
-import { executeSkillWorkflow } from "./workflows";
-import { SLASH_COMMANDS, HELP_COMMANDS } from "./workflows/dpa-assistant-workflow";
-import { getLinkedIssue } from "./services/issue-thread-mapping-service";
 import { stripThinkingTags } from "./streaming/thinking-panel";
+import { routeQuery, type RouterResult } from "./routing";
 
 /**
  * Format thinking/reasoning content as a collapsible-like section in markdown
@@ -122,7 +118,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
             existingMessages: messages,
         });
 
-        // Validate messages before sending to agent
+        // Validate messages before sending to router
         if (messages.length === 0) {
             console.error("❌ No messages to process");
             throw new Error("No messages to process");
@@ -130,137 +126,44 @@ export async function handleNewAppMention(data: FeishuMentionData) {
 
         console.log(`[Thread] Processing with ${messages.length} message(s)`);
 
-        // Check if this is a document tracking command (early exit before agent)
-        // After mention removal, cleanText starts directly with the command (e.g., "watch https://...")
-        const isDocCommand = /^(watch|check|unwatch|watched|tracking:\w+)\s+/i.test(cleanText);
-        if (isDocCommand) {
-            console.log(`[DocCommand] Intercepted document command: "${cleanText.substring(0, 50)}..."`);
-            devtoolsTracker.trackAgentCall("DocumentTracking", cleanText, {
+        // ============================================================
+        // UNIFIED ROUTING: All queries go through the intent-first router
+        // ============================================================
+        console.log(`[FeishuMention] Routing query via unified router...`);
+        
+        const routerResult: RouterResult = await routeQuery(cleanText, messages, {
+            chatId,
+            rootId,
+            userId,
+            botUserId,
+            onUpdate: async (text: string) => {
+                await updateCardElement(card.cardId, card.elementId, text);
+            },
+        });
+
+        console.log(`[FeishuMention] Router result:`);
+        console.log(`  - routedVia: ${routerResult.routedVia}`);
+        console.log(`  - intent: ${routerResult.classification.intent}`);
+        console.log(`  - confidence: ${routerResult.classification.confidence}`);
+        console.log(`  - duration: ${routerResult.durationMs}ms`);
+
+        // Handle doc-command special case (already handled, just finalize)
+        if (routerResult.routedVia === "doc-command") {
+            await updateCardElement(card.cardId, card.elementId, routerResult.response);
+            const duration = Date.now() - startTime;
+            devtoolsTracker.trackResponse("Router", routerResult.response, duration, {
+                threadId: rootId,
                 messageId,
-                rootId,
-                commandIntercepted: true
+                routedVia: "doc-command",
             });
-
-            // Handle document command directly (bypasses agent)
-            const handled = await handleDocumentCommand({
-                message: cleanText,
-                chatId,
-                userId,
-                botUserId
-            });
-
-            if (handled) {
-                console.log(`[DocCommand] Command handled successfully`);
-                await updateCardElement(card.cardId, card.elementId, "✅ Command executed");
-                const duration = Date.now() - startTime;
-                devtoolsTracker.trackResponse("DocumentTracking", "Command executed", duration, {
-                    threadId: rootId,
-                    messageId,
-                    commandHandled: true
-                });
-                return; // Early exit - don't call generateResponse
-            }
-            console.log(`[DocCommand] Command pattern matched but handler returned false, falling through to agent`);
+            return;
         }
 
-        // Check for slash commands (e.g., /collect, /创建, /list) - route directly to workflow
-        console.log(`[DEBUG] cleanText for slash check: "${cleanText.substring(0, 100)}"`);
-        console.log(`[DEBUG] cleanText starts with /: ${cleanText.startsWith('/')}`);
-        const slashMatch = cleanText.match(/^\/([^\s]+)/);
-        console.log(`[DEBUG] slashMatch: ${JSON.stringify(slashMatch)}`);
-        if (slashMatch) {
-            const slashCmd = `/${slashMatch[1].toLowerCase()}`;
-            const isKnownSlashCommand = slashCmd in SLASH_COMMANDS || HELP_COMMANDS.includes(slashCmd);
-            
-            if (isKnownSlashCommand) {
-                console.log(`[SlashCommand] ============================================`);
-                console.log(`[SlashCommand] Intercepted: "${slashCmd}"`);
-                console.log(`[SlashCommand] Full text: "${cleanText.substring(0, 100)}..."`);
-                console.log(`[SlashCommand] Context: chatId="${chatId}", rootId="${rootId}", userId="${userId}"`);
-                console.log(`[SlashCommand] ============================================`);
-                
-                devtoolsTracker.trackAgentCall("SlashCommand", cleanText, {
-                    messageId,
-                    rootId,
-                    command: slashCmd,
-                    commandIntercepted: true
-                });
-
-                try {
-                    // Check for linked GitLab issue
-                    const linkedIssue = await getLinkedIssue(chatId, rootId);
-                    if (linkedIssue) {
-                        console.log(`[SlashCommand] Thread linked to GitLab #${linkedIssue.issueIid}`);
-                    }
-
-                    // Execute DPA Assistant workflow directly with full context
-                    const workflowResult = await executeSkillWorkflow("dpa-assistant", {
-                        query: cleanText,
-                        chatId,
-                        rootId,
-                        userId,
-                        linkedIssue: linkedIssue || undefined,
-                        onUpdate: async (text: string) => {
-                            await updateCardElement(card.cardId, card.elementId, text);
-                        },
-                    });
-
-                    console.log(`[SlashCommand] Workflow result: success=${workflowResult.success}, needsConfirmation=${workflowResult.needsConfirmation}`);
-                    
-                    // Handle skip workflow signal (general_chat should fall through to agent)
-                    if (workflowResult.skipWorkflow) {
-                        console.log(`[SlashCommand] Workflow returned skip signal, falling through to agent`);
-                        // Don't return - continue to generateResponse below
-                    } else {
-                        // Finalize card with workflow response
-                        const duration = Date.now() - startTime;
-                        await finalizeCardWithFollowups(
-                            card.cardId,
-                            card.elementId,
-                            workflowResult.response,
-                            undefined,
-                            undefined,
-                            {
-                                conversationId: chatId,
-                                rootId: rootId,
-                                threadId: rootId,
-                                confirmationData: workflowResult.needsConfirmation ? workflowResult.confirmationData : undefined,
-                            }
-                        );
-
-                        devtoolsTracker.trackResponse("SlashCommand", workflowResult.response, duration, {
-                            threadId: rootId,
-                            messageId,
-                            command: slashCmd,
-                            workflowId: "dpa-assistant",
-                        });
-
-                        console.log(`[SlashCommand] Complete (duration=${duration}ms)`);
-                        return; // Early exit - don't call generateResponse
-                    }
-                } catch (workflowError) {
-                    console.error(`[SlashCommand] Workflow execution failed:`, workflowError);
-                    // Fall through to agent on error
-                }
-            } else {
-                console.log(`[SlashCommand] Unknown command "${slashCmd}", falling through to agent`);
-            }
-        }
-
-        // Generate response with streaming and memory context
-        console.log(`[FeishuMention] Generating response...`);
-        const rawResult = await generateResponse(messages, updateCard, chatId, rootId, userId, memoryRootId);
-        
-        // Structured result (with reasoning, confirmation)
-        let result: string;
-        let reasoning: string | undefined;
-        let needsConfirmation = false;
-        let confirmationData: string | undefined;
-        
-        result = rawResult.text;
-        reasoning = rawResult.reasoning;
-        needsConfirmation = rawResult.needsConfirmation || false;
-        confirmationData = rawResult.confirmationData;
+        // Extract result components
+        let result: string = routerResult.response;
+        let reasoning: string | undefined = routerResult.reasoning;
+        let needsConfirmation = routerResult.needsConfirmation || false;
+        let confirmationData: string | undefined = routerResult.confirmationData;
 
         // Always hide embedded <think>...</think> tags from rendered output
         const stripped = stripThinkingTags(result);

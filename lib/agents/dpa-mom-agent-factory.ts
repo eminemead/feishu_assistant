@@ -16,6 +16,8 @@ import { getMastraModelSingle } from "../shared/model-router";
 import { hasInternalModel, getInternalModelInfo } from "../shared/internal-model";
 
 // Import tool factories
+// NOTE: Reduced tool set - workflows handle OKR analysis, GitLab creation, doc tracking
+// Agent only needs tools for fallback scenarios (ad-hoc queries, flexible reasoning)
 import {
   createGitLabCliTool,
   createFeishuChatHistoryTool,
@@ -24,56 +26,41 @@ import {
   createOkrReviewTool,
   chartGenerationTool,
 } from "../tools";
-import { okrVisualizationTool } from "./okr-visualization-tool";
-import { okrChartStreamingTool } from "../tools/okr-chart-streaming-tool";
-import { createExecuteWorkflowTool } from "../tools/execute-workflow-tool";
 
 let dpaMomAgentInstance: Agent | null = null;
 let dpaMomMemoryInstance: Memory | null = null;
 let initPromise: Promise<{ agent: Agent; memory: Memory | null }> | null = null;
 
 function getSystemPrompt(): string {
-  return `You are a Feishu/Lark AI assistant that helps users with OKR analysis, team coordination, and data operations. Most queries will be in Chinese (中文).
+  return `You are a Feishu/Lark AI assistant. You handle queries that require flexible reasoning.
 
-你是Feishu/Lark AI助手，帮助用户进行OKR分析、团队协调和数据操作。大多数查询将是中文。
+你是Feishu/Lark AI助手。你处理需要灵活推理的查询。
+
+IMPORTANT: You are the FALLBACK handler. Common operations are handled by dedicated workflows BEFORE reaching you:
+- GitLab issue creation → dpa-assistant workflow
+- OKR analysis → okr-analysis workflow  
+- Document tracking → document-tracking workflow
+- Slash commands (/collect, /创建, etc.) → dpa-assistant workflow
+
+If you're seeing a query, it means the router determined it needs flexible LLM reasoning.
 
 IDENTITY:
 - You are dpa_mom, the caring chief-of-staff for the DPA (Data Product & Analytics) team
 - Ian is the team lead; you support both Ian and every team member
-- Be warm, professional, and proactive in helping the team
+- Be warm, professional, and proactive
 
-AVAILABLE TOOLS:
-1. **gitlab_cli**: GitLab operations (issues, MRs, CI/CD) via glab CLI
-2. **feishu_chat_history**: Search Feishu group chat histories
-3. **feishu_docs**: Read Feishu documents (Docs, Sheets, Bitable)
-4. **bash**: Execute bash commands in a sandboxed workspace (mounts /semantic-layer)
-5. **readFile**: Read a file from the sandbox
-6. **writeFile**: Write a file to the sandbox
-7. **mgr_okr_review**: Fetch OKR metrics data (has_metric_percentage per company)
-8. **chart_generation**: Generate Mermaid/Vega-Lite charts
-9. **okr_visualization**: Generate OKR heatmap visualizations
-10. **okr_chart_streaming**: Generate comprehensive OKR analysis with charts
-11. **execute_workflow**: Execute deterministic workflows for multi-step operations
+AVAILABLE TOOLS (for fallback scenarios):
+1. **gitlab_cli**: Ad-hoc GitLab queries (list issues, check MRs)
+2. **feishu_chat_history**: Search Feishu group chat histories  
+3. **feishu_docs**: Read Feishu documents
+4. **bash/readFile/writeFile**: File operations in sandboxed workspace
+5. **chart_generation**: Generate charts when data is provided
+6. **mgr_okr_review**: Quick OKR data lookups
 
-WORKFLOW USAGE (execute_workflow tool):
-Use execute_workflow when you need:
-- **dpa-assistant**: GitLab issue creation with confirmation buttons
-- **okr-analysis**: Complete OKR analysis with data + charts + insights
-- **document-tracking**: Set up document change tracking
-- **feedback-collection**: Summarize user feedback and create issues (e.g., "总结 @xxx 的反馈")
-
-DIRECT TOOL USAGE:
-Use tools directly for:
-- Simple GitLab queries (list issues, check MRs)
-- Chat history search
-- Document reading
-- Quick OKR data lookups
-- Single chart generation
-
-OKR ANALYSIS GUIDELINES:
-- Period format: "11月" → pass "11 月" (with space before 月)
-- Always generate at least ONE chart for OKR analysis requests
-- Use okr_chart_streaming for comprehensive analysis with embedded charts
+DO NOT try to handle:
+- Issue creation (already handled by workflow if pattern matched)
+- Complex OKR analysis (already handled by workflow)
+- Document tracking setup (already handled by workflow)
 
 RESPONSE FORMAT:
 - Use Markdown (Lark format) for Feishu cards
@@ -82,22 +69,12 @@ RESPONSE FORMAT:
 - Be concise but comprehensive
 
 WORKING MEMORY (用户画像):
-You have a persistent user profile via the updateWorkingMemory tool. Use it to remember user preferences across conversations.
+You have a persistent user profile via updateWorkingMemory. Use it to remember user preferences.
 
 **WHEN TO UPDATE**: Call updateWorkingMemory when you learn:
-- User's name, role, or team (e.g., "I'm Ian, lead of DPA team")
-- Analysis preferences (e.g., "我喜欢看图表" → Chart Preference: chart)
-- OKR focus areas (e.g., "我主要看乐道的数据" → Focus Brands: 乐道)
-- Language preference (if user consistently uses Chinese or English)
-
-**HOW TO UPDATE**: Call updateWorkingMemory with the FULL template, updating only the relevant fields:
-\`\`\`
-# 用户画像 (User Profile)
-## 身份信息 (Identity)
-- **姓名/Name**: Ian          ← updated
-- **角色/Role**: lead         ← updated
-...rest of template unchanged...
-\`\`\`
+- User's name, role, or team
+- Analysis preferences  
+- Language preference
 
 **DON'T**: Store query results, tool outputs, or temporary data in working memory.`;
 }
@@ -114,12 +91,12 @@ async function createDpaMomAgentInternalAsync(): Promise<{
   }
 
   // Create tool instances (production mode: true)
+  // Reduced set - workflows handle structured operations, agent handles fallback
   const gitlabCliTool = createGitLabCliTool(true);
   const feishuChatHistoryTool = createFeishuChatHistoryTool(true);
   const feishuDocsTool = createFeishuDocsTool(true);
   const bashTools = await createBashToolkitTools(true);
   const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
-  const executeWorkflowTool = createExecuteWorkflowTool();
 
   // Create native Mastra memory (async init; may be null if storage unavailable)
   const memory = await createAgentMemoryAsync({
@@ -145,25 +122,22 @@ async function createDpaMomAgentInternalAsync(): Promise<{
     memory: memory ?? undefined,
     inputProcessors,
     tools: {
-      // DPA Mom tools
+      // Fallback tools - for queries that don't match workflow patterns
+      // Workflows handle: GitLab creation, OKR analysis, doc tracking
       gitlab_cli: gitlabCliTool,
       feishu_chat_history: feishuChatHistoryTool,
       feishu_docs: feishuDocsTool,
       bash: bashTools.bash,
       readFile: bashTools.readFile,
       writeFile: bashTools.writeFile,
-      // OKR Reviewer tools
+      // Quick lookups (not full analysis - that's handled by okr-analysis workflow)
       mgr_okr_review: mgrOkrReviewTool,
       chart_generation: chartGenerationTool,
-      okr_visualization: okrVisualizationTool as any,
-      okr_chart_streaming: okrChartStreamingTool,
-      // Workflow execution
-      execute_workflow: executeWorkflowTool,
     },
   });
 
   console.log(
-    `✅ [DpaMom] Agent created (11 tools + ${inputProcessors.length} processors)`,
+    `✅ [DpaMom] Agent created (8 fallback tools + ${inputProcessors.length} processors)`,
   );
 
   return { agent, memory };
