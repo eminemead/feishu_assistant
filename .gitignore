@@ -18,3 +18,13 @@ bun.lock
 # Log files
 logs/
 .mastra/
+
+# Agent workspace (ephemeral scratch)
+workspace/
+
+# Agent state (durable per-thread, not version controlled)
+state/
+
+# Agent workspace and state (ephemeral/per-thread)
+workspace/
+state/

@@ -1,14 +1,26 @@
 # Semantic Layer
 
-This directory contains the **semantic layer** for the Feishu AI Assistant. It exposes our data model as files that agents can explore using bash commands (`ls`, `grep`, `cat`, etc.).
+This directory is the **source of truth** for data definitions. Read-only, git-tracked, team-shared.
 
-## Purpose
+> **Full architecture**: See [docs/architecture/AGENTFS_FILE_STRUCTURE.md](../docs/architecture/AGENTFS_FILE_STRUCTURE.md)
 
-Following Vercel's approach of "filesystem as the agent's interface", this semantic layer enables:
-- **Self-documenting schemas**: Agents read YAML files to understand tables and metrics
-- **Example-driven learning**: SQL examples teach agents the correct query patterns
-- **Discoverability**: Index files and consistent naming for efficient exploration
-- **Security**: Agents only see what's mounted in their AgentFS workspace
+## What Belongs Here
+
+| Content | Examples |
+|---------|----------|
+| **Schemas** | Table/column definitions, RLS notes, join paths, PK/FK |
+| **Metrics** | YAML definitions with owner, caveats, freshness |
+| **Views/snippets** | Canonical SQL templates, example queries |
+| **Glossary** | Business terms, OKR/P&L definitions |
+| **Small reference data** | Tiny CSVs/JSON (<1K rows, <100KB) for lookups |
+| **Test fixtures** | Minimal sample rows to show shape |
+
+## What Does NOT Belong Here
+
+- ❌ Per-user memory (use Mastra memory)
+- ❌ Large fact tables (use `execute_sql` → `/workspace/`)
+- ❌ Frequently changing data (query live)
+- ❌ Secrets/PII
 
 ## Directory Structure
 
@@ -16,20 +28,21 @@ Following Vercel's approach of "filesystem as the agent's interface", this seman
 semantic-layer/
 ├── metrics/              # Business metric definitions
 │   ├── _index.yaml       # Quick reference of all metrics
-│   ├── has_metric_pct.yaml
-│   └── ...
+│   └── has_metric_pct.yaml
 ├── entities/             # Table/view schemas
 │   ├── _index.yaml       # Quick reference of all entities
 │   ├── okr_metrics.yaml
-│   └── ...
+│   └── evidence_rls.yaml
 ├── joins/                # Standard join patterns
 │   └── standard_joins.yaml
 ├── views/                # Pre-built SQL views
-│   └── ...
-├── okr/                  # OKR-specific resources
+├── reference/            # Small lookup data (<100KB each)
+│   ├── bu_codes.csv
+│   └── region_map.json
+├── okr/                  # OKR domain resources
 │   └── examples/         # Example SQL queries
-├── pnl/                  # P&L-specific resources
-│   └── examples/         # Example SQL queries
+├── pnl/                  # P&L domain resources
+│   └── examples/
 └── docs/                 # Business glossary & guides
     └── glossary/
 ```

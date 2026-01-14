@@ -34,6 +34,16 @@ dimensions:
   - department        # Department name
   - metric_type       # Type of metric
 
+# Columns that can be used in WHERE filters (superset of dimensions)
+filterable:
+  - city_company
+  - manager_id
+  - quarter
+  - department
+  - metric_type
+  - has_metric        # Filter by metric presence (0 or 1)
+  - okr_id            # Filter by specific OKR
+
 filters:
   common:
     - 'quarter = "2024-Q4"'

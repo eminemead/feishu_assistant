@@ -6,13 +6,103 @@ This document defines the canonical directory layout for the AgentFS semantic la
 
 Following Vercel's insight: *"If your data layer is well-documented as files, generic filesystem + bash beats elaborate hand-crafted tools."*
 
-The semantic layer exposes our data model as files that agents explore using standard bash commands (`ls`, `grep`, `cat`, `find`).
+**Core principle**: `/semantic-layer` is the stable map and canon; `/workspace` is the scratchpad; `/state` is durable per-thread notes; live data comes from `execute_sql`, not from bloating the semantic layer with big dumps.
+
+| Directory | Purpose | Lifecycle | Git-tracked |
+|-----------|---------|-----------|-------------|
+| `/semantic-layer` | Source of truth: schemas, metrics, canonical SQL | Stable, versioned | ✅ Yes |
+| `/workspace` | Transient scratch: query results, temp files | Ephemeral per task | ❌ No |
+| `/state` | Durable notes: per-thread artifacts that persist | Per-thread, survives turns | ❌ No |
+
+## What Belongs Where
+
+### ✅ `/semantic-layer` (read-only, git-tracked)
+
+| Content | Examples |
+|---------|----------|
+| **Schemas** | Table/column definitions, RLS notes, join paths, PK/FK |
+| **Metrics** | YAML definitions with owner, caveats, freshness |
+| **Views/snippets** | Canonical SQL templates, example queries, common filters |
+| **Glossary/playbooks** | Business terms, OKR definitions, P&L definitions, how-to |
+| **Small reference data** | Tiny CSVs/JSON for lookups (<1K rows, <100KB) — BU codes, region mappings |
+| **Test fixtures** | Minimal sample rows to show shape, not production-scale |
+
+### ✅ `/workspace` (ephemeral scratchpad)
+
+| Content | Examples |
+|---------|----------|
+| **Query results** | `result.csv` from `execute_sql` |
+| **Temp SQL** | `query.sql` being iterated on |
+| **Intermediate files** | Derived CSVs, JSON extracts for bash processing |
+
+**Lifecycle**: Cleared between conversations. Agent should assume it can be wiped anytime.
+
+### ✅ `/state` (durable per-thread)
+
+| Content | Examples |
+|---------|----------|
+| **Analysis notes** | Findings that should survive across turns |
+| **Derived artifacts** | Summaries, insights worth keeping |
+| **Thread context** | Per-conversation state beyond Mastra memory |
+
+**Structure**: `/state/{thread_id}/notes.md` or JSON blobs.
+
+### ❌ What NOT to Put in `/semantic-layer`
+
+| Don't store | Why | Alternative |
+|-------------|-----|-------------|
+| Per-user memory/notes | Mastra mem handles this | Use Mastra memory API |
+| Large fact tables | Stale, bloats repo | `execute_sql` → `/workspace/result.csv` |
+| Frequently changing data | Out of date immediately | Query live via `execute_sql` |
+| Secrets/PII | Security risk | Environment variables, Supabase RLS |
+| Production-scale data | Wrong place for big data | StarRocks via `execute_sql` |
+
+**Rule of thumb**: If it's >1K rows or changes more than weekly, it belongs in the database, not the semantic layer.
+
+## Data Workflow Pattern
+
+When agent needs to analyze data:
+
+```
+1. UNDERSTAND: Read /semantic-layer/entities/<table>.md 
+               and /semantic-layer/views/*.sql
+               → learn shape, joins, metrics
+
+2. QUERY:      Formulate narrow SQL via execute_sql (with RLS)
+               → write output to /workspace/result.csv
+
+3. EXPLORE:    Use bash (head/tail/grep/awk/jq) on workspace file
+               → summarize, derive follow-up queries
+
+4. PERSIST:    Write derived artifacts to /state/... if needed
+               → keeps transient scratch vs meaningful notes separate
+
+5. ITERATE:    Adjust SQL, refresh /workspace/result.csv, repeat
+```
+
+**Example**:
+```bash
+# 1. Understand the schema
+cat /semantic-layer/entities/okr_metrics.yaml
+
+# 2. Query live data (agent calls execute_sql tool)
+# → writes to /workspace/okr_coverage.csv
+
+# 3. Explore results
+head -20 /workspace/okr_coverage.csv
+awk -F',' '{sum+=$3} END {print sum/NR}' /workspace/okr_coverage.csv
+
+# 4. Persist insight
+echo "Average coverage: 67%" >> /state/thread-123/findings.md
+
+# 5. Iterate with refined query
+```
 
 ## Directory Layout
 
 ```
 /
-├── semantic-layer/           # Core data definitions (version-controlled)
+├── semantic-layer/           # Source of truth (git-tracked)
 │   ├── metrics/              # Business metric definitions
 │   │   ├── _index.yaml       # Quick reference of all metrics
 │   │   ├── has_metric_pct.yaml
@@ -39,40 +129,58 @@ The semantic layer exposes our data model as files that agents explore using sta
 │   ├── pnl/                  # P&L domain resources
 │   │   └── examples/         # Example SQL queries
 │   │
+│   ├── reference/            # Small lookup data (<100KB each)
+│   │   ├── bu_codes.csv      # Business unit mappings
+│   │   └── region_map.json   # Region → country lookups
+│   │
 │   └── docs/                 # Business glossary & guides
 │       └── glossary/
 │           └── okr_terms.md
 │
-├── memory/                   # Per-user context (dynamic)
-│   └── users/
-│       └── {feishu_user_id}.md
+├── workspace/                # Ephemeral scratch (gitignored)
+│   ├── query.sql             # Agent-generated SQL
+│   └── result.csv            # Query results
 │
-└── workspace/                # Agent scratch space (ephemeral)
-    ├── query.sql             # Agent-generated SQL
-    └── result.csv            # Query results
-```
+└── state/                    # Durable per-thread (gitignored)
+    └── {thread_id}/
+        └── notes.md          # Persistent findings
 
 ## File Categories
 
-### 1. Static Files (Version Controlled)
-Located in `/semantic-layer/`. These are checked into Git and loaded from the repo.
+### 1. Static Files (`/semantic-layer/` — git-tracked)
+Source of truth, version controlled, team-shared.
 
-- **Metrics**: YAML files defining how to calculate business metrics
-- **Entities**: YAML files describing table schemas
-- **Examples**: SQL files showing correct query patterns
-- **Glossary**: Markdown files explaining business terms
+| Type | Format | Purpose |
+|------|--------|---------|
+| Metrics | YAML | How to calculate business metrics |
+| Entities | YAML | Table schemas, columns, relationships |
+| Examples | SQL | Correct query patterns |
+| Glossary | Markdown | Business term definitions |
+| Reference | CSV/JSON | Small lookup tables (<100KB) |
 
-### 2. Dynamic Files (Runtime Generated)
-Generated per-user or per-conversation:
+### 2. Ephemeral Files (`/workspace/` — gitignored)
+Created during agent execution, cleared between tasks.
 
-- **Memory**: User-specific notes and context from Supabase
-- **Schema**: Dynamically generated from StarRocks INFORMATION_SCHEMA
+| Type | Purpose |
+|------|---------|
+| `query.sql` | SQL being iterated on |
+| `result.csv` | Output from `execute_sql` |
+| `*.tmp` | Any intermediate processing files |
 
-### 3. Ephemeral Files (Agent Workspace)
-Created during agent execution:
+### 3. Durable State (`/state/` — gitignored)
+Per-thread artifacts that persist across turns but not git-tracked.
 
-- **workspace/**: Scratch space for agent to write files
-- Cleared between conversations or on demand
+| Type | Purpose |
+|------|---------|
+| `{thread_id}/notes.md` | Analysis findings |
+| `{thread_id}/context.json` | Thread-specific context |
+
+### 4. User Memory (Mastra)
+Handled by Mastra memory API, not filesystem.
+
+- Per-user preferences
+- Conversation history
+- User-specific notes
 
 ## YAML Schema Standards
 

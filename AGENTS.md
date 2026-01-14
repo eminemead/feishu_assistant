@@ -55,6 +55,7 @@ NODE_ENV=development ENABLE_DEVTOOLS=true bun run dev
 - **Build, test, & quality gates** → `docs/BUILD_AND_TEST.md`
 - **TypeScript code style** → `docs/CODE_STYLE.md`
 - **Critical workflows (memory, beads, etc)** → `docs/CRITICAL_WORKFLOWS.md`
+- **Data & semantic layer** → `docs/architecture/AGENTFS_FILE_STRUCTURE.md`
 - **Docs organization** → `docs/ORGANIZATION.md`
 
 ## Critical Reminders

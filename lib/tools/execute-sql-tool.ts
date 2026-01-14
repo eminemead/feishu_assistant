@@ -1,12 +1,28 @@
 /**
  * Execute SQL Tool
- * 
+ *
+ * @deprecated Use query-metric.ts and explore-table.ts instead.
+ * This tool has security issues:
+ * - RLS is logged but NOT enforced
+ * - SQL validation is bypassable (semicolon injection, subqueries)
+ * - Agent writes raw SQL = injection risk
+ *
+ * The new semantic layer tools (Option C) eliminate these by construction:
+ * - Agent specifies metric/dimensions/filters, NOT raw SQL
+ * - Query builder constructs safe SQL from YAML definitions
+ * - No SQL injection possible
+ *
+ * Migration:
+ * - createExecuteSqlTool() → createQueryMetricTool() + createExploreTableTool()
+ * - See lib/tools/query-metric.ts and lib/tools/explore-table.ts
+ *
+ * Original description:
  * Secure Mastra tool for executing SQL queries against StarRocks/DuckDB.
  * This is the bridge between AI agents and the analytics database.
- * 
- * Security layers:
- * 1. SQL Validation - Only SELECT/WITH allowed
- * 2. RLS Integration - User permissions applied
+ *
+ * Security layers (NOT WORKING PROPERLY):
+ * 1. SQL Validation - Only SELECT/WITH allowed (BYPASSABLE)
+ * 2. RLS Integration - User permissions applied (NOT ENFORCED)
  * 3. Row/Size Limits - Prevent data exfiltration
  * 4. Credential Isolation - Server-side credentials only
  */

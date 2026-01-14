@@ -22,8 +22,26 @@ export { createGitLabCliTool, type GitLabCliResult } from "./gitlab-cli-tool";
 export { createFeishuChatHistoryTool, getChatMemberMapping, type ChatHistoryResult } from "./feishu-chat-history-tool";
 export { createFeishuDocsTool } from "./feishu-docs-tool";
 export { createBashToolkitTools } from "./bash-toolkit";
-export { createExecuteSqlTool } from "./execute-sql-tool";
 export { createExecuteWorkflowTool, executeWorkflowTool } from "./execute-workflow-tool";
+
+// ============================================
+// SEMANTIC LAYER TOOLS (Option C - structured queries)
+// ============================================
+// These replace raw SQL with structured metric/table queries
+export { createQueryMetricTool, createGetMetricInfoTool } from "./query-metric";
+export { createExploreTableTool, createGetTableSchemaInfoTool } from "./explore-table";
+export {
+  createListMetricsTool,
+  createListTablesTool,
+  createSearchSemanticLayerTool,
+  createSemanticLayerTools,
+} from "./semantic-layer-tools";
+
+// ============================================
+// DEPRECATED - Use semantic layer tools instead
+// ============================================
+/** @deprecated Use createQueryMetricTool instead. Raw SQL has security issues. */
+export { createExecuteSqlTool } from "./execute-sql-tool";
 
 // ============================================
 // TOOL INSTANCES (pre-configured)
