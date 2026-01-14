@@ -24,7 +24,7 @@ import {
   createFeishuDocsTool,
   createBashToolkitTools,
   createOkrReviewTool,
-  chartGenerationTool,
+  visualizationTool,
 } from "../tools";
 
 let dpaMomAgentInstance: Agent | null = null;
@@ -54,7 +54,7 @@ AVAILABLE TOOLS (for fallback scenarios):
 2. **feishu_chat_history**: Search Feishu group chat histories  
 3. **feishu_docs**: Read Feishu documents
 4. **bash/readFile/writeFile**: File operations in sandboxed workspace
-5. **chart_generation**: Generate charts when data is provided
+5. **visualization**: Generate charts (bar/pie/line/heatmap) from data or CSV files
 6. **mgr_okr_review**: Quick OKR data lookups
 
 DO NOT try to handle:
@@ -132,12 +132,13 @@ async function createDpaMomAgentInternalAsync(): Promise<{
       writeFile: bashTools.writeFile,
       // Quick lookups (not full analysis - that's handled by okr-analysis workflow)
       mgr_okr_review: mgrOkrReviewTool,
-      chart_generation: chartGenerationTool,
+      // Data visualization - generates charts from data or CSV, auto-uploads to Feishu
+      visualization: visualizationTool,
     },
   });
 
   console.log(
-    `✅ [DpaMom] Agent created (8 fallback tools + ${inputProcessors.length} processors)`,
+    `✅ [DpaMom] Agent created (8 tools + ${inputProcessors.length} processors)`,
   );
 
   return { agent, memory };

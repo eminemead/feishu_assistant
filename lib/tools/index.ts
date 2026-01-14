@@ -49,8 +49,7 @@ export { createExecuteSqlTool } from "./execute-sql-tool";
 
 // Chart & Visualization tools
 export { chartGenerationTool, CHART_TOOL_EXAMPLES, type ChartResponse, type ChartRequest } from "./chart-generation-tool";
-export { visualizationTool, quickBarChart, quickPieChart, quickLineChart } from "./visualization-tool";
-export { okrChartStreamingTool } from "./okr-chart-streaming-tool";
+export { visualizationTool, createVisualizationTool } from "./visualization-tool";
 
 // RAG & Search tools
 export { documentSemanticSearchTool } from "./document-semantic-search-tool";

@@ -1,122 +1,274 @@
 /**
  * Visualization Tool
- * 
- * Generic chart generation tool for all agents.
- * Uses the unified VisualizationService for consistent rendering.
- * 
- * Features:
- * - Multiple chart types (bar, pie, line, heatmap, table)
- * - Multiple render modes (ascii, datawrapper, mermaid, vega-lite)
- * - Automatic fallback on failure
- * - Caching for performance
- * - Feishu image upload integration
+ *
+ * General-purpose chart generation for any data analysis scenario.
+ * Uses VisualizationService for unified rendering across agents.
+ *
+ * Data input options:
+ * - Direct data: Pass structured [{label, value}] array
+ * - From file: Pass source with raw text (CSV/JSON) and column mappings
+ *
+ * Render modes:
+ * - auto (default): Datawrapper PNG if configured, else ASCII
+ * - ascii: Instant emoji/unicode charts, works everywhere
+ * - datawrapper: Professional PNG charts (requires DATAWRAPPER_API_KEY)
+ *
+ * For Feishu: Images are auto-uploaded, returns markdown with image_key.
  */
 
 import { createTool } from "@mastra/core/tools";
-import { z } from 'zod';
-import { getVisualizationService, RenderMode } from '../services/visualization-service';
+import { z } from "zod";
+import {
+  getVisualizationService,
+  type RenderMode,
+} from "../services/visualization-service";
 
-/**
- * Chart data schemas
- */
-const BarDataSchema = z.array(z.object({
-  label: z.string(),
-  value: z.number(),
-}));
+// =============================================================================
+// CSV/JSON Parsing Helpers
+// =============================================================================
 
-const PieDataSchema = z.array(z.object({
-  label: z.string(),
-  value: z.number(),
-}));
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.trim().split("\n");
+  if (lines.length < 2) return [];
 
-const LineDataSchema = z.array(z.object({
-  x: z.string(),
-  y: z.number(),
-  series: z.string().optional(),
-}));
+  // Parse header
+  const headers = parseCSVLine(lines[0]);
 
-const HeatmapDataSchema = z.array(z.object({
-  row: z.string(),
-  metrics: z.array(z.object({
-    column: z.string(),
-    value: z.number(),
-  })),
-}));
+  // Parse rows
+  return lines.slice(1).map((line) => {
+    const values = parseCSVLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      row[h] = values[i] || "";
+    });
+    return row;
+  });
+}
 
-const TableDataSchema = z.array(z.object({
-  label: z.string(),
-  value: z.number(),
-  target: z.number().optional(),
-}));
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
 
-/**
- * Generic Visualization Tool
- * 
- * Use this tool to generate charts and visualizations in any agent.
- */
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function parseJSON(text: string): Record<string, unknown>[] {
+  const parsed = JSON.parse(text);
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+function extractChartData(
+  rows: Record<string, unknown>[],
+  labelColumn: string,
+  valueColumn: string,
+  targetColumn?: string
+): Array<{ label: string; value: number; target?: number }> {
+  return rows
+    .map((row) => {
+      const label = String(row[labelColumn] || "");
+      const value = parseFloat(String(row[valueColumn] || "0")) || 0;
+      const target = targetColumn
+        ? parseFloat(String(row[targetColumn] || "0")) || undefined
+        : undefined;
+      return { label, value, target };
+    })
+    .filter((d) => d.label); // Remove empty labels
+}
+
+// =============================================================================
+// Schema
+// =============================================================================
+
+const dataPointSchema = z.object({
+  label: z.string().describe("Category/row label"),
+  value: z.number().describe("Numeric value"),
+  target: z.number().optional().describe("Optional target value (for tables)"),
+});
+
+const sourceSchema = z.object({
+  text: z.string().describe("Raw file content (CSV or JSON text)"),
+  format: z.enum(["csv", "json"]).describe("File format"),
+  labelColumn: z.string().describe("Column name for labels/categories"),
+  valueColumn: z.string().describe("Column name for numeric values"),
+  targetColumn: z.string().optional().describe("Column name for target values (optional)"),
+});
+
+const visualizationInputSchema = z.object({
+  chartType: z
+    .enum(["bar", "pie", "line", "heatmap", "table"])
+    .describe("Type of chart to generate"),
+
+  // Either direct data OR source (file content)
+  data: z
+    .array(dataPointSchema)
+    .optional()
+    .describe("Direct chart data as label-value pairs"),
+
+  source: sourceSchema
+    .optional()
+    .describe("File source: raw text content with column mappings (use readFile first to get the text)"),
+
+  title: z.string().describe("Chart title"),
+
+  options: z
+    .object({
+      horizontal: z.boolean().optional().describe("For bar: use horizontal bars"),
+      sortDesc: z.boolean().optional().describe("For bar: sort by value descending"),
+      donut: z.boolean().optional().describe("For pie: render as donut"),
+      showValues: z.boolean().optional().describe("For heatmap: show numeric values"),
+      thresholds: z
+        .tuple([z.number(), z.number()])
+        .optional()
+        .describe("For heatmap: [low, high] color thresholds"),
+    })
+    .optional()
+    .describe("Chart-specific options"),
+
+  renderMode: z
+    .enum(["auto", "ascii", "datawrapper"])
+    .optional()
+    .default("auto")
+    .describe("Render mode: auto (best available), ascii (instant), datawrapper (PNG)"),
+});
+
+// =============================================================================
+// Tool Implementation
+// =============================================================================
+
 export const visualizationTool = createTool({
   id: "visualization",
-  description: `Generate charts and visualizations. Returns markdown with the chart embedded.
+  description: `Generate charts for data analysis. Returns markdown with embedded chart.
 
-Supported chart types:
-- bar: Horizontal or vertical bar chart for comparing categories
-- pie: Pie or donut chart for showing composition/distribution
-- line: Line chart for trends over time
-- heatmap: Matrix visualization with color-coded cells
-- table: Comparison table with inline progress bars
-- stats: Summary statistics block
-- sparkline: Inline trend indicator
+DATA INPUT - Two options:
 
-Render modes:
-- auto (default): Automatically selects best available (datawrapper > ascii)
-- ascii: Instant emoji/unicode charts, works everywhere
-- datawrapper: Professional PNG charts (requires API key)
-- mermaid: Text-based diagrams
-- vega-lite: JSON specs for client-side rendering
+1. **Direct data** (when you already have structured data):
+   { data: [{ label: "North", value: 85 }, { label: "South", value: 72 }] }
 
-Examples:
-- Bar chart: { chartType: "bar", data: [{ label: "A", value: 10 }], title: "Sales" }
-- Pie chart: { chartType: "pie", data: [{ label: "A", value: 30 }], title: "Share" }
-- Heatmap: { chartType: "heatmap", data: [{ row: "Co1", metrics: [{ column: "M1", value: 80 }] }] }`,
+2. **From file** (use readFile first, then pass the text):
+   Step 1: readFile("/workspace/sales.csv") → returns raw CSV text
+   Step 2: visualization({ 
+     source: { 
+       text: "<csv content from readFile>",
+       format: "csv",
+       labelColumn: "Region",
+       valueColumn: "Sales"
+     },
+     chartType: "bar",
+     title: "Sales by Region"
+   })
 
-  inputSchema: z.object({
-    chartType: z.enum(['bar', 'pie', 'line', 'heatmap', 'table', 'stats', 'sparkline'])
-      .describe('Type of chart to generate'),
-    
-    data: z.union([BarDataSchema, PieDataSchema, LineDataSchema, HeatmapDataSchema, TableDataSchema, z.array(z.number())])
-      .describe('Chart data. Format depends on chartType.'),
-    
-    title: z.string()
-      .describe('Chart title'),
-    
-    options: z.object({
-      horizontal: z.boolean().optional().describe('For bar charts: use horizontal bars'),
-      donut: z.boolean().optional().describe('For pie charts: render as donut'),
-      sortDesc: z.boolean().optional().describe('For bar charts: sort by value descending'),
-      showValues: z.boolean().optional().describe('For heatmaps: show numeric values'),
-      thresholds: z.tuple([z.number(), z.number()]).optional().describe('For heatmaps: [low, high] thresholds'),
-    }).optional().describe('Chart-specific options'),
-    
-    renderMode: z.enum(['auto', 'ascii', 'datawrapper', 'mermaid', 'vega-lite']).optional()
-      .default('auto')
-      .describe('Rendering mode. Default: auto (best available)'),
-  }),
+CHART TYPES:
+- bar: Compare categories (sales by region, scores by team)
+- pie: Show composition (market share, budget allocation)  
+- line: Show trends (growth over time, metrics by month)
+- heatmap: Matrix with color coding (performance grid)
+- table: Comparison with progress bars (actual vs target)
 
-execute: async (inputData, context) => {
-    // Support abort signal
+RENDER MODES:
+- auto: Datawrapper PNG if API key set, else ASCII (default)
+- ascii: Instant emoji/unicode charts, always works
+- datawrapper: Professional PNG charts uploaded to Feishu`,
+
+  inputSchema: visualizationInputSchema,
+
+  execute: async (input, context) => {
     if (context?.abortSignal?.aborted) {
-      return { success: false, markdown: '', mode: 'ascii', error: 'Aborted' };
+      return { success: false, markdown: "", error: "Aborted" };
     }
-    
-    const { chartType, data, title, options = {}, renderMode = 'auto' } = inputData;
+
+    const { chartType, title, options = {}, renderMode = "auto" } = input;
+    let { data } = input;
+    const { source } = input;
+
+    // Validate: need either data or source
+    if (!data && !source) {
+      return {
+        success: false,
+        markdown: "",
+        error: "Must provide either 'data' array or 'source' with file content",
+      };
+    }
+
+    // Parse source if provided
+    if (source && !data) {
+      try {
+        const rows =
+          source.format === "csv"
+            ? parseCSV(source.text)
+            : parseJSON(source.text);
+
+        if (rows.length === 0) {
+          return {
+            success: false,
+            markdown: "",
+            error: `No data rows found in ${source.format.toUpperCase()} content`,
+          };
+        }
+
+        // Validate columns exist
+        const firstRow = rows[0];
+        if (!(source.labelColumn in firstRow)) {
+          const available = Object.keys(firstRow).join(", ");
+          return {
+            success: false,
+            markdown: "",
+            error: `Column '${source.labelColumn}' not found. Available: ${available}`,
+          };
+        }
+        if (!(source.valueColumn in firstRow)) {
+          const available = Object.keys(firstRow).join(", ");
+          return {
+            success: false,
+            markdown: "",
+            error: `Column '${source.valueColumn}' not found. Available: ${available}`,
+          };
+        }
+
+        data = extractChartData(
+          rows,
+          source.labelColumn,
+          source.valueColumn,
+          source.targetColumn
+        );
+
+        if (data.length === 0) {
+          return {
+            success: false,
+            markdown: "",
+            error: "No valid data rows after parsing",
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          markdown: "",
+          error: `Failed to parse ${source.format.toUpperCase()}: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    }
+
+    // At this point, data is guaranteed to exist
+    const chartData = data!;
     const viz = getVisualizationService();
     const mode = renderMode as RenderMode;
 
     try {
       switch (chartType) {
-        case 'bar': {
-          const barData = data as Array<{ label: string; value: number }>;
-          const result = await viz.barChart(barData, {
+        case "bar": {
+          const result = await viz.barChart(chartData, {
             title,
             horizontal: options.horizontal,
             sortDesc: options.sortDesc,
@@ -126,13 +278,14 @@ execute: async (inputData, context) => {
             success: true,
             markdown: result.markdown,
             mode: result.mode,
+            imageKey: result.imageKey,
             usedFallback: result.usedFallback,
+            rowCount: chartData.length,
           };
         }
 
-        case 'pie': {
-          const pieData = data as Array<{ label: string; value: number }>;
-          const result = await viz.pieChart(pieData, {
+        case "pie": {
+          const result = await viz.pieChart(chartData, {
             title,
             donut: options.donut,
             mode,
@@ -141,29 +294,33 @@ execute: async (inputData, context) => {
             success: true,
             markdown: result.markdown,
             mode: result.mode,
+            imageKey: result.imageKey,
             usedFallback: result.usedFallback,
+            rowCount: chartData.length,
           };
         }
 
-        case 'line': {
-          const lineData = data as Array<{ x: string; y: number; series?: string }>;
-          const result = await viz.lineChart(lineData, {
-            title,
-            mode,
-          });
+        case "line": {
+          const lineData = chartData.map((d) => ({ x: d.label, y: d.value }));
+          const result = await viz.lineChart(lineData, { title, mode });
           return {
             success: true,
             markdown: result.markdown,
             mode: result.mode,
+            imageKey: result.imageKey,
             usedFallback: result.usedFallback,
+            rowCount: chartData.length,
           };
         }
 
-        case 'heatmap': {
-          const heatmapData = data as Array<{ row: string; metrics: Array<{ column: string; value: number }> }>;
+        case "heatmap": {
+          const heatmapData = chartData.map((d) => ({
+            row: d.label,
+            metrics: [{ column: "Value", value: d.value }],
+          }));
           const result = await viz.heatmap(heatmapData, {
             title,
-            showValues: options.showValues,
+            showValues: options.showValues ?? true,
             thresholds: options.thresholds,
             mode,
           });
@@ -172,90 +329,41 @@ execute: async (inputData, context) => {
             markdown: result.markdown,
             mode: result.mode,
             usedFallback: result.usedFallback,
+            rowCount: chartData.length,
           };
         }
 
-        case 'table': {
-          const tableData = data as Array<{ label: string; value: number; target?: number }>;
-          const result = await viz.comparisonTable(tableData, { title, mode });
+        case "table": {
+          const result = await viz.comparisonTable(chartData, { title, mode });
           return {
             success: true,
             markdown: result.markdown,
             mode: result.mode,
             usedFallback: result.usedFallback,
-          };
-        }
-
-        case 'stats': {
-          const values = data as number[];
-          const markdown = viz.summaryStats(values, { title, showDistribution: true });
-          return {
-            success: true,
-            markdown,
-            mode: 'ascii',
-            usedFallback: false,
-          };
-        }
-
-        case 'sparkline': {
-          const values = data as number[];
-          const sparkline = viz.sparkline(values);
-          return {
-            success: true,
-            markdown: `**${title}**: ${sparkline}`,
-            mode: 'ascii',
-            usedFallback: false,
+            rowCount: chartData.length,
           };
         }
 
         default:
           return {
             success: false,
+            markdown: "",
             error: `Unknown chart type: ${chartType}`,
-            markdown: '',
-            mode: 'ascii',
           };
       }
     } catch (error) {
       return {
         success: false,
+        markdown: "",
         error: error instanceof Error ? error.message : String(error),
-        markdown: '',
-        mode: 'ascii',
       };
     }
   },
 });
 
 /**
- * Quick chart helpers for programmatic use
+ * Factory function for custom configuration
  */
-export async function quickBarChart(
-  data: Array<{ label: string; value: number }>,
-  title: string,
-  options?: { horizontal?: boolean; sortDesc?: boolean; mode?: RenderMode }
-): Promise<string> {
-  const viz = getVisualizationService();
-  const result = await viz.barChart(data, { title, ...options });
-  return result.markdown;
-}
-
-export async function quickPieChart(
-  data: Array<{ label: string; value: number }>,
-  title: string,
-  options?: { donut?: boolean; mode?: RenderMode }
-): Promise<string> {
-  const viz = getVisualizationService();
-  const result = await viz.pieChart(data, { title, ...options });
-  return result.markdown;
-}
-
-export async function quickLineChart(
-  data: Array<{ x: string; y: number }>,
-  title: string,
-  options?: { mode?: RenderMode }
-): Promise<string> {
-  const viz = getVisualizationService();
-  const result = await viz.lineChart(data, { title, ...options });
-  return result.markdown;
+export function createVisualizationTool() {
+  return visualizationTool;
 }
