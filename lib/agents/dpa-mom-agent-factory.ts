@@ -25,6 +25,7 @@ import {
   createBashToolkitTools,
   createOkrReviewTool,
   visualizationTool,
+  createTtsVoiceTool,
 } from "../tools";
 
 let dpaMomAgentInstance: Agent | null = null;
@@ -56,6 +57,10 @@ AVAILABLE TOOLS (for fallback scenarios):
 4. **bash/readFile/writeFile**: File operations in sandboxed workspace
 5. **visualization**: Generate charts (bar/pie/line/heatmap) from data or CSV files
 6. **mgr_okr_review**: Quick OKR data lookups
+7. **send_voice_message**: Text-to-speech, sends voice message in Feishu
+   - USE WHEN user explicitly asks for voice: "用语音回复", "语音说", "reply with voice", "send as audio", "voice message"
+   - After sending voice, also reply with brief text confirmation
+   - Keep voice messages concise (<500 chars) for best quality
 
 DO NOT try to handle:
 - Issue creation (already handled by workflow if pattern matched)
@@ -97,6 +102,7 @@ async function createDpaMomAgentInternalAsync(): Promise<{
   const feishuDocsTool = createFeishuDocsTool(true);
   const bashTools = await createBashToolkitTools(true);
   const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
+  const ttsVoiceTool = createTtsVoiceTool(true);
 
   // Create native Mastra memory (async init; may be null if storage unavailable)
   const memory = await createAgentMemoryAsync({
@@ -134,11 +140,13 @@ async function createDpaMomAgentInternalAsync(): Promise<{
       mgr_okr_review: mgrOkrReviewTool,
       // Data visualization - generates charts from data or CSV, auto-uploads to Feishu
       visualization: visualizationTool,
+      // TTS voice messages - convert text to speech, send as Feishu audio
+      send_voice_message: ttsVoiceTool,
     },
   });
 
   console.log(
-    `✅ [DpaMom] Agent created (8 tools + ${inputProcessors.length} processors)`,
+    `✅ [DpaMom] Agent created (9 tools + ${inputProcessors.length} processors)`,
   );
 
   return { agent, memory };

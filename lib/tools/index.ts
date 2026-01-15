@@ -57,3 +57,6 @@ export { documentSemanticSearchTool } from "./document-semantic-search-tool";
 // Follow-up generation tools
 export { generateFollowupsTool, generateFollowupQuestions } from "./generate-followups-tool";
 
+// TTS Voice tool (mlx-audio based)
+export { createTtsVoiceTool, ttsVoiceTool, preloadTtsModel } from "./tts-voice-tool";
+
