@@ -1,38 +1,66 @@
 /**
  * Feishu Task Webhook Handler
  * 
- * Handles task.task.updated_v1 events from Feishu to sync task status to GitLab issues.
- * 
- * When a Feishu task is completed/uncompleted, this handler:
- * 1. Looks up the linked GitLab issue
- * 2. Updates the GitLab issue status via glab CLI
- * 3. Updates the sync record in Supabase
+ * Handles Feishu Task webhook events to sync with GitLab issues:
+ * - task.created: Create GitLab issue from new Feishu task
+ * - task.updated: Update GitLab issue fields
+ * - task.completed: Close linked GitLab issue
+ * - task.uncompleted: Reopen linked GitLab issue
+ * - task.deleted: Optionally close GitLab issue
+ * - task.comment.created: Add note to GitLab issue
  */
 
 import { 
   getGitlabIssueByTaskGuid, 
   updateGitlabStatus,
-  updateFeishuTaskStatus 
+  updateFeishuTaskStatus,
+  getFeishuTaskDetails,
+  createGitlabIssueFromTask,
+  updateGitlabIssueFromTask,
+  saveTaskLinkExtended,
+  FeishuTaskDetails,
 } from '../services/feishu-task-service';
+import { resolveGitlabUsername } from '../services/user-mapping-service';
+import { client as feishuClient } from '../feishu-utils';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+// Default target project for GitLab issues
+const DEFAULT_GITLAB_PROJECT = process.env.FEISHU_TASK_GITLAB_PROJECT || 'dpa/dpa-mom/task';
+
+// ============================================================================
+// Event Types
+// ============================================================================
+
+/**
+ * Event key types from Feishu Task webhook
+ */
+export type TaskEventKey = 
+  | 'task.created'
+  | 'task.updated'
+  | 'task.completed'
+  | 'task.uncompleted'
+  | 'task.deleted'
+  | 'task.comment.created';
+
 export interface TaskUpdatedEvent {
   schema: string;
   header: {
-    event_id: string;
+    event_id?: string;
     event_type: string;
-    create_time: string;
-    token: string;
-    app_id: string;
-    tenant_key: string;
+    create_time?: string;
+    token?: string;
+    app_id?: string;
+    tenant_key?: string;
   };
   event: {
     task_guid: string;
     obj_type: number;
     event_key: string;
+    comment_guid?: string;
+    changed_fields?: string[];
   };
 }
 
@@ -43,52 +71,148 @@ export interface TaskEventPayload {
 }
 
 /**
- * Handle Feishu task update webhook event
+ * Main handler for Feishu task webhook events
+ * Routes to specific handlers based on event_key
  */
 export async function handleTaskUpdatedEvent(event: TaskUpdatedEvent): Promise<{ success: boolean; message: string }> {
-  const { task_guid, event_key } = event.event;
+  const { task_guid, event_key, comment_guid, changed_fields } = event.event;
   
-  console.log(`📋 [TaskWebhook] Received task update: guid=${task_guid}, event=${event_key}`);
+  console.log(`📋 [TaskWebhook] Received event: guid=${task_guid}, event=${event_key}`);
   
-  // event_key values: task.completed, task.uncompleted, task.updated, etc.
-  const isCompleted = event_key === 'task.completed';
-  const isUncompleted = event_key === 'task.uncompleted';
-  
-  if (!isCompleted && !isUncompleted) {
-    console.log(`ℹ️ [TaskWebhook] Ignoring event_key: ${event_key}`);
-    return { success: true, message: `Ignored event: ${event_key}` };
+  // Fetch full task details for most events
+  const task = await getFeishuTaskDetails(task_guid);
+  if (!task && event_key !== 'task.deleted') {
+    console.error(`❌ [TaskWebhook] Failed to fetch task ${task_guid}`);
+    return { success: false, message: `Failed to fetch task ${task_guid}` };
   }
   
+  switch (event_key) {
+    case 'task.created':
+      return handleTaskCreated(task_guid, task!);
+    
+    case 'task.updated':
+      return handleTaskUpdated(task_guid, task!, changed_fields || []);
+    
+    case 'task.completed':
+      return handleTaskStatusChange(task_guid, true);
+    
+    case 'task.uncompleted':
+      return handleTaskStatusChange(task_guid, false);
+    
+    case 'task.deleted':
+      return handleTaskDeleted(task_guid);
+    
+    case 'task.comment.created':
+      return handleCommentCreated(task_guid, comment_guid || '', task);
+    
+    default:
+      console.log(`ℹ️ [TaskWebhook] Ignoring event_key: ${event_key}`);
+      return { success: true, message: `Ignored event: ${event_key}` };
+  }
+}
+
+// ============================================================================
+// Event Handlers (Phase 2.1)
+// ============================================================================
+
+/**
+ * Handle new task creation → create GitLab issue
+ */
+async function handleTaskCreated(
+  taskGuid: string, 
+  task: FeishuTaskDetails
+): Promise<{ success: boolean; message: string }> {
+  console.log(`📋 [TaskWebhook] Handling task.created: ${task.summary}`);
+  
+  // Check if already linked (idempotency)
+  const existing = await getGitlabIssueByTaskGuid(taskGuid);
+  if (existing) {
+    console.log(`ℹ️ [TaskWebhook] Task already linked to GitLab issue #${existing.gitlab_issue_iid}`);
+    return { success: true, message: 'Already synced' };
+  }
+  
+  // Create GitLab issue
+  const result = await createGitlabIssueFromTask(task, task.url, DEFAULT_GITLAB_PROJECT);
+  if (!result.success) {
+    console.error(`❌ [TaskWebhook] Failed to create GitLab issue: ${result.error}`);
+    return { success: false, message: result.error! };
+  }
+  
+  // Save link
+  await saveTaskLinkExtended({
+    gitlabProject: DEFAULT_GITLAB_PROJECT,
+    gitlabIssueIid: result.issueIid!,
+    gitlabIssueUrl: result.issueUrl!,
+    feishuTaskGuid: taskGuid,
+    feishuTaskUrl: task.url,
+  });
+  
+  console.log(`✅ [TaskWebhook] Created GitLab issue #${result.issueIid} for task ${taskGuid}`);
+  return { success: true, message: `Created GitLab issue #${result.issueIid}` };
+}
+
+/**
+ * Handle task field updates → update GitLab issue
+ */
+async function handleTaskUpdated(
+  taskGuid: string, 
+  task: FeishuTaskDetails,
+  changedFields: string[]
+): Promise<{ success: boolean; message: string }> {
+  console.log(`📋 [TaskWebhook] Handling task.updated: ${task.summary}, fields: ${changedFields.join(', ')}`);
+  
   // Look up linked GitLab issue
-  const link = await getGitlabIssueByTaskGuid(task_guid);
+  const link = await getGitlabIssueByTaskGuid(taskGuid);
   if (!link) {
-    console.log(`ℹ️ [TaskWebhook] No GitLab issue linked to task ${task_guid}`);
+    console.log(`ℹ️ [TaskWebhook] No GitLab issue linked to task ${taskGuid}, creating new...`);
+    // Create new issue if not linked
+    return handleTaskCreated(taskGuid, task);
+  }
+  
+  // Update GitLab issue
+  const result = await updateGitlabIssueFromTask(
+    link.gitlab_issue_iid, 
+    task, 
+    changedFields, 
+    link.gitlab_project
+  );
+  
+  if (!result.success) {
+    return { success: false, message: result.error! };
+  }
+  
+  return { success: true, message: `Updated GitLab issue #${link.gitlab_issue_iid}` };
+}
+
+/**
+ * Handle task completion/reopening → close/reopen GitLab issue
+ */
+async function handleTaskStatusChange(
+  taskGuid: string, 
+  completed: boolean
+): Promise<{ success: boolean; message: string }> {
+  console.log(`📋 [TaskWebhook] Handling task status change: completed=${completed}`);
+  
+  // Look up linked GitLab issue
+  const link = await getGitlabIssueByTaskGuid(taskGuid);
+  if (!link) {
+    console.log(`ℹ️ [TaskWebhook] No GitLab issue linked to task ${taskGuid}`);
     return { success: true, message: 'No linked GitLab issue' };
   }
   
   const { gitlab_project, gitlab_issue_iid } = link;
   
   try {
-    if (isCompleted) {
-      // Close the GitLab issue
+    if (completed) {
       console.log(`🔄 [TaskWebhook] Closing GitLab issue: ${gitlab_project}#${gitlab_issue_iid}`);
       await closeGitlabIssue(gitlab_project, gitlab_issue_iid);
       await updateGitlabStatus(gitlab_project, gitlab_issue_iid, 'closed');
-      
-      return { 
-        success: true, 
-        message: `Closed GitLab issue ${gitlab_project}#${gitlab_issue_iid}` 
-      };
+      return { success: true, message: `Closed GitLab issue ${gitlab_project}#${gitlab_issue_iid}` };
     } else {
-      // Reopen the GitLab issue
       console.log(`🔄 [TaskWebhook] Reopening GitLab issue: ${gitlab_project}#${gitlab_issue_iid}`);
       await reopenGitlabIssue(gitlab_project, gitlab_issue_iid);
       await updateGitlabStatus(gitlab_project, gitlab_issue_iid, 'opened');
-      
-      return { 
-        success: true, 
-        message: `Reopened GitLab issue ${gitlab_project}#${gitlab_issue_iid}` 
-      };
+      return { success: true, message: `Reopened GitLab issue ${gitlab_project}#${gitlab_issue_iid}` };
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -96,6 +220,120 @@ export async function handleTaskUpdatedEvent(event: TaskUpdatedEvent): Promise<{
     return { success: false, message: errorMsg };
   }
 }
+
+/**
+ * Handle task deletion → optionally close GitLab issue
+ */
+async function handleTaskDeleted(taskGuid: string): Promise<{ success: boolean; message: string }> {
+  console.log(`📋 [TaskWebhook] Handling task.deleted: ${taskGuid}`);
+  
+  // Look up linked GitLab issue
+  const link = await getGitlabIssueByTaskGuid(taskGuid);
+  if (!link) {
+    console.log(`ℹ️ [TaskWebhook] No GitLab issue linked to deleted task ${taskGuid}`);
+    return { success: true, message: 'No linked GitLab issue' };
+  }
+  
+  // Optionally close the GitLab issue (configurable behavior)
+  // For now, just add a note that the Feishu task was deleted
+  const { gitlab_project, gitlab_issue_iid } = link;
+  
+  try {
+    const noteContent = '⚠️ **Note**: The linked Feishu task has been deleted.';
+    const cmd = `glab issue note ${gitlab_issue_iid} -m "${noteContent}" -R ${gitlab_project}`;
+    await execAsync(cmd);
+    
+    console.log(`✅ [TaskWebhook] Added deletion note to GitLab issue #${gitlab_issue_iid}`);
+    return { success: true, message: `Added note to GitLab issue #${gitlab_issue_iid}` };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️ [TaskWebhook] Failed to add deletion note: ${errorMsg}`);
+    return { success: true, message: 'Task deleted, note failed' };
+  }
+}
+
+/**
+ * Handle comment creation → add note to GitLab issue (Phase 4)
+ * 
+ * Note: Feishu Task V2 API comment structure may vary.
+ * We attempt to fetch and sync the comment, falling back gracefully.
+ */
+async function handleCommentCreated(
+  taskGuid: string, 
+  commentGuid: string,
+  task?: FeishuTaskDetails | null
+): Promise<{ success: boolean; message: string }> {
+  console.log(`📋 [TaskWebhook] Handling task.comment.created: task=${taskGuid}, comment=${commentGuid}`);
+  
+  // Look up linked GitLab issue
+  const link = await getGitlabIssueByTaskGuid(taskGuid);
+  if (!link) {
+    console.log(`ℹ️ [TaskWebhook] No GitLab issue linked to task ${taskGuid}`);
+    return { success: true, message: 'No linked GitLab issue' };
+  }
+  
+  try {
+    // Try to fetch comment content from Feishu
+    // The API path varies by SDK version, so we use dynamic access
+    let content = '';
+    let author: string | null = null;
+    
+    try {
+      // Try the comment.get endpoint (varies by SDK version)
+      const taskApi = (feishuClient.task.v2 as any);
+      const commentApi = taskApi.comment || taskApi.taskComment;
+      
+      if (commentApi?.get) {
+        const commentResp = await commentApi.get({
+          path: { 
+            task_guid: taskGuid,
+            comment_id: commentGuid,
+          },
+          params: { user_id_type: 'open_id' },
+        });
+        
+        const isSuccess = (commentResp.code === 0 || commentResp.code === undefined);
+        if (isSuccess && commentResp.data?.comment) {
+          const comment = commentResp.data.comment;
+          content = comment.content || '';
+          const creatorId = comment.creator?.id;
+          if (creatorId) {
+            author = await resolveGitlabUsername(creatorId);
+          }
+        }
+      }
+    } catch (apiError) {
+      console.warn(`⚠️ [TaskWebhook] Comment API not available or failed:`, apiError);
+    }
+    
+    // Build note content
+    let noteContent: string;
+    if (content) {
+      noteContent = author
+        ? `**[Feishu Comment by @${author}]**\n\n${content}`
+        : `**[Feishu Comment]**\n\n${content}`;
+    } else {
+      // Fallback: just note that a comment was added
+      noteContent = '📝 **[Feishu Comment]** A new comment was added to the linked Feishu task.';
+    }
+    
+    // Add note to GitLab issue
+    const escapedNote = noteContent.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    const cmd = `glab issue note ${link.gitlab_issue_iid} -m "${escapedNote}" -R ${link.gitlab_project}`;
+    await execAsync(cmd);
+    
+    console.log(`✅ [TaskWebhook] Synced comment to GitLab issue #${link.gitlab_issue_iid}`);
+    return { success: true, message: 'Comment synced' };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [TaskWebhook] Failed to sync comment: ${errorMsg}`);
+    return { success: false, message: errorMsg };
+  }
+}
+
+// ============================================================================
+// GitLab Operations
+// ============================================================================
 
 /**
  * Close a GitLab issue via glab CLI

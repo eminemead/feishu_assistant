@@ -393,13 +393,15 @@ eventDispatcher.register({
   },
 } as any);
 
-// Handle Feishu task status changes (for GitLab-Feishu task sync)
+// Handle Feishu task events (for GitLab-Feishu task sync)
+// Supports: task.created, task.updated, task.completed, task.uncompleted, task.deleted
 eventDispatcher.register({
   "task.task.updated_v1": async (data: any) => {
     try {
       console.log("📋 [WebSocket] Task update event received");
       const taskGuid = data?.object?.guid || data?.task_guid;
       const eventKey = data?.event_key || data?.action;
+      const changedFields = data?.changed_fields || [];
       
       if (!taskGuid) {
         console.warn("⚠️ [WebSocket] Task event missing task_guid");
@@ -410,13 +412,66 @@ eventDispatcher.register({
       const event = {
         schema: "2.0",
         header: { event_type: "task.task.updated_v1" },
-        event: { task_guid: taskGuid, event_key: eventKey, obj_type: 1 },
+        event: { task_guid: taskGuid, event_key: eventKey, obj_type: 1, changed_fields: changedFields },
       } as any;
       
       const result = await handleTaskUpdatedEvent(event);
       console.log(`📋 [WebSocket] Task sync result: ${result.message}`);
     } catch (error) {
       console.error("❌ [WebSocket] Error handling task update:", error);
+    }
+  },
+} as any);
+
+// Handle Feishu task creation events
+eventDispatcher.register({
+  "task.task.created_v1": async (data: any) => {
+    try {
+      console.log("📋 [WebSocket] Task created event received");
+      const taskGuid = data?.object?.guid || data?.task_guid;
+      
+      if (!taskGuid) {
+        console.warn("⚠️ [WebSocket] Task created event missing task_guid");
+        return;
+      }
+      
+      const event = {
+        schema: "2.0",
+        header: { event_type: "task.task.created_v1" },
+        event: { task_guid: taskGuid, event_key: "task.created", obj_type: 1 },
+      } as any;
+      
+      const result = await handleTaskUpdatedEvent(event);
+      console.log(`📋 [WebSocket] Task create result: ${result.message}`);
+    } catch (error) {
+      console.error("❌ [WebSocket] Error handling task creation:", error);
+    }
+  },
+} as any);
+
+// Handle Feishu task comment events
+eventDispatcher.register({
+  "task.task.comment_created_v1": async (data: any) => {
+    try {
+      console.log("📋 [WebSocket] Task comment event received");
+      const taskGuid = data?.object?.guid || data?.task_guid;
+      const commentGuid = data?.comment_guid || data?.object?.comment_guid;
+      
+      if (!taskGuid) {
+        console.warn("⚠️ [WebSocket] Task comment event missing task_guid");
+        return;
+      }
+      
+      const event = {
+        schema: "2.0",
+        header: { event_type: "task.task.comment_created_v1" },
+        event: { task_guid: taskGuid, event_key: "task.comment.created", obj_type: 1, comment_guid: commentGuid },
+      } as any;
+      
+      const result = await handleTaskUpdatedEvent(event);
+      console.log(`📋 [WebSocket] Task comment result: ${result.message}`);
+    } catch (error) {
+      console.error("❌ [WebSocket] Error handling task comment:", error);
     }
   },
 } as any);
@@ -1031,8 +1086,11 @@ app.post("/webhook/docs/change", async (c) => {
 });
 
 // Feishu Task webhook endpoint
-// Receives task.task.updated_v1 events to sync task status to GitLab issues
-// Configure this URL in Feishu admin: Event Subscriptions → task.task.updated_v1
+// Receives task events to sync with GitLab issues:
+// - task.task.created_v1: New task → create GitLab issue
+// - task.task.updated_v1: Task update → update GitLab issue
+// - task.task.comment_created_v1: Comment → GitLab note
+// Configure this URL in Feishu admin: Event Subscriptions
 app.post("/webhook/task", async (c) => {
   try {
     const rawBody = await c.req.text();
@@ -1044,9 +1102,33 @@ app.post("/webhook/task", async (c) => {
         return c.json({ challenge: payload.challenge });
       }
       
-      // Handle task update event
-      if (payload.header?.event_type === "task.task.updated_v1") {
-        const result = await handleTaskUpdatedEvent(payload as TaskUpdatedEvent);
+      const eventType = payload.header?.event_type;
+      
+      // Handle task events
+      if (eventType === "task.task.updated_v1" || 
+          eventType === "task.task.created_v1" ||
+          eventType === "task.task.comment_created_v1") {
+        
+        // Map event type to event_key
+        let eventKey = payload.event?.event_key;
+        if (!eventKey) {
+          if (eventType === "task.task.created_v1") eventKey = "task.created";
+          else if (eventType === "task.task.comment_created_v1") eventKey = "task.comment.created";
+        }
+        
+        const event: TaskUpdatedEvent = {
+          schema: payload.schema || "2.0",
+          header: payload.header,
+          event: {
+            task_guid: payload.event?.task_guid || payload.event?.object?.guid,
+            obj_type: payload.event?.obj_type || 1,
+            event_key: eventKey,
+            comment_guid: payload.event?.comment_guid,
+            changed_fields: payload.event?.changed_fields,
+          },
+        };
+        
+        const result = await handleTaskUpdatedEvent(event);
         return c.json(result, result.success ? 200 : 500);
       }
     } catch (e) {

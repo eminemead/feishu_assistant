@@ -226,6 +226,273 @@ async function saveTaskLink(params: {
   console.log(`✅ [FeishuTask] Saved link: ${params.gitlabProject}#${params.gitlabIssueIid} ↔ ${params.feishuTaskGuid}`);
 }
 
+// ============================================================================
+// Feishu Task Details Fetching (Phase 1.1)
+// ============================================================================
+
+export interface FeishuTaskDetails {
+  guid: string;
+  summary: string;
+  description?: string;
+  due?: { timestamp: string; is_all_day: boolean };
+  members?: Array<{ id: string; type: string; role: string }>;
+  completed_at?: string;
+  creator?: { id: string; type: string };
+  created_at?: string;
+  updated_at?: string;
+  custom_fields?: Array<{ guid: string; text_value?: string; number_value?: string }>;
+  url?: string;
+}
+
+/**
+ * Fetch full task details from Feishu API
+ * Used when webhook only provides task_guid
+ */
+export async function getFeishuTaskDetails(taskGuid: string): Promise<FeishuTaskDetails | null> {
+  try {
+    const resp = await feishuClient.task.v2.task.get({
+      path: { task_guid: taskGuid },
+      params: { user_id_type: 'open_id' },
+    });
+    
+    const isSuccess = (resp.code === 0 || resp.code === undefined);
+    if (!isSuccess || !resp.data?.task) {
+      console.warn(`⚠️ [FeishuTask] Failed to fetch task ${taskGuid}:`, resp);
+      return null;
+    }
+    
+    const task = resp.data.task;
+    return {
+      guid: task.guid!,
+      summary: task.summary || '',
+      description: task.description,
+      due: task.due as any,
+      members: task.members as any,
+      completed_at: task.completed_at,
+      creator: task.creator as any,
+      created_at: task.created_at,
+      updated_at: task.updated_at,
+      custom_fields: task.custom_fields as any,
+      url: task.url,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [FeishuTask] Error fetching task ${taskGuid}:`, errorMsg);
+    return null;
+  }
+}
+
+// ============================================================================
+// GitLab Issue Creation from Feishu Task (Phase 1.2)
+// ============================================================================
+
+export interface GitlabIssueResult {
+  success: boolean;
+  issueIid?: number;
+  issueUrl?: string;
+  error?: string;
+}
+
+/**
+ * Escape shell argument for safe command execution
+ */
+function escapeShellArg(arg: string): string {
+  return arg.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
+/**
+ * Format Feishu timestamp to GitLab due date (YYYY-MM-DD)
+ */
+function formatDueDate(timestamp: string): string {
+  const ts = parseInt(timestamp, 10);
+  const date = new Date(ts * 1000);
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * Build GitLab issue description from Feishu task
+ */
+function buildGitlabDescription(task: FeishuTaskDetails, feishuTaskUrl?: string): string {
+  let desc = task.description || '';
+  
+  if (feishuTaskUrl) {
+    desc += `\n\n---\n🔗 **Feishu Task**: [${task.summary}](${feishuTaskUrl})`;
+  } else if (task.url) {
+    desc += `\n\n---\n🔗 **Feishu Task**: [${task.summary}](${task.url})`;
+  }
+  
+  return desc;
+}
+
+/**
+ * Resolve GitLab assignee from Feishu task members
+ */
+async function resolveGitlabAssignee(
+  members?: Array<{ id: string; type: string; role: string }>
+): Promise<string | null> {
+  if (!members || members.length === 0) return null;
+  
+  // Find assignee role members
+  const assignee = members.find(m => m.role === 'assignee');
+  if (!assignee) return null;
+  
+  // Import user mapping service
+  const { getGitlabUsername } = await import('./user-mapping-service');
+  return getGitlabUsername(assignee.id);
+}
+
+/**
+ * Create GitLab issue from Feishu task data
+ */
+export async function createGitlabIssueFromTask(
+  task: FeishuTaskDetails,
+  feishuTaskUrl?: string,
+  targetProject: string = 'dpa/dpa-mom/task'
+): Promise<GitlabIssueResult> {
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+  
+  try {
+    const title = task.summary;
+    const description = buildGitlabDescription(task, feishuTaskUrl);
+    const assignee = await resolveGitlabAssignee(task.members);
+    const dueDate = task.due?.timestamp ? formatDueDate(task.due.timestamp) : undefined;
+    
+    // Build glab command
+    let cmd = `glab issue create -t "${escapeShellArg(title)}" -d "${escapeShellArg(description)}" -R ${targetProject}`;
+    if (assignee) cmd += ` --assignee ${assignee}`;
+    if (dueDate) cmd += ` --due-date ${dueDate}`;
+    
+    console.log(`🔧 [FeishuTask] Creating GitLab issue: ${cmd.substring(0, 100)}...`);
+    
+    const { stdout, stderr } = await execAsync(cmd);
+    
+    // Parse issue IID from output (format: "Created issue #123...")
+    const match = stdout.match(/#(\d+)/);
+    const issueIid = match ? parseInt(match[1]) : undefined;
+    
+    if (!issueIid) {
+      console.warn(`⚠️ [FeishuTask] Could not parse issue IID from: ${stdout}`);
+      return { 
+        success: false, 
+        error: `Failed to parse issue IID from glab output: ${stdout}` 
+      };
+    }
+    
+    const issueUrl = `https://git.nevint.com/${targetProject}/-/issues/${issueIid}`;
+    console.log(`✅ [FeishuTask] Created GitLab issue #${issueIid}: ${issueUrl}`);
+    
+    return { success: true, issueIid, issueUrl };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [FeishuTask] Error creating GitLab issue:`, errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+// ============================================================================
+// GitLab Issue Update from Feishu Task (Phase 1.3)
+// ============================================================================
+
+/**
+ * Update existing GitLab issue when Feishu task changes
+ */
+export async function updateGitlabIssueFromTask(
+  issueIid: number,
+  task: FeishuTaskDetails,
+  changedFields: string[],
+  targetProject: string = 'dpa/dpa-mom/task'
+): Promise<{ success: boolean; error?: string }> {
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+  
+  try {
+    const updates: string[] = [];
+    
+    if (changedFields.includes('summary')) {
+      updates.push(`-t "${escapeShellArg(task.summary)}"`);
+    }
+    if (changedFields.includes('description')) {
+      updates.push(`-d "${escapeShellArg(task.description || '')}"`);
+    }
+    if (changedFields.includes('due')) {
+      const dueDate = task.due?.timestamp ? formatDueDate(task.due.timestamp) : '';
+      if (dueDate) {
+        updates.push(`--due-date ${dueDate}`);
+      }
+    }
+    
+    if (updates.length > 0) {
+      const cmd = `glab issue update ${issueIid} ${updates.join(' ')} -R ${targetProject}`;
+      console.log(`🔧 [FeishuTask] Updating GitLab issue #${issueIid}: ${cmd.substring(0, 100)}...`);
+      await execAsync(cmd);
+    }
+    
+    // Handle completion status separately
+    if (changedFields.includes('completed_at')) {
+      if (task.completed_at && task.completed_at !== '0') {
+        const cmd = `glab issue close ${issueIid} -R ${targetProject}`;
+        console.log(`🔧 [FeishuTask] Closing GitLab issue #${issueIid}`);
+        await execAsync(cmd);
+      } else {
+        const cmd = `glab issue reopen ${issueIid} -R ${targetProject}`;
+        console.log(`🔧 [FeishuTask] Reopening GitLab issue #${issueIid}`);
+        await execAsync(cmd);
+      }
+    }
+    
+    console.log(`✅ [FeishuTask] Updated GitLab issue #${issueIid}`);
+    return { success: true };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [FeishuTask] Error updating GitLab issue #${issueIid}:`, errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+// ============================================================================
+// Task Link Persistence (Extended)
+// ============================================================================
+
+/**
+ * Save task link with extended info
+ */
+export async function saveTaskLinkExtended(params: {
+  gitlabProject: string;
+  gitlabIssueIid: number;
+  gitlabIssueUrl: string;
+  feishuTaskGuid: string;
+  feishuTaskUrl?: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('gitlab_feishu_task_links')
+    .upsert({
+      gitlab_project: params.gitlabProject,
+      gitlab_issue_iid: params.gitlabIssueIid,
+      gitlab_issue_url: params.gitlabIssueUrl,
+      feishu_task_guid: params.feishuTaskGuid,
+      feishu_task_url: params.feishuTaskUrl || null,
+      gitlab_status: 'opened',
+      feishu_status: 'todo',
+      last_synced_at: new Date().toISOString(),
+    }, {
+      onConflict: 'feishu_task_guid',
+    });
+
+  if (error) {
+    console.error('❌ [FeishuTask] Failed to save task link:', error);
+    throw error;
+  }
+
+  console.log(`✅ [FeishuTask] Saved link: ${params.feishuTaskGuid} ↔ ${params.gitlabProject}#${params.gitlabIssueIid}`);
+}
+
+// ============================================================================
+// Lookup Functions
+// ============================================================================
+
 /**
  * Look up GitLab issue by Feishu task GUID
  */
