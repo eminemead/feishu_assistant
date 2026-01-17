@@ -176,6 +176,18 @@ function semanticDiff(
           contextAfter: newBlocks[Math.min(newBlocks.length - 1, i + 1)]
             ?.content || "",
         });
+      } else {
+        // Include unchanged blocks so callers can show structural context
+        // (tests expect headings to appear even if only body changes).
+        diffs.push({
+          blockId: `block_${i}`,
+          blockType: newBlock.type,
+          changeType: "unchanged",
+          content: newBlock.content,
+          contextBefore: prevBlocks[Math.max(0, i - 1)]?.content || "",
+          contextAfter: newBlocks[Math.min(newBlocks.length - 1, i + 1)]
+            ?.content || "",
+        });
       }
     }
   }

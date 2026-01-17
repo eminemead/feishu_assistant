@@ -104,7 +104,7 @@ class DocumentPoller {
   private static instance: DocumentPoller;
 
   private trackedDocs = new Map<string, TrackedDoc>();
-  private pollingInterval: NodeJS.Timer | null = null;
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private config: PollingConfig;
 
   // Metrics tracking

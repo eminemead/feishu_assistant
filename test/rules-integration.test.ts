@@ -10,8 +10,16 @@ import {
 } from "../lib/rules-integration";
 import { DocumentChange } from "../lib/doc-persistence";
 
-// Mock dependencies
-vi.mock("../lib/rules-engine");
+// NOTE: This file uses vi.mock which affects global module state.
+// Run integration tests separately: bun test test/*-integration.test.ts
+vi.mock("../lib/rules-engine", () => ({
+  setRulesEngineUserId: vi.fn(),
+  getRulesEngine: vi.fn(() => ({
+    evaluateChangeAgainstRules: vi.fn(async () => []),
+    getRulesForDoc: vi.fn(async () => []),
+    getAllRules: vi.fn(async () => []),
+  })),
+}));
 
 const createMockChange = (overrides?: Partial<DocumentChange>): DocumentChange => ({
   id: "change-1",

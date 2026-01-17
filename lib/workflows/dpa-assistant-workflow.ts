@@ -23,11 +23,11 @@ import { z } from "zod";
 import { generateText } from "ai";
 import { getMastraModelSingle } from "../shared/model-router";
 import { feishuCardOutputGuidelines } from "../shared/feishu-output-guidelines";
-import { 
-  createGitLabCliTool, 
-  createFeishuChatHistoryTool, 
-  createFeishuDocsTool 
-} from "../tools";
+// Import directly from specific tool files to avoid circular dependency
+// (tools/index.ts → execute-workflow-tool.ts → workflows/index.ts → this file)
+import { createGitLabCliTool } from "../tools/gitlab-cli-tool";
+import { createFeishuChatHistoryTool } from "../tools/feishu-chat-history-tool";
+import { createFeishuDocsTool } from "../tools/feishu-docs-tool";
 import { readAndSummarizeDocs, getAuthPromptIfNeeded } from "../tools/feishu-docs-user-tool";
 import { getChatMemberMapping } from "../tools/feishu-chat-history-tool";
 import { runDocumentReadWorkflow } from "./document-read-workflow";
@@ -36,6 +36,10 @@ import { Agent } from "@mastra/core/agent";
 import { createFeishuTask } from "../services/feishu-task-service";
 import { getFeishuOpenId } from "../services/user-mapping-service";
 import { storeIssueThreadMapping } from "../services/issue-thread-mapping-service";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Free model instance - uses NVIDIA (default) or OpenRouter free models
 const freeModel = getMastraModelSingle(false); // Uses model-router for correct routing
@@ -53,6 +57,7 @@ const IntentEnum = z.enum([
   "doc_read",
   "feedback_summarize",  // Summarize user feedback for issue creation
   "feedback_update",  // Append feedback summary to existing issue
+  "code_review",  // Review commits/code changes for bugs and feedback
   "general_chat"
 ]);
 
@@ -151,6 +156,12 @@ export const SLASH_COMMANDS: Record<string, Intent> = {
   '/update': 'feedback_update',
   '/更新': 'feedback_update',
   '/追加': 'feedback_update',
+  // Code review
+  '/code-review': 'code_review',
+  '/codereview': 'code_review',
+  '/审查': 'code_review',
+  '/代码审查': 'code_review',
+  '/cr': 'code_review',
 };
 
 // Help command shows available commands
@@ -346,6 +357,29 @@ const classifyIntentStep = createStep({
           return {
             intent: mappedIntent,
             params: { issueIid, targetUsers },
+            query: remainingQuery,
+            chatId,
+            rootId,
+            userId,
+            linkedIssue,
+          };
+        }
+        
+        // For code_review, extract optional commit SHA or range
+        // Format: /review [commit-sha] or /review [sha1..sha2] or /review (defaults to HEAD~1..HEAD)
+        if (mappedIntent === 'code_review') {
+          console.log(`[DPA Workflow] code_review: remainingQuery="${remainingQuery}"`);
+          
+          // Extract commit SHA/range from remaining query
+          // Match patterns: abc123, abc123..def456, HEAD~1, HEAD~1..HEAD, etc.
+          const commitMatch = remainingQuery.match(/([a-f0-9]{6,40}(?:\.\.[a-f0-9]{6,40})?|HEAD(?:~\d+)?(?:\.\.HEAD(?:~\d+)?)?)/i);
+          const commitRef = commitMatch?.[1] || null;
+          
+          console.log(`[DPA Workflow] code_review: extracted commitRef="${commitRef}"`);
+          
+          return {
+            intent: mappedIntent,
+            params: commitRef ? { commitRef } : undefined,
             query: remainingQuery,
             chatId,
             rootId,
@@ -1955,6 +1989,162 @@ const executeGitLabAssignStep = createStep({
 });
 
 /**
+ * Step: Execute Code Review
+ * Reviews git commits for bugs and provides feedback
+ * Supports: /review (latest commit), /review abc123 (specific commit), /review abc..def (range)
+ */
+const executeCodeReviewStep = createStep({
+  id: "execute-code-review",
+  inputSchema: z.object({
+    intent: IntentEnum,
+    params: z.record(z.string()).optional(),
+    query: z.string(),
+    chatId: z.string().optional(),
+    rootId: z.string().optional(),
+    userId: z.string().optional(),
+    linkedIssue: linkedIssueSchema,
+  }),
+  outputSchema: z.object({
+    result: z.string(),
+    intent: IntentEnum,
+  }),
+  execute: async ({ inputData }) => {
+    const { params, query } = inputData;
+    
+    console.log(`[DPA Workflow] Executing code review`);
+    
+    // Default to reviewing the latest commit (HEAD~1..HEAD)
+    let commitRef = params?.commitRef || "HEAD~1..HEAD";
+    let isRange = commitRef.includes("..");
+    
+    // If a single commit SHA is provided, review that commit specifically
+    if (!isRange && /^[a-f0-9]{6,40}$/i.test(commitRef)) {
+      // Single commit - show changes from parent
+      commitRef = `${commitRef}~1..${commitRef}`;
+      isRange = true;
+    }
+    
+    try {
+      // Get git diff
+      const diffCommand = isRange 
+        ? `git diff ${commitRef} --stat && echo "---DIFF---" && git diff ${commitRef}`
+        : `git show ${commitRef} --stat && echo "---DIFF---" && git show ${commitRef} --format=format:"%H%n%s%n%b" --`;
+      
+      console.log(`[DPA Workflow] Running: ${diffCommand}`);
+      
+      const { stdout: diffOutput, stderr: diffError } = await execAsync(diffCommand, {
+        cwd: process.cwd(),
+        maxBuffer: 5 * 1024 * 1024, // 5MB buffer for large diffs
+        timeout: 30000,
+      });
+      
+      if (diffError && !diffOutput) {
+        return {
+          result: `❌ **Git Error**\n\n${diffError}`,
+          intent: "code_review" as const,
+        };
+      }
+      
+      // Get commit info for context
+      const logCommand = isRange
+        ? `git log ${commitRef} --oneline`
+        : `git log -1 ${commitRef} --format="%H|%s|%an|%ar"`;
+      
+      const { stdout: logOutput } = await execAsync(logCommand, {
+        cwd: process.cwd(),
+        timeout: 5000,
+      });
+      
+      // Parse diff output
+      const diffParts = diffOutput.split("---DIFF---");
+      const statOutput = diffParts[0]?.trim() || "";
+      const fullDiff = diffParts[1]?.trim() || diffOutput;
+      
+      // Truncate very large diffs for LLM context
+      const MAX_DIFF_LENGTH = 15000;
+      const truncatedDiff = fullDiff.length > MAX_DIFF_LENGTH 
+        ? fullDiff.substring(0, MAX_DIFF_LENGTH) + "\n\n... (diff truncated for review)"
+        : fullDiff;
+      
+      // If diff is empty, inform user
+      if (!truncatedDiff || truncatedDiff.trim() === "") {
+        return {
+          result: `📋 **No Changes Found**\n\n\`${commitRef}\` contains no diff to review.\n\n💡 Try: \`/code-review HEAD~5..HEAD\` to review last 5 commits`,
+          intent: "code_review" as const,
+        };
+      }
+      
+      // Build review prompt
+      const reviewPrompt = `You are an expert code reviewer. Review the following git diff and provide thorough feedback.
+
+**Commit(s) being reviewed:**
+${logOutput}
+
+**File Statistics:**
+${statOutput}
+
+**Diff:**
+\`\`\`diff
+${truncatedDiff}
+\`\`\`
+
+**Your task:**
+1. **🐛 Potential Bugs**: Identify any bugs, logic errors, or edge cases that might cause issues
+2. **⚠️ Security Concerns**: Flag any security vulnerabilities (SQL injection, XSS, auth issues, secrets, etc.)
+3. **🔧 Code Quality**: Note any code smells, anti-patterns, or maintainability concerns
+4. **💡 Suggestions**: Provide specific, actionable improvements with code examples when helpful
+5. **✅ What's Good**: Briefly acknowledge well-written parts
+
+**Format your response in Markdown with clear sections. Be concise but thorough. Focus on what matters most.**
+
+If the code looks solid, say so briefly and mention any minor suggestions.
+If there are critical issues, prioritize them at the top.
+
+Respond in the same language as code comments (default to English for code review).`;
+
+      const { text: review } = await generateText({
+        model: freeModel,
+        prompt: reviewPrompt,
+        temperature: 0.3,
+      });
+      
+      // Build response with context
+      const commitCount = isRange ? logOutput.split("\n").filter(Boolean).length : 1;
+      const filesChanged = (statOutput.match(/(\d+) files? changed/)?.[1]) || "?";
+      
+      let response = `🔍 **Code Review**\n\n`;
+      response += `<font color="grey">📊 ${commitCount} commit(s) | ${filesChanged} file(s) changed | ref: \`${commitRef}\`</font>\n\n`;
+      response += `---\n\n`;
+      response += review;
+      response += `\n\n---\n💡 Review another: \`/code-review <sha>\` or \`/code-review HEAD~5..HEAD\``;
+      
+      return {
+        result: response,
+        intent: "code_review" as const,
+      };
+    } catch (error: any) {
+      // Handle common git errors with helpful messages
+      if (error.message?.includes("not a git repository")) {
+        return {
+          result: `❌ **Not a Git Repository**\n\nThis command must be run from within a git repository.`,
+          intent: "code_review" as const,
+        };
+      }
+      if (error.message?.includes("unknown revision")) {
+        return {
+          result: `❌ **Invalid Commit Reference**\n\n\`${commitRef}\` not found.\n\n💡 Examples:\n- \`/code-review\` — review latest commit\n- \`/code-review abc123\` — review specific commit\n- \`/code-review HEAD~3..HEAD\` — review last 3 commits`,
+          intent: "code_review" as const,
+        };
+      }
+      return {
+        result: `❌ **Code Review Error**\n\n${error.message}`,
+        intent: "code_review" as const,
+      };
+    }
+  }
+});
+
+/**
  * Step: Execute Chat Search
  */
 const executeChatSearchStep = createStep({
@@ -2146,6 +2336,11 @@ const executeGeneralChatStep = createStep({
 - \`/搜索 关键词\` — 搜索聊天记录
 - \`/文档 [链接]\` — 读取飞书文档
 
+**代码审查**
+- \`/code-review\` — 审查最近一次提交
+- \`/code-review abc123\` — 审查指定commit
+- \`/code-review HEAD~5..HEAD\` — 审查最近5次提交
+
 **其他**
 - \`/帮助\` — 显示此帮助
 
@@ -2312,6 +2507,10 @@ export const dpaAssistantWorkflow = createWorkflow({
       async ({ inputData }) => inputData?.intent === "feedback_update",
       executeFeedbackUpdateStep
     ],
+    [
+      async ({ inputData }) => inputData?.intent === "code_review",
+      executeCodeReviewStep
+    ],
     // Help command: general_chat with __helpCommand param → executeGeneralChatStep
     [
       async ({ inputData }) => inputData?.intent === "general_chat" && inputData?.params?.__helpCommand === "true",
@@ -2344,10 +2543,11 @@ export const dpaAssistantWorkflow = createWorkflow({
     const docRead = getStepResult("execute-doc-read");
     const feedbackSummarize = getStepResult("execute-feedback-summarize");
     const feedbackUpdate = getStepResult("execute-feedback-update");
+    const codeReview = getStepResult("execute-code-review");
     const generalChat = getStepResult("execute-general-chat");
     
     // Return the result from whichever branch executed
-    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead || feedbackSummarize || feedbackUpdate || generalChat;
+    const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead || feedbackSummarize || feedbackUpdate || codeReview || generalChat;
     
     if (branchResult) {
       return {

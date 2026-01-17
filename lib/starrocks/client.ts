@@ -37,8 +37,8 @@ function ensurePool(): Pool {
 
 export async function queryStarrocks<T = any>(sql: string, params: any[] = []): Promise<T[]> {
   const conn = ensurePool();
-  const [rows] = await conn.query<T[]>(sql, params);
-  return rows;
+  const [rows] = await conn.query(sql, params);
+  return rows as T[];
 }
 
 export async function closeStarrocksPool() {

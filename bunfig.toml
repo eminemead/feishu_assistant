@@ -1,0 +1,3 @@
+[test]
+# Preload test setup to configure mock environment variables
+preload = ["./test/setup.ts"]

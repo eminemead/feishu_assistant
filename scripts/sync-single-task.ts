@@ -19,6 +19,7 @@
 
 import {
   getFeishuTaskDetails,
+  getFeishuTaskDetailsWithUserAuth,
   createGitlabIssueFromTask,
   saveTaskLinkExtended,
   getGitlabIssueByTaskGuid,
@@ -26,6 +27,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 
 const GITLAB_PROJECT = process.env.GITLAB_PROJECT || process.env.FEISHU_TASK_GITLAB_PROJECT || 'dpa/dpa-mom/task';
+const FEISHU_TASK_USER_ID = process.env.FEISHU_TASK_USER_ID || '';
 
 // Supabase client
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -50,11 +52,18 @@ function log(color: keyof typeof colors, ...args: any[]) {
  * Extract task GUID from URL or return as-is if already a GUID
  */
 function extractTaskGuid(input: string): string {
-  // If it's a URL, extract the GUID
-  if (input.includes('feishu.cn/task/')) {
-    const match = input.match(/task\/([a-f0-9-]+)/i);
-    return match ? match[1] : input;
+  const trimmed = input.trim();
+  
+  // Try common URL formats
+  const urlMatch =
+    trimmed.match(/task\/([a-f0-9-]{8,})/i) ||
+    trimmed.match(/task_guid=([a-f0-9-]{8,})/i) ||
+    trimmed.match(/taskGuid=([a-f0-9-]{8,})/i);
+  
+  if (urlMatch) {
+    return urlMatch[1];
   }
+  
   // Otherwise assume it's already a GUID
   return input.trim();
 }
@@ -89,7 +98,18 @@ async function syncTask(input: string): Promise<boolean> {
   
   // Fetch task details
   log('blue', `   Fetching task details...`);
-  const task = await getFeishuTaskDetails(taskGuid);
+  let task = null;
+  
+  if (FEISHU_TASK_USER_ID) {
+    task = await getFeishuTaskDetailsWithUserAuth(taskGuid, FEISHU_TASK_USER_ID);
+    if (!task) {
+      log('yellow', `   ⚠️ User token fetch failed, falling back to app token...`);
+    }
+  }
+  
+  if (!task) {
+    task = await getFeishuTaskDetails(taskGuid);
+  }
   
   if (!task) {
     log('red', `   ❌ Failed to fetch task. Check if GUID is correct and app has permission.`);
@@ -149,6 +169,7 @@ Examples:
 
 Environment:
   GITLAB_PROJECT - Target GitLab project (default: dpa/dpa-mom/task)
+  FEISHU_TASK_USER_ID - Use user OAuth token (open_id) for task access
 `);
     process.exit(1);
   }

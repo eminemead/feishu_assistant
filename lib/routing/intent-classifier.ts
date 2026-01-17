@@ -228,7 +228,7 @@ const INTENT_RULES: IntentRule[] = [
     examples: ["最近群里聊了什么", "搜索之前的消息"],
   },
   {
-    id: "chart_generation",
+    id: "visualization",
     patterns: [
       /画.*图/i,
       /生成.*图表/i,
@@ -236,9 +236,9 @@ const INTENT_RULES: IntentRule[] = [
       /visualize/i,
       /可视化/i,
     ],
-    target: { type: "tool", toolId: "chart_generation" },
+    target: { type: "tool", toolId: "visualization" },
     priority: 35,
-    description: "Chart generation - direct tool",
+    description: "Visualization/chart generation - direct tool",
     examples: ["画个柱状图", "生成饼图"],
   },
 

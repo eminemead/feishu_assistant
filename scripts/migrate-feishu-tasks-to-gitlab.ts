@@ -18,6 +18,8 @@
  * 
  * Environment Variables:
  *   FEISHU_TASKLIST_GUID  - Tasklist GUID to fetch tasks from (optional, fetches user's tasks if not set)
+ *   FEISHU_TASK_USER_ID   - Feishu open_id to use user OAuth token for task access
+ *   FEISHU_TASK_OAUTH_SCOPES - CSV scopes for auth URL (if token missing)
  *   GITLAB_PROJECT        - Target GitLab project (default: dpa/dpa-mom/task)
  *   SKIP_COMPLETED        - Skip completed tasks (default: false)
  */
@@ -26,13 +28,20 @@ import { client as feishuClient } from '../lib/feishu-utils';
 import { createClient } from '@supabase/supabase-js';
 import {
   createGitlabIssueFromTask,
+  getFeishuTaskDetails,
+  getFeishuTaskDetailsWithUserAuth,
   saveTaskLinkExtended,
   getGitlabIssueByTaskGuid,
+  listFeishuTasklistsWithUserAuth,
+  listFeishuTasksFromTasklistWithUserAuth,
   FeishuTaskDetails,
 } from '../lib/services/feishu-task-service';
+import { generateAuthUrl, getUserAccessToken } from '../lib/auth/feishu-oauth';
 
 // Configuration
 const TASKLIST_GUID = process.env.FEISHU_TASKLIST_GUID || '';
+const FEISHU_TASK_USER_ID = process.env.FEISHU_TASK_USER_ID || '';
+const FEISHU_TASK_OAUTH_SCOPES = process.env.FEISHU_TASK_OAUTH_SCOPES || '';
 const GITLAB_PROJECT = process.env.GITLAB_PROJECT || process.env.FEISHU_TASK_GITLAB_PROJECT || 'dpa/dpa-mom/task';
 const SKIP_COMPLETED = process.env.SKIP_COMPLETED === 'true';
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -71,6 +80,10 @@ interface MigrationStats {
  * Feishu Task V2 API requires fetching from specific tasklists
  */
 async function fetchTasksFromTasklist(tasklistGuid: string): Promise<FeishuTaskDetails[]> {
+  if (FEISHU_TASK_USER_ID) {
+    return listFeishuTasksFromTasklistWithUserAuth(tasklistGuid, FEISHU_TASK_USER_ID);
+  }
+
   const tasks: FeishuTaskDetails[] = [];
   let pageToken: string | undefined;
   
@@ -121,39 +134,24 @@ async function fetchTasksFromTasklist(tasklistGuid: string): Promise<FeishuTaskD
  * Fetch single task details
  */
 async function fetchTaskDetails(taskGuid: string): Promise<FeishuTaskDetails | null> {
-  try {
-    const resp = await feishuClient.task.v2.task.get({
-      path: { task_guid: taskGuid },
-      params: { user_id_type: 'open_id' },
-    });
-    
-    const isSuccess = (resp.code === 0 || resp.code === undefined);
-    if (!isSuccess || !resp.data?.task) {
-      return null;
+  if (FEISHU_TASK_USER_ID) {
+    const userTask = await getFeishuTaskDetailsWithUserAuth(taskGuid, FEISHU_TASK_USER_ID);
+    if (userTask) {
+      return userTask;
     }
-    
-    const task = resp.data.task;
-    return {
-      guid: task.guid!,
-      summary: task.summary || '',
-      description: task.description,
-      due: task.due as any,
-      members: task.members as any,
-      completed_at: task.completed_at,
-      creator: task.creator as any,
-      created_at: task.created_at,
-      updated_at: task.updated_at,
-      url: task.url,
-    };
-  } catch {
-    return null;
   }
+
+  return getFeishuTaskDetails(taskGuid);
 }
 
 /**
  * List available tasklists
  */
 async function listTasklists(): Promise<Array<{ guid: string; name: string }>> {
+  if (FEISHU_TASK_USER_ID) {
+    return listFeishuTasklistsWithUserAuth(FEISHU_TASK_USER_ID);
+  }
+
   const tasklists: Array<{ guid: string; name: string }> = [];
   let pageToken: string | undefined;
   
@@ -351,6 +349,9 @@ async function runMigration() {
   console.log('═'.repeat(70));
   console.log(`  Target Project: ${GITLAB_PROJECT}`);
   console.log(`  Tasklist GUID:  ${TASKLIST_GUID || '(all tasks)'}`);
+  if (FEISHU_TASK_USER_ID) {
+    console.log(`  User OAuth:     ${FEISHU_TASK_USER_ID}`);
+  }
   console.log(`  Skip Completed: ${SKIP_COMPLETED}`);
   console.log(`  Dry Run:        ${DRY_RUN}`);
   console.log(`  Limit:          ${LIMIT || 'None'}`);
@@ -358,6 +359,24 @@ async function runMigration() {
   
   if (DRY_RUN) {
     log('yellow', '\n⚠️  DRY RUN MODE - No changes will be made\n');
+  }
+  
+  if (FEISHU_TASK_USER_ID) {
+    const token = await getUserAccessToken(FEISHU_TASK_USER_ID);
+    if (!token) {
+      log('yellow', '\n⚠️  No user OAuth token found for tasks.');
+      if (FEISHU_TASK_OAUTH_SCOPES) {
+        const scopes = FEISHU_TASK_OAUTH_SCOPES
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+        const authUrl = generateAuthUrl(FEISHU_TASK_USER_ID, scopes);
+        log('yellow', `   Authorize tasks here: ${authUrl}`);
+      } else {
+        log('yellow', '   Set FEISHU_TASK_OAUTH_SCOPES to generate an auth link.');
+      }
+      return;
+    }
   }
   
   // Fetch tasks

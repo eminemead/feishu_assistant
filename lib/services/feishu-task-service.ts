@@ -7,6 +7,7 @@
 
 import { client as feishuClient } from '../feishu-utils';
 import { createClient } from '@supabase/supabase-js';
+import { getUserAccessToken } from '../auth/feishu-oauth';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -244,6 +245,69 @@ export interface FeishuTaskDetails {
   url?: string;
 }
 
+const TASK_API_BASE = "https://open.feishu.cn/open-apis/task/v2";
+
+function normalizeTaskDetails(task: any): FeishuTaskDetails {
+  return {
+    guid: task.guid || task.task_guid || "",
+    summary: task.summary || "",
+    description: task.description,
+    due: task.due as any,
+    members: task.members as any,
+    completed_at: task.completed_at,
+    creator: task.creator as any,
+    created_at: task.created_at,
+    updated_at: task.updated_at,
+    custom_fields: task.custom_fields as any,
+    url: task.url,
+  };
+}
+
+async function fetchTaskWithUserToken(
+  taskGuid: string,
+  userToken: string
+): Promise<FeishuTaskDetails | null> {
+  const url = new URL(`${TASK_API_BASE}/tasks/${taskGuid}`);
+  url.searchParams.set("user_id_type", "open_id");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${userToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data: any = await response.json();
+  if (data.code !== 0 || !data.data?.task) {
+    console.warn(`⚠️ [FeishuTask] User token fetch failed for ${taskGuid}:`, data);
+    return null;
+  }
+
+  return normalizeTaskDetails(data.data.task);
+}
+
+/**
+ * Fetch task details using user's OAuth token (bypasses follower limitation).
+ */
+export async function getFeishuTaskDetailsWithUserAuth(
+  taskGuid: string,
+  feishuUserId: string
+): Promise<FeishuTaskDetails | null> {
+  const userToken = await getUserAccessToken(feishuUserId);
+  if (!userToken) {
+    return null;
+  }
+
+  try {
+    return await fetchTaskWithUserToken(taskGuid, userToken);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [FeishuTask] User token error fetching task ${taskGuid}:`, errorMsg);
+    return null;
+  }
+}
+
 /**
  * Fetch full task details from Feishu API
  * Used when webhook only provides task_guid
@@ -261,25 +325,133 @@ export async function getFeishuTaskDetails(taskGuid: string): Promise<FeishuTask
       return null;
     }
     
-    const task = resp.data.task;
-    return {
-      guid: task.guid!,
-      summary: task.summary || '',
-      description: task.description,
-      due: task.due as any,
-      members: task.members as any,
-      completed_at: task.completed_at,
-      creator: task.creator as any,
-      created_at: task.created_at,
-      updated_at: task.updated_at,
-      custom_fields: task.custom_fields as any,
-      url: task.url,
-    };
+    return normalizeTaskDetails(resp.data.task);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`❌ [FeishuTask] Error fetching task ${taskGuid}:`, errorMsg);
     return null;
   }
+}
+
+export interface FeishuTasklistInfo {
+  guid: string;
+  name: string;
+}
+
+/**
+ * List tasklists using user's OAuth token (required for personal tasklists).
+ */
+export async function listFeishuTasklistsWithUserAuth(
+  feishuUserId: string
+): Promise<FeishuTasklistInfo[]> {
+  const userToken = await getUserAccessToken(feishuUserId);
+  if (!userToken) {
+    return [];
+  }
+
+  const tasklists: FeishuTasklistInfo[] = [];
+  let pageToken: string | undefined;
+
+  try {
+    do {
+      const url = new URL(`${TASK_API_BASE}/tasklists`);
+      url.searchParams.set("page_size", "100");
+      url.searchParams.set("user_id_type", "open_id");
+      if (pageToken) {
+        url.searchParams.set("page_token", pageToken);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data: any = await response.json();
+      if (data.code !== 0) {
+        console.warn(`⚠️ [FeishuTask] User token tasklist list failed:`, data);
+        break;
+      }
+
+      const items = data.data?.items || [];
+      for (const item of items) {
+        if (item?.guid) {
+          tasklists.push({
+            guid: item.guid,
+            name: item.name || "Unnamed",
+          });
+        }
+      }
+
+      pageToken = data.data?.page_token;
+    } while (pageToken);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [FeishuTask] Error listing tasklists:`, errorMsg);
+  }
+
+  return tasklists;
+}
+
+/**
+ * List tasks in a tasklist using user's OAuth token.
+ */
+export async function listFeishuTasksFromTasklistWithUserAuth(
+  tasklistGuid: string,
+  feishuUserId: string
+): Promise<FeishuTaskDetails[]> {
+  const userToken = await getUserAccessToken(feishuUserId);
+  if (!userToken) {
+    return [];
+  }
+
+  const tasks: FeishuTaskDetails[] = [];
+  let pageToken: string | undefined;
+
+  try {
+    do {
+      const url = new URL(`${TASK_API_BASE}/tasklists/${tasklistGuid}/tasks`);
+      url.searchParams.set("page_size", "100");
+      url.searchParams.set("user_id_type", "open_id");
+      if (pageToken) {
+        url.searchParams.set("page_token", pageToken);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data: any = await response.json();
+      if (data.code !== 0) {
+        console.warn(`⚠️ [FeishuTask] User token tasklist tasks failed:`, data);
+        break;
+      }
+
+      const items = data.data?.items || [];
+      for (const item of items) {
+        const taskGuid = item.task_guid || item.guid;
+        if (taskGuid) {
+          const taskDetails = await fetchTaskWithUserToken(taskGuid, userToken);
+          if (taskDetails) {
+            tasks.push(taskDetails);
+          }
+        }
+      }
+
+      pageToken = data.data?.page_token;
+    } while (pageToken);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [FeishuTask] Error listing tasklist tasks:`, errorMsg);
+  }
+
+  return tasks;
 }
 
 // ============================================================================

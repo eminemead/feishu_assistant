@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
 import {
   getRulesEngine,
   setRulesEngineUserId,
@@ -119,7 +119,7 @@ describe("Rules Engine", () => {
     it("should delete a rule", async () => {
       const engine = getRulesEngine();
 
-      await expect(engine.deleteRule("rule-1")).resolves.not.toThrow();
+      await expect(engine.deleteRule("rule-1")).resolves.toBeUndefined();
     });
 
     it("should get all user rules", async () => {

@@ -10,11 +10,8 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import { promisify } from "util";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 import { createCanvas } from "canvas";
-
-const execAsync = promisify(exec);
 
 interface OKRAnalysisResult {
   period: string;
@@ -116,17 +113,33 @@ plt.close()
     // Write Python script
     await fs.writeFile(scriptPath, scriptContent);
 
-    // Execute Python script with data
-    const { stdout } = await execAsync(
-      `python3 ${scriptPath}`,
-      {
-        input: JSON.stringify(analysisResult),
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for image
-      }
-    );
+    // Execute Python script and pass JSON via stdin
+    const pngBuffer: Buffer = await new Promise((resolve, reject) => {
+      const child = spawn("python3", [scriptPath], {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
 
-    // Return PNG buffer
-    return Buffer.from(stdout, "binary");
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+
+      child.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
+      child.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
+
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve(Buffer.concat(stdoutChunks));
+          return;
+        }
+        const stderr = Buffer.concat(stderrChunks).toString("utf8");
+        reject(new Error(`python3 exited ${code}: ${stderr}`));
+      });
+
+      child.stdin.write(JSON.stringify(analysisResult));
+      child.stdin.end();
+    });
+
+    return pngBuffer;
   } finally {
     // Cleanup
     await fs.unlink(scriptPath).catch(() => {});

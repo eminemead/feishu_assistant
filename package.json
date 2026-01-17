@@ -16,7 +16,10 @@
     "start": "bun dist/server.js",
     "dev": "bun --watch server.ts",
     "dev:studio": "mastra dev",
-    "test": "bun test",
+    "test": "bun run test:bun && bun run test:vitest",
+    "test:bun": "bun test --preload ./test/setup.ts test/agents test/routing test/integration test/workflows lib/**/*.test.ts",
+    "test:vitest": "bunx vitest run test/rules-engine.test.ts test/doc-snapshots.test.ts test/doc-supabase-migration.test.ts test/doc-commands-enhanced.test.ts test/rules-integration.test.ts test/doc-snapshot-integration.test.ts",
+    "test:all": "bun test --preload ./test/setup.ts",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
     "test:phoenix-trace": "bun scripts/test-phoenix-trace.ts",
@@ -75,6 +78,7 @@
     "@typescript/native-preview": "^7.0.0-dev.20260102.1",
     "esbuild": "^0.20.2",
     "mastra": "^1.0.0-beta.13",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.17"
   }
 }

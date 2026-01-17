@@ -480,12 +480,12 @@ Show overall rules and automation status.
  */
 export function isEnhancedCommand(text: string): boolean {
   return (
-    /^@?bot\s+history\s+/i.test(text) ||
-    /^@?bot\s+snapshots\s+/i.test(text) ||
-    /^@?bot\s+rules?\s+/i.test(text) ||
-    /^@?bot\s+rule:add\s+/i.test(text) ||
-    /^@?bot\s+rules:status/i.test(text) ||
-    /^@?bot\s+tracking:advanced/i.test(text)
+    /^(?:@?bot\s+)?history\s+/i.test(text) ||
+    /^(?:@?bot\s+)?snapshots\s+/i.test(text) ||
+    /^(?:@?bot\s+)?rules?\s+/i.test(text) ||
+    /^(?:@?bot\s+)?rule:add\s+/i.test(text) ||
+    /^(?:@?bot\s+)?rules:status/i.test(text) ||
+    /^(?:@?bot\s+)?tracking:advanced/i.test(text)
   );
 }
 
@@ -515,32 +515,35 @@ export async function handleEnhancedCommand(args: {
     .trim();
 
   // Route to handlers
-  if (/^@?bot\s+history\s+/i.test(text)) {
+  if (/^(?:@?bot\s+)?history\s+/i.test(text)) {
     await handleHistoryCommand(text, chatId, userId);
     return true;
   }
 
-  if (/^@?bot\s+snapshots\s+/i.test(text)) {
+  if (/^(?:@?bot\s+)?snapshots\s+/i.test(text)) {
     await handleSnapshotsCommand(text, chatId, userId);
     return true;
   }
 
-  if (/^@?bot\s+rules?\s+/i.test(text) && !/^@?bot\s+rules?:/.test(text)) {
+  if (
+    /^(?:@?bot\s+)?rules?\s+/i.test(text) &&
+    !/^(?:@?bot\s+)?rules?:/.test(text)
+  ) {
     await handleRulesCommand(text, chatId, userId);
     return true;
   }
 
-  if (/^@?bot\s+rule:add\s+/i.test(text)) {
+  if (/^(?:@?bot\s+)?rule:add\s+/i.test(text)) {
     await handleRuleAddCommand(text, chatId, userId);
     return true;
   }
 
-  if (/^@?bot\s+rules:status/i.test(text)) {
+  if (/^(?:@?bot\s+)?rules:status/i.test(text)) {
     await handleRulesStatusCommand(chatId, userId);
     return true;
   }
 
-  if (/^@?bot\s+tracking:advanced/i.test(text)) {
+  if (/^(?:@?bot\s+)?tracking:advanced/i.test(text)) {
     await handleAdvancedHelpCommand(chatId);
     return true;
   }

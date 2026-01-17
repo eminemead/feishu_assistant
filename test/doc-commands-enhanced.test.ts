@@ -10,14 +10,54 @@ import {
   handleEnhancedCommand,
 } from "../lib/doc-commands-enhanced";
 
-// Mock dependencies
-vi.mock("../lib/doc-snapshot-integration");
-vi.mock("../lib/rules-engine");
-vi.mock("../lib/rules-integration");
-vi.mock("../lib/doc-persistence");
+// NOTE: This file uses vi.mock which affects global module state.
+// Run integration tests separately: bun test test/*-integration.test.ts test/doc-commands-enhanced.test.ts
+vi.mock("../lib/doc-snapshots", () => ({
+  setSnapshotUserId: vi.fn(),
+  getSnapshotService: vi.fn(() => ({
+    getSnapshotStats: vi.fn(async () => ({
+      totalSnapshots: 0,
+      totalOriginalSize: 0,
+      totalCompressedSize: 0,
+      averageCompressionRatio: 1,
+      oldestSnapshot: null,
+      newestSnapshot: null,
+    })),
+    pruneOldSnapshots: vi.fn(async () => 0),
+    getSnapshotHistory: vi.fn(async () => []),
+    getSnapshotContent: vi.fn(async () => null),
+  })),
+}));
+vi.mock("../lib/semantic-diff", () => ({
+  computeDiff: vi.fn(() => ({ summary: { summary: "mock diff" } })),
+  formatDiffForCard: vi.fn(() => "mock formatted diff"),
+}));
+vi.mock("../lib/rules-engine", () => ({
+  setRulesEngineUserId: vi.fn(),
+  getRulesEngine: vi.fn(() => ({
+    getRulesForDoc: vi.fn(async () => []),
+    createRule: vi.fn(async () => ({
+      id: "rule-1",
+      userId: "test-user",
+      docToken: "doccnXXX",
+      name: "Test Rule",
+      condition: { type: "any" },
+      action: { type: "notify", target: "oc_testGroup" },
+      enabled: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })),
+    getAllRules: vi.fn(async () => []),
+  })),
+}));
+vi.mock("../lib/doc-persistence", () => ({
+  setPersistenceUserId: vi.fn(),
+  getPersistence: vi.fn(() => ({})),
+}));
 vi.mock("../lib/feishu-utils", () => ({
   createAndSendStreamingCard: vi.fn(),
   parseMessageContent: vi.fn((text) => text),
+  getFeishuClient: vi.fn(),
 }));
 
 describe("Enhanced Document Commands - Phase 2", () => {

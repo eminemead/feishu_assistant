@@ -28,7 +28,11 @@ import {
 // =============================================================================
 
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split("\n");
+  const lines = text
+    .replace(/^\uFEFF/, "") // strip BOM
+    .trim()
+    .split(/\r?\n/)
+    .filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
 
   // Parse header
@@ -53,7 +57,13 @@ function parseCSVLine(line: string): string[] {
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
     if (char === '"') {
-      inQuotes = !inQuotes;
+      // Handle escaped quote inside quoted field
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
     } else if (char === "," && !inQuotes) {
       result.push(current.trim());
       current = "";
@@ -78,14 +88,26 @@ function extractChartData(
 ): Array<{ label: string; value: number; target?: number }> {
   return rows
     .map((row) => {
-      const label = String(row[labelColumn] || "");
-      const value = parseFloat(String(row[valueColumn] || "0")) || 0;
+      const rawLabel = row[labelColumn];
+      const label = rawLabel === null || rawLabel === undefined ? "" : String(rawLabel);
+
+      const rawValue = row[valueColumn];
+      const value =
+        rawValue === null || rawValue === undefined
+          ? 0
+          : parseFloat(String(rawValue)) || 0;
+
       const target = targetColumn
-        ? parseFloat(String(row[targetColumn] || "0")) || undefined
+        ? (() => {
+            const rawTarget = row[targetColumn];
+            if (rawTarget === null || rawTarget === undefined) return undefined;
+            const v = parseFloat(String(rawTarget));
+            return Number.isFinite(v) ? v : undefined;
+          })()
         : undefined;
       return { label, value, target };
     })
-    .filter((d) => d.label); // Remove empty labels
+    .filter((d) => d.label.trim().length > 0); // Remove empty labels
 }
 
 // =============================================================================
@@ -130,9 +152,12 @@ const visualizationInputSchema = z.object({
       donut: z.boolean().optional().describe("For pie: render as donut"),
       showValues: z.boolean().optional().describe("For heatmap: show numeric values"),
       thresholds: z
-        .tuple([z.number(), z.number()])
+        .object({
+          low: z.number().describe("Low threshold value"),
+          high: z.number().describe("High threshold value"),
+        })
         .optional()
-        .describe("For heatmap: [low, high] color thresholds"),
+        .describe("For heatmap: color thresholds (low/high values)"),
     })
     .optional()
     .describe("Chart-specific options"),
@@ -318,10 +343,14 @@ RENDER MODES:
             row: d.label,
             metrics: [{ column: "Value", value: d.value }],
           }));
+          // Convert object thresholds to tuple format for heatmap
+          const thresholdsTuple = options.thresholds 
+            ? [options.thresholds.low, options.thresholds.high] as [number, number]
+            : undefined;
           const result = await viz.heatmap(heatmapData, {
             title,
             showValues: options.showValues ?? true,
-            thresholds: options.thresholds,
+            thresholds: thresholdsTuple,
             mode,
           });
           return {

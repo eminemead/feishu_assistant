@@ -5,9 +5,7 @@
 import { TokenLimiter, ToolCallFilter } from "@mastra/core/processors";
 
 const VERBOSE_TOOLS = [
-  "chart_generation",
-  "okr_visualization", 
-  "okr_chart_streaming",
+  "visualization",
   "mgr_okr_review",
   "feishu_docs",
 ];

@@ -105,10 +105,11 @@ export async function testStreamingCardWithV3Schema(
       },
     });
 
-    const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
-    const responseData = resp.data || resp;
+    const isSuccess =
+      resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
+    const cardId = (resp as any)?.card_id ?? (resp as any)?.data?.card_id;
 
-    if (!isSuccess || !responseData?.card_id) {
+    if (!isSuccess || !cardId) {
       console.error(`❌ [CardKitV3] Failed to create v3 card:`, JSON.stringify(resp, null, 2));
       return {
         success: false,
@@ -118,13 +119,13 @@ export async function testStreamingCardWithV3Schema(
     }
 
     console.log(`✅ [CardKitV3] SUCCESS: Created streaming card with v3 schema!`);
-    console.log(`   Card ID: ${responseData.card_id}`);
+    console.log(`   Card ID: ${cardId}`);
     console.log(`   Schema: 3.0`);
     console.log(`   This means v3 supports action elements in streaming cards!`);
 
     return {
       success: true,
-      cardId: responseData.card_id,
+      cardId,
       schema: "3.0",
     };
   } catch (error) {
@@ -203,8 +204,10 @@ export async function testStreamingCardV3Hybrid(): Promise<{
           },
         });
 
-        const isSuccess = resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
-        if (isSuccess && resp.data?.card_id) {
+        const isSuccess =
+          resp.code === 0 ? resp.code === 0 || resp.code === undefined : (resp.code === 0 || resp.code === undefined);
+        const cardId = (resp as any)?.card_id ?? (resp as any)?.data?.card_id;
+        if (isSuccess && cardId) {
           console.log(`✅ [CardKitV3] Variation ${variation.name} works!`);
           results.push(`${variation.name}: ✅`);
         } else {

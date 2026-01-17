@@ -66,17 +66,17 @@ export async function sendButtonsAsSeperateMessage(
     };
 
     // Send as separate message (NOT streaming)
-    const resp = await sendCardMessage(
+    const resp = await (sendCardMessage as any)(
       conversationId,
       JSON.stringify(cardData),
       rootId,
       threadId
     );
 
-    console.log(`✅ [SeparateButtonsMessage] Sent buttons as separate card: ${resp.message_id}`);
+    console.log(`✅ [SeparateButtonsMessage] Sent buttons as separate card: ${(resp as any).message_id}`);
     return {
       success: true,
-      separateCardId: resp.message_id,
+      separateCardId: (resp as any).message_id,
     };
   } catch (error) {
     console.error(`❌ [SeparateButtonsMessage] Failed to send buttons:`, error);

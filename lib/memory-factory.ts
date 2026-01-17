@@ -360,10 +360,13 @@ export async function ensureWorkingMemoryInitialized(
     // the LLM would have updated working memory
     let hasExistingThreads = false;
     try {
-      const threads = await memory.getThreadsByResourceId({ resourceId });
-      hasExistingThreads = threads && threads.length > 0;
+      const output = await memory.listThreadsByResourceId({ resourceId });
+      const threads = Array.isArray(output)
+        ? output
+        : ((output as any)?.threads ?? (output as any)?.data ?? []);
+      hasExistingThreads = Array.isArray(threads) && threads.length > 0;
     } catch (threadErr) {
-      // getThreadsByResourceId may fail if table doesn't exist yet - that's OK
+      // listThreadsByResourceId may fail if table doesn't exist yet - that's OK
       logger.info('MemoryFactory', `No existing threads for ${feishuUserId} (first time)`);
     }
     

@@ -31,9 +31,7 @@ The caring chief-of-staff for the DPA (Data Product & Analytics) team.
 | `feishu_chat_history` | Search Feishu group chat histories |
 | `feishu_docs` | Read Feishu documents |
 | `mgr_okr_review` | Fetch OKR metrics data |
-| `chart_generation` | Generate Mermaid/Vega-Lite charts |
-| `okr_visualization` | Generate OKR heatmaps |
-| `okr_chart_streaming` | Comprehensive OKR analysis with charts |
+| `visualization` | Generate Feishu-friendly charts (ASCII or uploaded PNG) |
 | `execute_workflow` | Execute deterministic workflows |
 
 ### Workflows (via `execute_workflow`)

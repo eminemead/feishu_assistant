@@ -7,11 +7,48 @@ import {
   initializeSnapshotSystem,
 } from "../lib/doc-snapshot-integration";
 
-// Mock dependencies
-vi.mock("../lib/doc-snapshots");
-vi.mock("../lib/semantic-diff");
-vi.mock("../lib/doc-persistence");
-vi.mock("../lib/feishu-utils");
+// NOTE: This file uses vi.mock which affects global module state.
+// Run integration tests separately: bun test test/*-integration.test.ts
+vi.mock("../lib/doc-snapshots", () => ({
+  setSnapshotUserId: vi.fn(),
+  getSnapshotService: vi.fn(() => ({
+    createSnapshot: vi.fn(async () => ({ revisionNumber: 1 })),
+    getSnapshotHistory: vi.fn(async () => [
+      { revisionNumber: 2, modifiedAt: Date.now() - 1000 },
+      { revisionNumber: 1, modifiedAt: Date.now() - 2000 },
+    ]),
+    getSnapshotContent: vi.fn(async () => "mock content"),
+    getSnapshotStats: vi.fn(async () => ({
+      totalSnapshots: 2,
+      totalOriginalSize: 2048,
+      totalCompressedSize: 1024,
+      averageCompressionRatio: 2,
+      oldestSnapshot: { revisionNumber: 1, modifiedAt: Date.now() - 2000 },
+      newestSnapshot: { revisionNumber: 2, modifiedAt: Date.now() - 1000 },
+    })),
+    pruneOldSnapshots: vi.fn(async () => 0),
+  })),
+}));
+vi.mock("../lib/semantic-diff", () => ({
+  computeDiff: vi.fn(() => ({ summary: { summary: "mock diff" } })),
+  formatDiffForCard: vi.fn(() => "mock formatted diff"),
+}));
+vi.mock("../lib/doc-persistence", () => ({
+  setPersistenceUserId: vi.fn(),
+  getPersistence: vi.fn(() => ({
+    getChangeHistory: vi.fn(async () => []),
+  })),
+}));
+vi.mock("../lib/feishu-utils", () => ({
+  getFeishuClient: vi.fn(() => ({
+    doc: {
+      v2: {
+        rawContent: vi.fn(async () => ({ code: 0, data: { content: "mock content" } })),
+        content: vi.fn(async () => ({ code: 0, data: { document: { title: "t", revision: 1, body: { content: [] }, document_id: "d" } } })),
+      },
+    },
+  })),
+}));
 
 describe("Document Snapshot Integration", () => {
   beforeEach(() => {

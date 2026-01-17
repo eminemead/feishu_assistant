@@ -64,12 +64,13 @@ export async function testAddButtonsAfterStreamingDisabled(
     console.log(`🧪 [ButtonTest] Attempting to add ${buttons.length} buttons via cardElement.create...`);
 
     // Try using cardElement.create API (same as we tried before, but after streaming disabled)
-    const resp = await client.cardkit.v1.cardElement.create({
+    const resp = await (client.cardkit.v1.cardElement.create as any)({
       path: {
         card_id: cardId,
       },
       data: {
-        element: JSON.stringify(actionElement),
+        // SDK typings vary; keep this test script permissive.
+        elements: JSON.stringify(actionElement),
         sequence: sequence,
       },
     });
@@ -149,11 +150,11 @@ export async function testAddButtonsViaCardUpdate(
 
     console.log(`🧪 [ButtonTest] Attempting card.update with action element...`);
 
-    const resp = await client.cardkit.v1.card.update({
+    const resp = await (client.cardkit.v1.card.update as any)({
       path: {
         card_id: cardId,
       },
-      data: JSON.stringify(updateData),
+      data: updateData,
     });
 
     const isSuccess = resp.code === 0

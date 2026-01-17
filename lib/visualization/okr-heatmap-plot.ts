@@ -144,8 +144,9 @@ export async function generateHeatmapPlot(
   document.body.appendChild(plot);
 
   // Get SVG string from the plot element
-  const svgElement = plot.querySelector("svg") || plot;
-  const svgString = svgElement.outerHTML || svgElement.toString();
+  const rootEl = plot as unknown as Element;
+  const svgElement = rootEl.querySelector("svg") || rootEl;
+  const svgString = (svgElement as any).outerHTML || String(svgElement);
   
   // Convert SVG to PNG using sharp (more reliable than canvas for SVG)
   return await convertSVGToPNG(svgString);

@@ -21,8 +21,8 @@ describe("End-to-End Integration", () => {
       const response = await generateResponse(messages, updateStatus);
 
       expect(response).toBeDefined();
-      expect(typeof response).toBe("string");
-      expect(response.length).toBeGreaterThan(0);
+      expect(typeof response.text).toBe("string");
+      expect(response.text.length).toBeGreaterThan(0);
     }, 30000);
 
     it("should handle manager review query", async () => {
@@ -31,7 +31,7 @@ describe("End-to-End Integration", () => {
       const response = await generateResponse(messages);
       
       expect(response).toBeDefined();
-      expect(typeof response).toBe("string");
+      expect(typeof response.text).toBe("string");
     }, 30000);
   });
 
@@ -42,7 +42,7 @@ describe("End-to-End Integration", () => {
       const response = await generateResponse(messages);
       
       expect(response).toBeDefined();
-      expect(typeof response).toBe("string");
+      expect(typeof response.text).toBe("string");
     }, 30000);
 
     it("should handle web search queries", async () => {
@@ -51,7 +51,7 @@ describe("End-to-End Integration", () => {
       const response = await generateResponse(messages);
       
       expect(response).toBeDefined();
-      expect(typeof response).toBe("string");
+      expect(typeof response.text).toBe("string");
     }, 30000);
   });
 
@@ -66,7 +66,7 @@ describe("End-to-End Integration", () => {
       const response = await generateResponse(messages);
       
       expect(response).toBeDefined();
-      expect(typeof response).toBe("string");
+      expect(typeof response.text).toBe("string");
     }, 30000);
   });
 
@@ -77,7 +77,7 @@ describe("End-to-End Integration", () => {
       const response = await generateResponse(messages);
       
       expect(response).toBeDefined();
-      expect(typeof response).toBe("string");
+      expect(typeof response.text).toBe("string");
     }, 30000);
 
     it("should handle minimal content messages", async () => {
@@ -87,7 +87,7 @@ describe("End-to-End Integration", () => {
         const response = await generateResponse(messages);
         // Should return a response
         expect(response).toBeDefined();
-        expect(typeof response).toBe("string");
+        expect(typeof response.text).toBe("string");
       } catch (error) {
         // Error is acceptable if API fails
         expect(error).toBeDefined();

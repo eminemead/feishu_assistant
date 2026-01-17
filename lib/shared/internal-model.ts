@@ -81,7 +81,7 @@ export function getInternalModel(): LanguageModel | null {
       );
     }
 
-    return response.json();
+    return (await response.json()) as InternalApiResponse;
   }
 
   /**
@@ -93,10 +93,26 @@ export function getInternalModel(): LanguageModel | null {
     async doGenerate(params: any) {
       const messages = params.messages as CoreMessage[];
       
+      const extractText = (content: any): string => {
+        if (typeof content === "string") return content;
+        if (!Array.isArray(content)) return "";
+        for (const part of content as any[]) {
+          if (
+            part &&
+            typeof part === "object" &&
+            part.type === "text" &&
+            typeof part.text === "string"
+          ) {
+            return part.text;
+          }
+        }
+        return "";
+      };
+
       // Convert CoreMessage format to internal API format
       const internalMessages = messages.map((msg) => ({
         role: msg.role as "user" | "assistant" | "system",
-        content: typeof msg.content === "string" ? msg.content : msg.content[0]?.text || "",
+        content: extractText(msg.content),
       }));
 
       const request: InternalApiRequest = {
@@ -126,10 +142,26 @@ export function getInternalModel(): LanguageModel | null {
     async doStream(params: any) {
       const messages = params.messages as CoreMessage[];
       
+      const extractText = (content: any): string => {
+        if (typeof content === "string") return content;
+        if (!Array.isArray(content)) return "";
+        for (const part of content as any[]) {
+          if (
+            part &&
+            typeof part === "object" &&
+            part.type === "text" &&
+            typeof part.text === "string"
+          ) {
+            return part.text;
+          }
+        }
+        return "";
+      };
+
       // Convert CoreMessage format to internal API format
       const internalMessages = messages.map((msg) => ({
         role: msg.role as "user" | "assistant" | "system",
-        content: typeof msg.content === "string" ? msg.content : msg.content[0]?.text || "",
+        content: extractText(msg.content),
       }));
 
       const request: InternalApiRequest = {

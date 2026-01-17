@@ -81,8 +81,11 @@ async function executeGlabCommand(command: string, timeout: number = 30000): Pro
 
 /**
  * GitLab CLI result type
+ * 
+ * Exported for use in workflows that call the tool directly.
+ * Pattern: `const result = await (gitlabTool.execute as any)({...}) as GitLabCliResult`
  */
-interface GitLabCliResult {
+export interface GitLabCliResult {
   success: boolean;
   output?: string;
   error?: string;

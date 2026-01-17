@@ -402,6 +402,12 @@ eventDispatcher.register({
       const taskGuid = data?.object?.guid || data?.task_guid;
       const eventKey = data?.event_key || data?.action;
       const changedFields = data?.changed_fields || [];
+      const operatorOpenId =
+        data?.operator?.operator_id ||
+        data?.operator?.open_id ||
+        data?.operator?.user_id ||
+        data?.operator_id ||
+        data?.user_id;
       
       if (!taskGuid) {
         console.warn("⚠️ [WebSocket] Task event missing task_guid");
@@ -412,7 +418,13 @@ eventDispatcher.register({
       const event = {
         schema: "2.0",
         header: { event_type: "task.task.updated_v1" },
-        event: { task_guid: taskGuid, event_key: eventKey, obj_type: 1, changed_fields: changedFields },
+        event: { 
+          task_guid: taskGuid, 
+          event_key: eventKey, 
+          obj_type: 1, 
+          changed_fields: changedFields,
+          operator_open_id: operatorOpenId,
+        },
       } as any;
       
       const result = await handleTaskUpdatedEvent(event);
@@ -429,6 +441,12 @@ eventDispatcher.register({
     try {
       console.log("📋 [WebSocket] Task created event received");
       const taskGuid = data?.object?.guid || data?.task_guid;
+      const operatorOpenId =
+        data?.operator?.operator_id ||
+        data?.operator?.open_id ||
+        data?.operator?.user_id ||
+        data?.operator_id ||
+        data?.user_id;
       
       if (!taskGuid) {
         console.warn("⚠️ [WebSocket] Task created event missing task_guid");
@@ -438,7 +456,12 @@ eventDispatcher.register({
       const event = {
         schema: "2.0",
         header: { event_type: "task.task.created_v1" },
-        event: { task_guid: taskGuid, event_key: "task.created", obj_type: 1 },
+        event: { 
+          task_guid: taskGuid, 
+          event_key: "task.created", 
+          obj_type: 1,
+          operator_open_id: operatorOpenId,
+        },
       } as any;
       
       const result = await handleTaskUpdatedEvent(event);
@@ -456,6 +479,12 @@ eventDispatcher.register({
       console.log("📋 [WebSocket] Task comment event received");
       const taskGuid = data?.object?.guid || data?.task_guid;
       const commentGuid = data?.comment_guid || data?.object?.comment_guid;
+      const operatorOpenId =
+        data?.operator?.operator_id ||
+        data?.operator?.open_id ||
+        data?.operator?.user_id ||
+        data?.operator_id ||
+        data?.user_id;
       
       if (!taskGuid) {
         console.warn("⚠️ [WebSocket] Task comment event missing task_guid");
@@ -465,7 +494,13 @@ eventDispatcher.register({
       const event = {
         schema: "2.0",
         header: { event_type: "task.task.comment_created_v1" },
-        event: { task_guid: taskGuid, event_key: "task.comment.created", obj_type: 1, comment_guid: commentGuid },
+        event: { 
+          task_guid: taskGuid, 
+          event_key: "task.comment.created", 
+          obj_type: 1, 
+          comment_guid: commentGuid,
+          operator_open_id: operatorOpenId,
+        },
       } as any;
       
       const result = await handleTaskUpdatedEvent(event);

@@ -164,8 +164,8 @@ export function extractButtonValue(actionValue: any): string | null {
     return actionValue;
   }
   if (actionValue && typeof actionValue === "object") {
-    // Legacy object fallback
-    return actionValue.text || actionValue.value || null;
+    // Object format: prefer 'value' field, fall back to 'text'
+    return actionValue.value || actionValue.text || null;
   }
   return null;
 }

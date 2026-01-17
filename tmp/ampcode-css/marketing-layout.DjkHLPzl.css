@@ -1,0 +1,460 @@
+
+	.message-bar.svelte-3pyi6g {
+		pointer-events: auto;
+	}
+
+	.message-bar.svelte-3pyi6g:hover {
+		animation: svelte-3pyi6g-shake 0.4s ease-in-out;
+	}
+
+	@keyframes svelte-3pyi6g-shake {
+		0%,
+		100% {
+			transform: translateX(0);
+		}
+		20% {
+			transform: translateX(-4px);
+		}
+		40% {
+			transform: translateX(4px);
+		}
+		60% {
+			transform: translateX(-3px);
+		}
+		80% {
+			transform: translateX(3px);
+		}
+	}
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+@layer properties {
+  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+    *, :before, :after, ::backdrop {
+      --tw-leading: initial;
+      --tw-shadow: 0 0 #0000;
+      --tw-shadow-color: initial;
+      --tw-shadow-alpha: 100%;
+      --tw-inset-shadow: 0 0 #0000;
+      --tw-inset-shadow-color: initial;
+      --tw-inset-shadow-alpha: 100%;
+      --tw-ring-color: initial;
+      --tw-ring-shadow: 0 0 #0000;
+      --tw-inset-ring-color: initial;
+      --tw-inset-ring-shadow: 0 0 #0000;
+      --tw-ring-inset: initial;
+      --tw-ring-offset-width: 0px;
+      --tw-ring-offset-color: #fff;
+      --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-font-weight: initial;
+      --tw-tracking: initial;
+    }
+  }
+}
+
+body:has(#marketing-root.svelte-1bsnhax) {
+  background-color: light-dark(#dfdfc1, #091c1e) !important;
+}
+
+#marketing-root.svelte-1bsnhax {
+  color-scheme: light dark;
+  --background: #dfdfc1;
+  --foreground: #0b0d0b;
+  --muted-foreground: #29564e;
+  --accent: #1588b2;
+  --border: #b1b1a5;
+  --primary: #1588b2;
+  --primary-foreground: #dfdfc1;
+  --accent-foreground: #dfdfc1;
+}
+
+@media (prefers-color-scheme: dark) {
+  #marketing-root.svelte-1bsnhax {
+    --background: #091c1e;
+    --foreground: #f6fff5;
+    --muted-foreground: #978e81;
+    --accent: #f6833b;
+    --border: #7d665b;
+    --primary: #f6833b;
+    --primary-foreground: #091c1e;
+    --accent-foreground: #091c1e;
+  }
+}
+
+#marketing-root.svelte-1bsnhax:before {
+  content: "";
+  mix-blend-mode: darken;
+  opacity: .08;
+  pointer-events: none;
+  z-index: -1;
+  background-image: url("/(marketing)/footer-bg-inverted.jpg");
+  background-position: bottom;
+  background-repeat: no-repeat;
+  background-size: 100vw;
+  height: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  #marketing-root.svelte-1bsnhax:before {
+    mix-blend-mode: screen;
+    background-image: url("/(marketing)/footer-bg.jpg");
+  }
+}
+
+.prose {
+  font-family: var(--font-polysans, "PolySans Var", var(--font-sans));
+  color: var(--color-foreground, var(--foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose {
+    color: color-mix(in oklab, var(--color-foreground, var(--foreground)) 80%, transparent);
+  }
+}
+
+.prose pre, .prose .terminal-chat {
+  border-radius: var(--radius-sm, calc(var(--radius)  - 4px));
+  max-width: calc(100vw - 3rem);
+  padding-inline: calc(var(--spacing, .25rem) * 3);
+  padding-top: calc(var(--spacing, .25rem) * 2.5);
+  padding-bottom: calc(var(--spacing, .25rem) * 3);
+  font-family: var(--font-mono, "Berkeley Mono", monospace);
+  --tw-leading: calc(var(--spacing, .25rem) * 4.25);
+  line-height: calc(var(--spacing, .25rem) * 4.25);
+  --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  overflow-x: auto;
+}
+
+@media (min-width: 64rem) {
+  .prose pre, .prose .terminal-chat {
+    max-width: none;
+  }
+}
+
+.prose pre, .prose .terminal-chat {
+  background-color: light-dark(oklab(100% 0 5.96046e-8 / .33), var(--muted-foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose pre, .prose .terminal-chat {
+    background-color: light-dark(oklab(100% 0 5.96046e-8 / .33), color-mix(in oklab, var(--muted-foreground) 10%, transparent));
+  }
+}
+
+.prose pre, .prose .terminal-chat {
+  --tw-ring-color: light-dark(var(--muted-foreground), var(--muted-foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose pre, .prose .terminal-chat {
+    --tw-ring-color: light-dark(color-mix(in oklab, var(--muted-foreground) 8%, transparent), color-mix(in oklab, var(--muted-foreground) 20%, transparent));
+  }
+}
+
+.prose pre, .prose .terminal-chat {
+  scrollbar-width: none;
+}
+
+.prose pre code, .prose .terminal-chat code {
+  font-size: var(--text-base, .8125rem);
+  line-height: var(--tw-leading, var(--text-base--line-height, 1.25rem));
+  --tw-leading: calc(var(--spacing, .25rem) * 1);
+  line-height: calc(var(--spacing, .25rem) * 1);
+  color: var(--color-foreground, var(--foreground));
+}
+
+.prose pre::-webkit-scrollbar {
+  display: none;
+}
+
+.prose .terminal-chat::-webkit-scrollbar {
+  display: none;
+}
+
+.prose pre.language-undefined {
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.prose img, .prose video {
+  --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, var(--foreground));
+  border-radius: .25rem;
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose img, .prose video {
+    --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, color-mix(in srgb, var(--foreground) 2%, transparent));
+  }
+}
+
+.prose img, .prose video {
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(4px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  --tw-ring-color: var(--color-foreground, var(--foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose img, .prose video {
+    --tw-ring-color: color-mix(in oklab, var(--color-foreground, var(--foreground)) 10%, transparent);
+  }
+}
+
+.prose :not(pre) > code, .prose kbd {
+  border-radius: var(--radius-sm, calc(var(--radius)  - 4px));
+  padding-inline: calc(var(--spacing, .25rem) * .75);
+  padding-block: calc(var(--spacing, .25rem) * .5);
+  font-family: var(--font-mono, "Berkeley Mono", monospace);
+  --tw-font-weight: var(--font-weight-normal, 400);
+  font-weight: var(--font-weight-normal, 400);
+  --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  background-color: light-dark(var(--muted-foreground), var(--muted-foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose :not(pre) > code, .prose kbd {
+    background-color: light-dark(color-mix(in oklab, var(--muted-foreground) 10%, transparent), color-mix(in oklab, var(--muted-foreground) 10%, transparent));
+  }
+}
+
+.prose :not(pre) > code, .prose kbd {
+  --tw-ring-color: light-dark(var(--muted-foreground), var(--muted-foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose :not(pre) > code, .prose kbd {
+    --tw-ring-color: light-dark(color-mix(in oklab, var(--muted-foreground) 8%, transparent), color-mix(in oklab, var(--muted-foreground) 20%, transparent));
+  }
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  color: var(--color-foreground, var(--foreground));
+}
+
+.prose h2 {
+  margin-top: calc(var(--spacing, .25rem) * 8);
+  margin-bottom: calc(var(--spacing, .25rem) * 3);
+  font-family: var(--font-sagittaire-display);
+  font-family: var(--font-sagittaire-display, "Sagittaire Display", serif);
+  font-size: var(--text-2xl, 1.5rem);
+  line-height: var(--tw-leading, var(--text-2xl--line-height, 2rem));
+  --tw-tracking: var(--tracking-tight, -.025em);
+  letter-spacing: var(--tracking-tight, -.025em);
+}
+
+.prose img + h2 {
+  margin-top: calc(var(--spacing, .25rem) * 12);
+}
+
+.prose kbd {
+  --tw-shadow: 0 0 #0000;
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+}
+
+.prose :not(pre) > code {
+  color: light-dark(var(--foreground), var(--foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose :not(pre) > code {
+    color: light-dark(color-mix(in oklab, var(--foreground) 90%, var(--accent)), color-mix(in oklab, var(--foreground) 90%, var(--accent)));
+  }
+}
+
+.prose :not(pre) > code:before, .prose :not(pre) > code:after {
+  content: none !important;
+}
+
+.prose ul li::marker {
+  color: var(--color-muted-foreground, var(--muted-foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose ul li::marker {
+    color: color-mix(in oklab, var(--color-muted-foreground, var(--muted-foreground)) 50%, transparent);
+  }
+}
+
+.prose ol li::marker {
+  color: var(--color-muted-foreground, var(--muted-foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .prose ol li::marker {
+    color: color-mix(in oklab, var(--color-muted-foreground, var(--muted-foreground)) 50%, transparent);
+  }
+}
+
+.prose blockquote p {
+  text-indent: -.3em;
+  font-size: var(--text-xl, 1.25rem) !important;
+  line-height: var(--tw-leading, var(--text-xl--line-height, 1.75rem)) !important;
+  --tw-font-weight: var(--font-weight-thin, 100) !important;
+  font-weight: var(--font-weight-thin, 100) !important;
+}
+
+.prose a {
+  --tw-font-weight: var(--font-weight-normal, 400);
+  font-weight: var(--font-weight-normal, 400);
+  color: var(--color-foreground, var(--foreground));
+  font-style: italic;
+  text-decoration-line: underline;
+}
+
+.prose a:hover {
+  text-underline-offset: 2px;
+  text-decoration-line: underline;
+  -webkit-text-decoration-color: var(--muted-foreground);
+  -webkit-text-decoration-color: var(--muted-foreground);
+  text-decoration-color: var(--muted-foreground);
+  text-decoration-thickness: 1px;
+}
+
+.prose strong {
+  --tw-font-weight: var(--font-weight-medium, 500);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-foreground, var(--foreground));
+}
+
+.token.comment, .token.prolog, .token.doctype, .token.cdata {
+  color: light-dark(#7d5d44, #b08968);
+}
+
+.token.punctuation {
+  color: light-dark(#9ca3af, #a9b2c0);
+}
+
+.token.namespace {
+  opacity: .7;
+}
+
+.token.tag, .token.boolean, .token.number {
+  color: #c18401;
+}
+
+.token.selector, .token.attr-name, .token.string, .token.char {
+  color: light-dark(#3d8b3d, #50a14f);
+}
+
+.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string {
+  color: #6a737d;
+}
+
+.token.atrule, .token.attr-value, .token.keyword, .token.important {
+  color: #f34f3f;
+}
+
+.token.regex {
+  color: #dc2626;
+}
+
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+@property --tw-leading {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff;
+}
+
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-tracking {
+  syntax: "*";
+  inherits: false
+}

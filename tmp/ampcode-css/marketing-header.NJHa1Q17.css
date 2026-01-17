@@ -1,0 +1,606 @@
+/* ============================================
+     PROPORTIONAL GRID SYSTEM
+
+     Key concept: 0 gap between rails.
+     Content is padded INWARD from rail edges.
+     - cell-pad: proportional padding on both sides
+     - no padding: element sits on rail edges (images)
+
+     Rail proportions:
+     Desktop (5 rails): 560fr 560fr 373fr 373fr 373fr (1.5:1 ratio)
+     Tablet (3 rails): 1fr 1fr 1fr
+     Mobile (1 rail): 1fr
+     ============================================ */
+
+:root {
+	--lens-grid-max-width: 2560px;
+	/* 4.098% margin ratio for desktop grid rails (as viewport units) */
+	--lens-margin-ratio: 4.098vw;
+	--lens-cell-padding: clamp(0.75rem, 1.5vw, 1.5rem);
+	--lens-grid-template: 1fr;
+	--lens-grid-margin: 1rem;
+	--lens-col-yolk: #f6833b;
+
+	/* Fluid type scale
+	   Scales fluidly with viewport width using vi units (inline axis).
+	   Mobile ratio ~1.2, Desktop ratio ~1.6, Base: 16px (1rem)
+	   Range: 320px to 2560px (matching grid max-width) */
+	--type-xs: clamp(0.69rem, 0.65rem + 0.11vi, 0.94rem);
+	--type-sm: clamp(0.83rem, 0.77rem + 0.15vi, 1.13rem);
+	--type-base: clamp(1rem, 0.91rem + 0.22vi, 1.5rem);
+	--type-lg: clamp(1.2rem, 1.04rem + 0.4vi, 2.1rem);
+	--type-xl: clamp(1.44rem, 1.14rem + 0.75vi, 3rem);
+	--type-2xl: clamp(1.73rem, 1.18rem + 1.36vi, 4.5rem);
+	--type-3xl: clamp(2.07rem, 1.07rem + 2.5vi, 7rem);
+	--type-4xl: clamp(2.49rem, 0.69rem + 4.5vi, 11rem);
+	--type-5xl: clamp(2.99rem, -0.26rem + 8.1vi, 17rem);
+
+	/* Line heights */
+	--type-lh-tight: 1.1;
+	--type-lh-snug: 1.25;
+	--type-lh-normal: 1.414;
+	--type-lh-relaxed: 1.65;
+	--type-lh-loose: 1.8;
+}
+
+@media (min-width: 768px) {
+	:root {
+		--lens-grid-template: 1fr 1fr 1fr;
+		--lens-grid-margin: 3%;
+	}
+}
+
+@media (min-width: 1024px) {
+	:root {
+		--lens-grid-template: 560fr 560fr 373fr 373fr 373fr;
+		/* Scales with viewport, but caps at 4.098% of max-width (no magic pixels) */
+		--lens-grid-margin: min(
+			var(--lens-margin-ratio),
+			calc(var(--lens-grid-max-width) * 0.04098)
+		);
+	}
+}
+
+/* ============================================
+     GRID CONTAINER
+
+     Full viewport width with padding-based inset.
+     On large displays (>2560px), extra padding centers
+     the content area while allowing backgrounds/borders
+     to reach viewport edges.
+     ============================================ */
+
+.grid-container {
+	--_grid-center-offset: 0px;
+	display: grid;
+	width: 100%;
+	padding-inline: calc(var(--_grid-center-offset) + var(--lens-grid-margin));
+	gap: 0;
+	grid-template-columns: var(--lens-grid-template);
+	overflow-x: clip;
+}
+
+@media (min-width: 2560px) {
+	.grid-container {
+		/* Add centering offset so content area stays at max-width */
+		--_grid-center-offset: calc((100vw - var(--lens-grid-max-width)) / 2);
+	}
+}
+
+/* ============================================
+     CELL PADDING
+     ============================================ */
+
+.cell-pad {
+	padding-inline: var(--lens-cell-padding);
+}
+
+/* ============================================
+     FULL-BLEED UTILITIES
+
+     Break out of grid to full viewport width while
+     maintaining grid-aligned content.
+
+     Usage:
+       .full-bleed        - spans full viewport width
+       .full-bleed-scroll - horizontal scroll with grid-aligned start
+
+     The scroll variant adds left padding matching the grid margin
+     plus cell padding, so the first item aligns with grid content.
+
+     Note: .grid-container has overflow-x: clip by default.
+
+     These inherit --_grid-center-offset from .grid-container,
+     so they automatically adapt to large displays.
+     ============================================ */
+
+.full-bleed,
+.full-bleed-scroll {
+	--_bleed-inset: calc(var(--_grid-center-offset, 0px) + var(--lens-grid-margin));
+	position: relative;
+	left: calc(-1 * var(--_bleed-inset));
+	width: calc(100% + var(--_bleed-inset) * 2);
+}
+
+.full-bleed-scroll {
+	overflow: hidden;
+}
+
+.full-bleed-scroll > * {
+	--_bleed-pad: calc(var(--_bleed-inset) + var(--lens-cell-padding));
+	padding-left: var(--_bleed-pad);
+	scroll-padding-left: var(--_bleed-pad);
+}
+
+/* ============================================
+     BLEED INLINE UTILITIES
+
+     Break out of grid container padding on one side
+     while maintaining grid-aligned content via inner padding.
+
+     Usage:
+       .bleed-inline-start - bleeds to inline-start (left in LTR)
+       .bleed-inline-end   - bleeds to inline-end (right in LTR)
+
+     These inherit --_grid-center-offset from .grid-container,
+     so they automatically adapt to large displays.
+     ============================================ */
+
+.bleed-inline-start,
+.bleed-inline-end {
+	--_bleed-inset: calc(var(--_grid-center-offset, 0px) + var(--lens-grid-margin));
+}
+
+.bleed-inline-start {
+	margin-inline-start: calc(-1 * var(--_bleed-inset));
+	padding-inline-start: var(--_bleed-inset);
+}
+
+.bleed-inline-end {
+	margin-inline-end: calc(-1 * var(--_bleed-inset));
+	padding-inline-end: var(--_bleed-inset);
+}
+
+/* ============================================
+     GRID SECTIONS - Vertical rhythm
+     ============================================ */
+
+.grid-section {
+	padding-block: clamp(2rem, 4vw, 3.5rem);
+	row-gap: clamp(1.33rem, 2.67vw, 2.33rem);
+}
+
+.grid-section--dense {
+	padding-block: clamp(0.5rem, 3vw, 1.5rem);
+	row-gap: clamp(1rem, 2vw, 1.67rem);
+}
+
+.grid-section--spacious {
+	padding-block: clamp(3rem, 6vw, 5.5rem);
+	row-gap: clamp(2rem, 4vw, 3.67rem);
+}
+
+/* ============================================
+     REGION ROLES - Responsive column placement
+     ============================================ */
+
+/* Mobile (single column) */
+@media (max-width: 767px) {
+	.section-header,
+	.section-body,
+	.section-aside {
+		grid-column: 1;
+	}
+}
+
+/* Tablet (3-column) */
+@media (min-width: 768px) and (max-width: 1023px) {
+	.section-header {
+		grid-column: 1;
+	}
+	.section-body {
+		grid-column: 2 / 4;
+	}
+	.section-aside {
+		grid-column: 1;
+		grid-row: 2;
+	}
+}
+
+/* Desktop (5-column) */
+@media (min-width: 1024px) {
+	.section-header {
+		grid-column: 1;
+	}
+	.section-header--wide {
+		grid-column: 1 / 3;
+	}
+	.section-body {
+		grid-column: 2 / 4;
+	}
+	.section-body--wide {
+		grid-column: 2 / 5;
+	}
+	.section-aside {
+		grid-column: 5;
+	}
+}
+
+/* ============================================
+     RAIL STROKE UTILITIES
+
+     Adds vertical strokes to container edges.
+
+     Usage:
+       .rail-tick-start  - stroke on inline-start edge
+
+     Contexts:
+       - On .cell-pad element: stroke aligns to rail edge
+       - Inside .cell-pad: use .cell-pad--stroke-context on parent
+
+     Data attributes:
+       data-stroke-h     - height: "tight" | "row"
+       data-stroke-color - color: "muted"
+     ============================================ */
+
+.rail-tick-start,
+.rail-tick-end {
+	position: relative;
+	--lens-stroke-width: 1px;
+	--lens-stroke-color: var(--muted-foreground);
+	--lens-stroke-opacity: 0.5;
+	--lens-stroke-length: 100%;
+	--lens-stroke-offset-base: 0px;
+	--lens-stroke-offset-extra: 0px;
+	--lens-stroke-inline-offset: 0px;
+}
+
+.rail-tick-start::before,
+.rail-tick-end::after {
+	content: '';
+	position: absolute;
+	inline-size: var(--lens-stroke-width);
+	block-size: var(--lens-stroke-length);
+	inset-block-start: calc(var(--lens-stroke-offset-base) + var(--lens-stroke-offset-extra));
+	background-color: var(--lens-stroke-color);
+	opacity: var(--lens-stroke-opacity);
+	pointer-events: none;
+}
+
+.rail-tick-start::before {
+	inset-inline-start: var(--lens-stroke-inline-offset);
+}
+
+.rail-tick-end::after {
+	inset-inline-end: var(--lens-stroke-inline-offset);
+}
+
+/* Height presets */
+[data-stroke-h='tight'] {
+	--lens-stroke-length: 1lh;
+}
+
+[data-stroke-h='row'] {
+	--lens-stroke-length: calc(
+		100% - var(--lens-stroke-offset-base) - var(--lens-stroke-offset-extra)
+	);
+}
+
+/* Auto-align stroke to text content */
+[data-stroke-h='tight'] {
+	--lens-stroke-offset-base: var(--lens-stroke-pad-offset, 0px);
+}
+
+.cell-pad[data-stroke-h='tight'] {
+	--lens-stroke-pad-offset: var(--lens-cell-padding);
+}
+
+/* Context: stroke element is inside a .cell-pad parent */
+.cell-pad--stroke-context .rail-tick-start {
+	--lens-stroke-inline-offset: calc(-1 * var(--lens-cell-padding));
+}
+
+/* For end stroke inside a stroke context, offset inward */
+.cell-pad--stroke-context .rail-tick-end {
+	--lens-stroke-inline-offset: calc(-1 * var(--lens-cell-padding));
+}
+
+/* For end stroke directly on cell-pad, no offset needed (padding box = rail edge) */
+
+/* Color presets */
+[data-stroke-color='muted'] {
+	--lens-stroke-color: var(--muted-foreground);
+	--lens-stroke-opacity: 0.4;
+}
+
+/* ============================================
+     TYPE SCALE UTILITIES
+
+     Each class sets font-size and line-height.
+     Larger sizes get tighter line-heights.
+     ============================================ */
+
+.type-xs {
+	font-size: var(--type-xs);
+	line-height: var(--type-lh-normal);
+}
+
+.type-sm {
+	font-size: var(--type-sm);
+	line-height: var(--type-lh-normal);
+}
+
+.type-base {
+	font-size: var(--type-base);
+	line-height: var(--type-lh-normal);
+}
+
+.type-lg {
+	font-size: var(--type-lg);
+	line-height: var(--type-lh-normal);
+}
+
+.type-xl {
+	font-size: var(--type-xl);
+	line-height: var(--type-lh-snug);
+}
+
+.type-2xl {
+	font-size: var(--type-2xl);
+	line-height: var(--type-lh-snug);
+}
+
+.type-3xl {
+	font-size: var(--type-3xl);
+	line-height: var(--type-lh-tight);
+}
+
+.type-4xl {
+	font-size: var(--type-4xl);
+	line-height: var(--type-lh-tight);
+}
+
+.type-5xl {
+	font-size: var(--type-5xl);
+	line-height: var(--type-lh-tight);
+}
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+.background-grid.svelte-vre9z4 {
+  pointer-events: none;
+  z-index: 0;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.background-grid-svg.svelte-vre9z4 {
+  width: 100%;
+  display: block;
+}
+
+.bg-grid-rail-line.svelte-vre9z4 {
+  stroke: light-dark(var(--foreground), var(--foreground));
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .bg-grid-rail-line.svelte-vre9z4 {
+    stroke: light-dark(color-mix(in oklab, var(--foreground) 8%, transparent), color-mix(in oklab, var(--foreground) 15%, transparent));
+  }
+}
+
+.bg-grid-rail-line.svelte-vre9z4 {
+  stroke-width: 1px;
+  stroke-dasharray: 4 4;
+  stroke-linecap: butt;
+}
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+.grid-overlay.svelte-k1k7q9 {
+  pointer-events: none;
+  z-index: 999;
+  position: fixed;
+  inset: 0;
+}
+
+.grid-container.svelte-k1k7q9 {
+  grid-template-columns: var(--lens-grid-template);
+  max-width: var(--lens-grid-max-width);
+  padding-inline: var(--lens-grid-margin);
+  height: 100%;
+  margin-inline: auto;
+  display: grid;
+}
+
+.grid-rail.svelte-k1k7q9 {
+  background: linear-gradient(to right, #ff00001a 0, #ff00001a var(--lens-cell-padding), transparent var(--lens-cell-padding)), linear-gradient(to left, #ff00001a 0, #ff00001a var(--lens-cell-padding), transparent var(--lens-cell-padding));
+  height: 100%;
+  position: relative;
+}
+
+.grid-rail.svelte-k1k7q9:before, .grid-rail.svelte-k1k7q9:after {
+  content: "";
+  background: #f009;
+  width: 1px;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.grid-rail.svelte-k1k7q9:before {
+  left: 0;
+}
+
+.grid-rail.svelte-k1k7q9:after {
+  right: 0;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .grid-rail.rail-4.svelte-k1k7q9, .grid-rail.rail-5.svelte-k1k7q9 {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .grid-rail.rail-2.svelte-k1k7q9, .grid-rail.rail-3.svelte-k1k7q9, .grid-rail.rail-4.svelte-k1k7q9, .grid-rail.rail-5.svelte-k1k7q9 {
+    display: none;
+  }
+}
+
+	.operational.svelte-17tm13q {
+		background-color: #10b981;
+	}
+
+	.degraded.svelte-17tm13q {
+		background-color: #eab308;
+	}
+
+	.major.svelte-17tm13q {
+		background-color: #f97316;
+	}
+
+	.critical.svelte-17tm13q {
+		background-color: #ef4444;
+	}
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+@layer properties {
+  @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+    *, :before, :after, ::backdrop {
+      --tw-font-weight: initial;
+      --tw-space-y-reverse: 0;
+      --tw-leading: initial;
+    }
+  }
+}
+
+.section-header.svelte-1yl60m7 {
+  flex-direction: column;
+  justify-content: space-between;
+  display: flex;
+}
+
+.footer-column.svelte-1yl60m7 h3:where(.svelte-1yl60m7) {
+  margin-bottom: calc(var(--spacing, .25rem) * 4);
+  font-family: var(--font-polysans, "PolySans Var", var(--font-sans));
+  --tw-font-weight: var(--font-weight-bold, 700);
+  font-weight: var(--font-weight-bold, 700);
+}
+
+@media (min-width: 64rem) {
+  .footer-column.svelte-1yl60m7 h3:where(.svelte-1yl60m7) {
+    margin-bottom: calc(var(--spacing, .25rem) * 6);
+  }
+}
+
+.footer-column.svelte-1yl60m7 h3:where(.svelte-1yl60m7) {
+  font-width: 110%;
+  font-stretch: 110%;
+}
+
+:where(.footer-column.svelte-1yl60m7 ul:where(.svelte-1yl60m7) > :not(:last-child)) {
+  --tw-space-y-reverse: 0;
+  margin-block-start: calc(calc(var(--spacing, .25rem) * 3) * var(--tw-space-y-reverse));
+  margin-block-end: calc(calc(var(--spacing, .25rem) * 3) * calc(1 - var(--tw-space-y-reverse)));
+}
+
+@media (min-width: 64rem) {
+  :where(.footer-column.svelte-1yl60m7 ul:where(.svelte-1yl60m7) > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing, .25rem) * 2) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing, .25rem) * 2) * calc(1 - var(--tw-space-y-reverse)));
+  }
+}
+
+.footer-column.svelte-1yl60m7 ul:where(.svelte-1yl60m7) li:where(.svelte-1yl60m7) {
+  --tw-leading: var(--leading-tight, 1.25);
+  line-height: var(--leading-tight, 1.25);
+}
+
+.footer-column.svelte-1yl60m7 ul:where(.svelte-1yl60m7) a:where(.svelte-1yl60m7) {
+  font-family: var(--font-polysans, "PolySans Var", var(--font-sans));
+  --tw-font-weight: var(--font-weight-medium, 500);
+  font-weight: var(--font-weight-medium, 500);
+  white-space: nowrap;
+  opacity: .6;
+  transition-property: opacity;
+  transition-timing-function: var(--tw-ease, var(--default-transition-timing-function, cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration, var(--default-transition-duration, .15s));
+}
+
+.footer-column.svelte-1yl60m7 ul:where(.svelte-1yl60m7) a:where(.svelte-1yl60m7):hover {
+  opacity: 1;
+}
+
+.footer-legal.svelte-1yl60m7 ul:where(.svelte-1yl60m7) {
+  flex-direction: column;
+  gap: .5rem;
+  display: flex;
+}
+
+.footer-legal.svelte-1yl60m7 ul:where(.svelte-1yl60m7) li:where(.svelte-1yl60m7) {
+  font-size: var(--text-sm, .75rem);
+  line-height: var(--tw-leading, var(--text-sm--line-height, 1rem));
+}
+
+.footer-legal.svelte-1yl60m7 ul:where(.svelte-1yl60m7) a:where(.svelte-1yl60m7) {
+  opacity: .6;
+  transition-property: opacity;
+  transition-timing-function: var(--tw-ease, var(--default-transition-timing-function, cubic-bezier(.4, 0, .2, 1)));
+  transition-duration: var(--tw-duration, var(--default-transition-duration, .15s));
+}
+
+.footer-legal.svelte-1yl60m7 ul:where(.svelte-1yl60m7) a:where(.svelte-1yl60m7):hover {
+  opacity: 1;
+}
+
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false
+}
+
+@property --tw-space-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-leading {
+  syntax: "*";
+  inherits: false
+}
+
+	.icon-swap.svelte-rb61tq {
+		display: inline-grid;
+		place-items: center;
+	}
+
+	.icon-swap-item.svelte-rb61tq {
+		grid-area: 1 / 1;
+		transition:
+			transform 0.025s ease-out,
+			opacity 0.025s ease-out,
+			filter 0.025s ease-out;
+		transform: scale(0);
+		opacity: 0;
+		filter: blur(2px);
+	}
+
+	.icon-swap-item.active.svelte-rb61tq {
+		transition:
+			transform 0.1s ease-out,
+			opacity 0.1s ease-out,
+			filter 0.1s ease-out;
+		transform: scale(1);
+		opacity: 1;
+		filter: blur(0);
+	}
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .section-nav.svelte-167wykt {
+    grid-column: 2 / 4;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section-nav.svelte-167wykt {
+    grid-column: 2 / 6;
+  }
+}

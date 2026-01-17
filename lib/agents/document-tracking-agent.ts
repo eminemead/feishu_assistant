@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { getMastraModel } from "../shared/model-router";
 import { handleDocumentCommand } from "../handle-doc-commands";
-import { tool } from "ai";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { documentSemanticSearchTool } from "../tools/document-semantic-search-tool";
 
@@ -75,9 +75,10 @@ export interface ChangeDetectionResult {
  * Create tool for executing document tracking commands
  */
 function createDocumentCommandTool() {
-  return (tool as any)({
+  return createTool({
+    id: "executeDocCommand",
     description: "Execute document tracking commands like watch, check, unwatch, etc.",
-    parameters: z.object({
+    inputSchema: z.object({
       command: z.enum(["watch", "check", "unwatch", "watched", "tracking:status", "tracking:help"]),
       documentInput: z.string().optional().describe("Document URL, token, or search term"),
       groupId: z.string().optional().describe("Optional group/chat ID to notify"),

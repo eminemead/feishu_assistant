@@ -130,7 +130,7 @@ async function readDocWithToken(
       },
     });
 
-    const data = await response.json();
+    const data: any = await response.json();
 
     if (data.code !== 0) {
       return {
@@ -185,9 +185,10 @@ async function readDocWithAppToken(
       }
 
       // Try structured content API
-      const resp = await client.docx.v1.document.content({
-        path: { document_id: docToken },
-      });
+      const resp = (await client.request({
+        method: "GET",
+        url: `/open-apis/docx/v1/documents/${docToken}/content`,
+      })) as any;
 
       const isSuccess = typeof resp.success === 'function' ? resp.success() : (resp.code === 0 || resp.code === undefined);
 

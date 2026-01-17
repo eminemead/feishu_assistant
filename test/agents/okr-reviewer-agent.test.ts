@@ -70,9 +70,7 @@ describe("OKR Analysis Functions", () => {
     it("should mention all OKR tools", () => {
       const instructions = getOkrReviewerAgentInstructions();
       expect(instructions).toContain("mgr_okr_review");
-      expect(instructions).toContain("chart_generation");
-      expect(instructions).toContain("okr_visualization");
-      expect(instructions).toContain("okr_chart_streaming");
+      expect(instructions).toContain("visualization");
     });
   });
 

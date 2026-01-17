@@ -246,7 +246,8 @@ export const _testOnly = {
 };
 
 // Run tests if executed directly
-if (import.meta.main) {
+const isMain = Boolean((import.meta as any).main);
+if (isMain) {
   runButtonHypothesisTests().then(results => {
     console.log(`\n✅ Test run complete. ${results.length} tests executed.`);
     process.exit(results.some(r => r.status === "passed") ? 0 : 1);

@@ -121,6 +121,7 @@ async function triggerChangeAnalysis(
       debounced: false,
       notificationSent: true,
       notificationSentAt: new Date(),
+      createdAt: new Date(),
     };
 
     await evaluateChangeRules(docChange, { async: true });

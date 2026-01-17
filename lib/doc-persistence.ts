@@ -151,9 +151,9 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { error } = await supabase!
+      const { error } = await (getSupabaseClient() as any)
         .from("document_tracking")
-        .update({ is_active: false } as any)
+        .update({ is_active: false })
         .match({ user_id: userId, doc_token: docToken });
 
       if (error) {
@@ -186,13 +186,14 @@ class DocumentPersistence {
     const userId = this.getUserId();
 
     try {
-      const { data, error } = await getSupabaseClient()
-        .from("document_tracking")
+      const { data, error } = await (getSupabaseClient() as any).from(
+        "document_tracking"
+      )
         .update({
           last_modified_user: update.lastModifiedUser,
           last_modified_time: update.lastModifiedTime,
           last_notification_sent_at: update.lastNotificationSentAt?.toISOString(),
-        } as any)
+        })
         .match({ user_id: userId, doc_token: docToken })
         .select()
         .single();

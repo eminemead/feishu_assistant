@@ -290,8 +290,11 @@ export async function fetchChatHistory(params: {
 
 /**
  * Chat history result type
+ * 
+ * Exported for use in workflows that call the tool directly.
+ * Pattern: `const result = await (chatHistoryTool.execute as any)({...}) as ChatHistoryResult`
  */
-interface ChatHistoryResult {
+export interface ChatHistoryResult {
   success: boolean;
   chatId: string;
   messageCount?: number;

@@ -43,12 +43,13 @@ export function getOpenRouterWithWhitelist(requireTools: boolean = false): Langu
   // Wrap to enforce whitelist on EVERY request
   return {
     ...autoRouter,
-    async call(input: any, options?: any) {
+    async doGenerate(input: any, options?: any) {
       const enrichedOptions = {
         ...options,
         headers: {
           ...options?.headers,
-          "HTTP-Referer": process.env.HTTP_REFERER || "https://feishu-assistant.app",
+          "HTTP-Referer":
+            process.env.HTTP_REFERER || "https://feishu-assistant.app",
           "X-Title": "Feishu Assistant",
         },
         providerOptions: {
@@ -60,16 +61,17 @@ export function getOpenRouterWithWhitelist(requireTools: boolean = false): Langu
           },
         },
       };
-      
-      // @ts-ignore
-      return autoRouter.call(input, enrichedOptions);
+
+      // @ts-ignore - OpenRouter provider model typing varies across versions
+      return autoRouter.doGenerate(input, enrichedOptions);
     },
     async doStream(input: any, options?: any) {
       const enrichedOptions = {
         ...options,
         headers: {
           ...options?.headers,
-          "HTTP-Referer": process.env.HTTP_REFERER || "https://feishu-assistant.app",
+          "HTTP-Referer":
+            process.env.HTTP_REFERER || "https://feishu-assistant.app",
           "X-Title": "Feishu Assistant",
         },
         providerOptions: {
@@ -80,8 +82,8 @@ export function getOpenRouterWithWhitelist(requireTools: boolean = false): Langu
           },
         },
       };
-      
-      // @ts-ignore
+
+      // @ts-ignore - OpenRouter provider model typing varies across versions
       return autoRouter.doStream(input, enrichedOptions);
     },
   } as LanguageModel;

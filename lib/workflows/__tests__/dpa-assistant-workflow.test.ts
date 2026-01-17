@@ -114,6 +114,52 @@ describe("Slash Command Parsing", () => {
       expect(result?.intent).toBeNull();
     });
 
+    // Code Review command tests
+    it("should route /code-review to code_review", () => {
+      const result = parseSlashCommand("/code-review");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+      expect(result?.remainingQuery).toBe("");
+    });
+
+    it("should route /codereview to code_review", () => {
+      const result = parseSlashCommand("/codereview");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+    });
+
+    it("should route /审查 to code_review", () => {
+      const result = parseSlashCommand("/审查");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+    });
+
+    it("should route /cr to code_review", () => {
+      const result = parseSlashCommand("/cr");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+    });
+
+    it("should route /代码审查 to code_review", () => {
+      const result = parseSlashCommand("/代码审查");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+    });
+
+    it("should parse /code-review with commit SHA", () => {
+      const result = parseSlashCommand("/code-review abc123def");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+      expect(result?.remainingQuery).toBe("abc123def");
+    });
+
+    it("should parse /code-review with commit range", () => {
+      const result = parseSlashCommand("/code-review HEAD~5..HEAD");
+      expect(result).not.toBeNull();
+      expect(result?.intent).toBe("code_review");
+      expect(result?.remainingQuery).toBe("HEAD~5..HEAD");
+    });
+
     it("should be case-insensitive for English commands", () => {
       const result1 = parseSlashCommand("/CREATE issue");
       const result2 = parseSlashCommand("/Create issue");
@@ -147,6 +193,14 @@ describe("Slash Command Parsing", () => {
       expect(SLASH_COMMANDS["/search"]).toBe("chat_search");
       expect(SLASH_COMMANDS["/文档"]).toBe("doc_read");
       expect(SLASH_COMMANDS["/doc"]).toBe("doc_read");
+    });
+
+    it("should have all code review commands", () => {
+      expect(SLASH_COMMANDS["/code-review"]).toBe("code_review");
+      expect(SLASH_COMMANDS["/codereview"]).toBe("code_review");
+      expect(SLASH_COMMANDS["/审查"]).toBe("code_review");
+      expect(SLASH_COMMANDS["/代码审查"]).toBe("code_review");
+      expect(SLASH_COMMANDS["/cr"]).toBe("code_review");
     });
   });
 

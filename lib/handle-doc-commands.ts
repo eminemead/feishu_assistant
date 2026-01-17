@@ -342,7 +342,11 @@ async function handleCheckCommand(
         chatId,
         userId,
       });
-      workflowLine = `\n\n**Workflow**: changeDetected=${workflowResult.changeDetected} debounced=${workflowResult.debounced} notified=${workflowResult.notified}`;
+      if (workflowResult.status === "success") {
+        workflowLine = `\n\n**Workflow**: changeDetected=${workflowResult.result.changeDetected} debounced=${workflowResult.result.debounced} notified=${workflowResult.result.notified}`;
+      } else {
+        workflowLine = `\n\n**Workflow**: ${workflowResult.status}`;
+      }
     } catch (err) {
       workflowLine = `\n\n**Workflow**: failed (${err instanceof Error ? err.message : String(err)})`;
     }

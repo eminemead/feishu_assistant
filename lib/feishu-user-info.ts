@@ -173,11 +173,11 @@ export async function listDepartmentUsers(
 export async function searchUsers(
   query: string,
   pageSize: number = 50
-) {
+): Promise<any[]> {
   try {
     console.log(`📋 [Feishu] Searching users: ${query}`);
     
-    const users = [];
+    const users: any[] = [];
     let count = 0;
     
     // Use batch lookup or manual search as searchUsersWithIterator might not exist

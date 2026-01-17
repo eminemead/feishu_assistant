@@ -1,0 +1,67 @@
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+.lightbox-backdrop.svelte-1c4po3v {
+  z-index: 100;
+  background: #000000e6;
+  justify-content: center;
+  align-items: center;
+  animation: .15s ease-out svelte-1c4po3v-fade-in;
+  display: flex;
+  position: fixed;
+  inset: 0;
+}
+
+@keyframes svelte-1c4po3v-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.lightbox-close.svelte-1c4po3v {
+  color: #fff;
+  cursor: pointer;
+  opacity: .7;
+  z-index: 101;
+  background: none;
+  border: none;
+  padding: .5rem;
+  transition: opacity .15s;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+.lightbox-close.svelte-1c4po3v:hover {
+  opacity: 1;
+}
+
+.lightbox-close.svelte-1c4po3v svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.lightbox-content.svelte-1c4po3v {
+  justify-content: center;
+  align-items: center;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+}
+
+.lightbox-content.svelte-1c4po3v img:where(.svelte-1c4po3v), .lightbox-content.svelte-1c4po3v video:where(.svelte-1c4po3v) {
+  object-fit: contain;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+/*! tailwindcss v4.1.11 | MIT License | https://tailwindcss.com */
+.news-content-body.svelte-1m63zip img, .news-content-body.svelte-1m63zip video {
+  width: max-content;
+  max-width: min(100%, attr(width px));
+  height: auto;
+  margin-block: calc(var(--spacing, .25rem) * 4);
+  border-radius: var(--radius-sm, calc(var(--radius)  - 4px));
+  overflow: hidden;
+}

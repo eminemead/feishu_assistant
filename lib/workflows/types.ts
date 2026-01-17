@@ -7,6 +7,27 @@
  * - Different models per step
  * - Type-safe input/output schemas
  * - Streaming support via writer
+ * 
+ * ## Direct Tool Execution Pattern
+ * 
+ * Workflows sometimes need to call tools directly for deterministic control flow.
+ * This is an accepted pattern when you need explicit step-by-step execution
+ * rather than agent-driven tool selection.
+ * 
+ * ```typescript
+ * // Import result types for proper typing
+ * import { GitLabCliResult, ChatHistoryResult, ChartResponse } from "../tools";
+ * 
+ * // Pattern: Cast execute and result
+ * const result = await (gitlabTool.execute as any)({ command: "..." }) as GitLabCliResult;
+ * ```
+ * 
+ * This pattern is necessary because:
+ * 1. Mastra tool.execute has complex generic types
+ * 2. We're calling tools outside agent context
+ * 3. The `as any` is safe - runtime behavior is correct
+ * 
+ * Result types are exported from tools/index.ts for use in workflows.
  */
 
 import { z } from "zod";

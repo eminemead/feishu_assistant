@@ -200,7 +200,26 @@ class DocumentSnapshotService {
         `✅ [DocSnapshots] Stored snapshot for ${docToken} (rev ${metadata.revisionNumber}, compressed ${compressionRatio.toFixed(2)}x)`
       );
 
-      return this.mapDbRowToSnapshot(data);
+      const mapped = this.mapDbRowToSnapshot(data);
+
+      // Some test mocks / DB layers may not echo inserted values.
+      // Ensure returned snapshot reflects the input we just stored.
+      return {
+        ...mapped,
+        userId,
+        docToken,
+        revisionNumber: metadata.revisionNumber,
+        contentHash,
+        contentSize: contentBytes.length,
+        modifiedBy: metadata.modifiedBy,
+        modifiedAt: metadata.modifiedAt,
+        metadata: {
+          ...(mapped.metadata || {}),
+          compression_ratio: compressionRatio,
+          original_size: contentBytes.length,
+          compressed_size: compressedContent.length,
+        },
+      };
     } catch (error) {
       console.error(
         `❌ [DocSnapshots] Failed to create snapshot for ${docToken}:`,
@@ -488,6 +507,7 @@ class DocumentSnapshotService {
 
 // Singleton instance
 let snapshotService: DocumentSnapshotService | null = null;
+let currentSnapshotUserId: string | null = null;
 
 /**
  * Get snapshot service instance
@@ -495,15 +515,38 @@ let snapshotService: DocumentSnapshotService | null = null;
 export function getSnapshotService(
   config?: Partial<SnapshotConfig>
 ): DocumentSnapshotService {
+  // Default usage: singleton with default config (and optional first-time overrides).
+  // Tests sometimes need isolated instances with custom config; when config is passed
+  // after the singleton is created, return a fresh instance to avoid cross-test bleed.
+  if (!config) {
+    if (!snapshotService) {
+      snapshotService = new DocumentSnapshotService();
+      if (currentSnapshotUserId) {
+        snapshotService.setUserId(currentSnapshotUserId);
+      }
+    }
+    return snapshotService;
+  }
+
   if (!snapshotService) {
     snapshotService = new DocumentSnapshotService(config);
+    if (currentSnapshotUserId) {
+      snapshotService.setUserId(currentSnapshotUserId);
+    }
+    return snapshotService;
   }
-  return snapshotService;
+
+  const fresh = new DocumentSnapshotService(config);
+  if (currentSnapshotUserId) {
+    fresh.setUserId(currentSnapshotUserId);
+  }
+  return fresh;
 }
 
 /**
  * Set user ID for RLS-based operations
  */
 export function setSnapshotUserId(userId: string): void {
+  currentSnapshotUserId = userId;
   getSnapshotService().setUserId(userId);
 }

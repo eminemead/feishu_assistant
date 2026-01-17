@@ -37,11 +37,27 @@ const TOOL_PARAM_SCHEMAS: Record<string, z.ZodSchema> = {
   mgr_okr_review: z.object({
     period: z.string().optional().describe("Time period (e.g., '11 月', 'Q4')"),
   }),
-  chart_generation: z.object({
-    chartType: z.enum(["bar", "line", "pie", "heatmap"]).describe("Chart type"),
-    data: z.any().optional().describe("Data for the chart"),
+  visualization: z.object({
+    chartType: z
+      .enum(["bar", "pie", "line", "heatmap", "table"])
+      .optional()
+      .describe("Chart type"),
     title: z.string().optional().describe("Chart title"),
-    description: z.string().optional().describe("Chart description"),
+    data: z
+      .any()
+      .optional()
+      .describe("Optional structured data. Prefer [{label,value}] array."),
+    source: z
+      .object({
+        text: z.string(),
+        format: z.enum(["csv", "json"]),
+        labelColumn: z.string(),
+        valueColumn: z.string(),
+        targetColumn: z.string().optional(),
+      })
+      .optional()
+      .describe("Optional raw CSV/JSON text with column mappings"),
+    renderMode: z.enum(["auto", "ascii", "datawrapper"]).optional(),
   }),
 };
 
@@ -71,11 +87,13 @@ Extract optional filters like start/end time or sender if explicitly mentioned.`
 - Period: Look for month (11月, 12月) or quarter (Q4, Q3)
 Return period in the format "11 月" (space before 月) when month is provided.`,
 
-  chart_generation: `Extract chart generation parameters.
-- chartType: bar, line, pie, or heatmap
+  visualization: `Extract visualization parameters.
+- chartType: bar, pie, line, heatmap, or table
 - title: Any title mentioned
-- description: Explain what the chart represents
-Data may be omitted if the user didn't provide it.`,
+
+IMPORTANT:
+- If the user didn't provide data, leave data/source empty (the executor will ask for it).
+- If the user pasted CSV/JSON inline, put it into source.text and set source.format + columns when obvious.`,
 };
 
 function normalizeGlabCommand(raw: string): string {
@@ -258,35 +276,41 @@ async function executeToolById(
       }, {});
     }
 
-    case "chart_generation": {
-      const chartTool = tools.chartGenerationTool;
-      if (!chartTool.execute) throw new Error("chart_generation tool has no execute method");
+    case "visualization": {
+      const tool = tools.visualizationTool;
+      if (!tool.execute) throw new Error("visualization tool has no execute method");
+
+      const chartType =
+        (params.chartType as "bar" | "pie" | "line" | "heatmap" | "table") ||
+        "bar";
+      const title = (params.title as string) || "Chart";
+      const renderMode = (params.renderMode as "auto" | "ascii" | "datawrapper") || "auto";
+
+      const data = params.data as unknown;
+      const source = params.source as unknown;
+
       // If user asked for a chart without providing data, don't hard-fail.
       // Ask for minimal required data so the conversation can continue.
-      if (params.data === undefined) {
-        const requested = (params.chartType as string) || "chart";
+      if (data === undefined && source === undefined) {
         return (
-          `I can generate a **${requested}** chart, but I need the **data**.\n\n` +
+          `I can generate a **${chartType}** chart, but I need the **data**.\n\n` +
           `Please provide either:\n` +
-          `- A JSON array of records (recommended), or\n` +
-          `- A small table (rows/columns) pasted in the message.\n\n` +
-          `Example:\n` +
-          `[\n  { "label": "A", "value": 10 },\n  { "label": "B", "value": 20 }\n]`
+          `- A JSON array like:\n` +
+          `[\n  { "label": "A", "value": 10 },\n  { "label": "B", "value": 20 }\n]\n\n` +
+          `- Or paste CSV text (with headers) and tell me which columns are label/value.`
         );
       }
-      // Map to valid chart types - chart_generation has complex schema
-      const rawType = (params.chartType as string) || "bar";
-      const subType = rawType as "bar" | "line" | "pie" | "heatmap" | "flowchart";
-      const chartType = ["bar", "line", "area", "scatter", "heatmap", "histogram", "boxplot", "waterfall", "bubble"].includes(subType) 
-        ? "vega-lite" as const
-        : "mermaid" as const;
-      return await chartTool.execute({
-        chartType,
-        subType,
-        data: params.data,
-        title: (params.title as string) || "Chart",
-        description: (params.description as string) || "Generated chart",
-      }, {});
+
+      return await tool.execute(
+        {
+          chartType,
+          title,
+          renderMode,
+          data,
+          source,
+        } as any,
+        {}
+      );
     }
 
     default:

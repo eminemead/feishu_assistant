@@ -1,0 +1,25 @@
+
+	.img-matte.svelte-1k18utt {
+		mask-image: url('/trumpeter/matte.png');
+		mask-size: cover;
+		mask-position: center;
+		mask-mode: luminance;
+		-webkit-mask-image: url('/trumpeter/matte.png');
+		-webkit-mask-size: cover;
+		-webkit-mask-position: center;
+	}
+
+	.link-callout.svelte-1k18utt {
+		background: #1c2520;
+		box-shadow: 0 20px 30px 0 rgba(0, 0, 0, 0.25);
+		color: #dfdfc1;
+	}
+
+	.link-callout.svelte-1k18utt:hover {
+		background: color-mix(in oklab, #1c2520 95%, #fff);
+	}
+
+	.link-callout__cta.svelte-1k18utt {
+		background: var(--lens-col-yolk);
+		color: #1c2520;
+	}

@@ -241,7 +241,7 @@ ANALYSIS WORKFLOW:
 1. Extract the period from user query (e.g., "11月" → "11 月", "10月" → "10 月")
 2. Call mgr_okr_review tool with the extracted period (CRITICAL: use exact format "X 月")
 3. When users ask for OKR analysis (分析), ALWAYS generate charts/visualizations alongside text analysis
-4. Use chart_generation tool to create visual representations (bar charts for company performance, pie charts for metrics distribution)
+4. Use visualization tool to create visual representations (bar charts for company performance, pie charts for metrics distribution)
 5. Combine data insights with visualizations for comprehensive reports
 6. For each OKR analysis request, generate at least one chart visualization
 
@@ -253,19 +253,16 @@ IMPORTANT PERIOD FORMATS:
 
 TOOLS:
 - mgr_okr_review: Fetches has_metric_percentage per city company. ALWAYS use for OKR analysis to get raw data.
-- chart_generation: Creates Mermaid/Vega-Lite charts. USE THIS TO VISUALIZE DATA (bar charts, pie charts, heatmaps).
-- okr_visualization: Generates heatmap visualizations when needed.
-- okr_chart_streaming: Generates comprehensive OKR analysis with embedded charts. USE THIS when users ask for "OKR分析", "图表", "可视化", or "Show OKR charts". This tool automatically queries data, generates charts, and provides insights.
+- visualization: Generates charts (bar/pie/line/heatmap/table) from data or CSV/JSON text. Use this for Feishu-friendly visualizations.
 
 IMPORTANT: Every OKR analysis response should include:
 1. Text analysis with insights
-2. At least ONE chart/visualization generated via chart_generation tool
+2. At least ONE chart/visualization generated via visualization tool
 3. Summary with key findings and recommendations
 
 提醒：
 - 使用mgr_okr_review工具获取OKR指标数据。
-- 使用chart_generation工具生成可视化（条形图、饼图）展示数据。
-- 使用okr_chart_streaming工具生成完整的OKR分析报告（包含图表和洞察）。
+- 使用visualization工具生成可视化（条形图、饼图）展示数据。
 - 每个OKR分析响应必须包含：文本分析 + 至少一个图表可视化 + 总结。
-- 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用okr_chart_streaming工具。`;
+- 当用户要求"OKR分析"、"图表"或"可视化"时，优先使用visualization工具。`;
 }

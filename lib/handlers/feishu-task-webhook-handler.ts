@@ -15,11 +15,13 @@ import {
   updateGitlabStatus,
   updateFeishuTaskStatus,
   getFeishuTaskDetails,
+  getFeishuTaskDetailsWithUserAuth,
   createGitlabIssueFromTask,
   updateGitlabIssueFromTask,
   saveTaskLinkExtended,
   FeishuTaskDetails,
 } from '../services/feishu-task-service';
+import { generateAuthUrl, hasUserAuthorized } from '../auth/feishu-oauth';
 import { resolveGitlabUsername } from '../services/user-mapping-service';
 import { client as feishuClient } from '../feishu-utils';
 import { exec } from 'child_process';
@@ -29,6 +31,63 @@ const execAsync = promisify(exec);
 
 // Default target project for GitLab issues
 const DEFAULT_GITLAB_PROJECT = process.env.FEISHU_TASK_GITLAB_PROJECT || 'dpa/dpa-mom/task';
+
+// OAuth auth-link prompt throttling (avoid spamming users)
+const AUTH_PROMPT_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const lastAuthPrompt = new Map<string, number>();
+
+function getTaskOauthScopes(): string[] {
+  const envScopes = process.env.FEISHU_TASK_OAUTH_SCOPES;
+  if (envScopes) {
+    const scopes = envScopes
+      .split(',')
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    if (scopes.length > 0) {
+      return scopes;
+    }
+  }
+  return ["task:task:read", "task:tasklist:read"];
+}
+
+async function maybePromptUserAuth(openId: string, taskGuid: string): Promise<void> {
+  if (!openId) return;
+
+  const authorized = await hasUserAuthorized(openId);
+  if (authorized) return;
+
+  const now = Date.now();
+  const lastPrompt = lastAuthPrompt.get(openId) || 0;
+  if (now - lastPrompt < AUTH_PROMPT_TTL_MS) return;
+
+  lastAuthPrompt.set(openId, now);
+
+  const authUrl = generateAuthUrl(openId, getTaskOauthScopes());
+  const text =
+    "🔐 为了同步你创建/更新的飞书任务到 GitLab，需要你的授权。\n" +
+    `请点击授权链接：${authUrl}\n\n` +
+    "授权后，Bot 将使用你的 user_access_token 读取任务详情（仅限已授权权限范围内）。";
+
+  try {
+    const resp = await feishuClient.im.message.create({
+      params: {
+        receive_id_type: "open_id",
+      },
+      data: {
+        receive_id: openId,
+        msg_type: "text",
+        content: JSON.stringify({ text }),
+      },
+    });
+
+    const isSuccess = resp.code === 0 || resp.code === undefined;
+    if (!isSuccess) {
+      console.warn("⚠️ [TaskWebhook] Failed to send auth prompt:", resp);
+    }
+  } catch (error) {
+    console.warn("⚠️ [TaskWebhook] Error sending auth prompt:", error);
+  }
+}
 
 // ============================================================================
 // Event Types
@@ -61,6 +120,7 @@ export interface TaskUpdatedEvent {
     event_key: string;
     comment_guid?: string;
     changed_fields?: string[];
+    operator_open_id?: string;
   };
 }
 
@@ -76,12 +136,19 @@ export interface TaskEventPayload {
  */
 export async function handleTaskUpdatedEvent(event: TaskUpdatedEvent): Promise<{ success: boolean; message: string }> {
   const { task_guid, event_key, comment_guid, changed_fields } = event.event;
+  const operatorOpenId = event.event.operator_open_id;
   
   console.log(`📋 [TaskWebhook] Received event: guid=${task_guid}, event=${event_key}`);
   
   // Fetch full task details for most events
-  const task = await getFeishuTaskDetails(task_guid);
+  const taskWithUserAuth = operatorOpenId
+    ? await getFeishuTaskDetailsWithUserAuth(task_guid, operatorOpenId)
+    : null;
+  const task = taskWithUserAuth || await getFeishuTaskDetails(task_guid);
   if (!task && event_key !== 'task.deleted') {
+    if (operatorOpenId) {
+      await maybePromptUserAuth(operatorOpenId, task_guid);
+    }
     console.error(`❌ [TaskWebhook] Failed to fetch task ${task_guid}`);
     return { success: false, message: `Failed to fetch task ${task_guid}` };
   }
