@@ -24,6 +24,7 @@ import {
   createFeishuDocsTool,
   createBashToolkitTools,
   createOkrReviewTool,
+  createExecuteWorkflowTool,
   visualizationTool,
   createTtsVoiceTool,
 } from "../tools";
@@ -41,6 +42,7 @@ IMPORTANT: You are the FALLBACK handler. Common operations are handled by dedica
 - GitLab issue creation → dpa-assistant workflow
 - OKR analysis → okr-analysis workflow  
 - Document tracking → document-tracking workflow
+- Feishu tasks (create/list/complete) → feishu-task workflow
 - Slash commands (/collect, /创建, etc.) → dpa-assistant workflow
 
 If you're seeing a query, it means the router determined it needs flexible LLM reasoning.
@@ -51,6 +53,7 @@ IDENTITY:
 - Be warm, professional, and proactive
 
 AVAILABLE TOOLS (for fallback scenarios):
+0. **execute_workflow**: Run deterministic workflows (feishu-task, dpa-assistant, okr-analysis, document-tracking)
 1. **gitlab_cli**: Ad-hoc GitLab queries (list issues, check MRs)
 2. **feishu_chat_history**: Search Feishu group chat histories  
 3. **feishu_docs**: Read Feishu documents
@@ -66,6 +69,7 @@ DO NOT try to handle:
 - Issue creation (already handled by workflow if pattern matched)
 - Complex OKR analysis (already handled by workflow)
 - Document tracking setup (already handled by workflow)
+- Feishu task creation (use execute_workflow if needed)
 
 RESPONSE FORMAT:
 - Use Markdown (Lark format) for Feishu cards
@@ -102,6 +106,7 @@ async function createDpaMomAgentInternalAsync(): Promise<{
   const feishuDocsTool = createFeishuDocsTool(true);
   const bashTools = await createBashToolkitTools(true);
   const mgrOkrReviewTool = createOkrReviewTool(true, true, 60 * 60 * 1000);
+  const executeWorkflow = createExecuteWorkflowTool();
   const ttsVoiceTool = createTtsVoiceTool(true);
 
   // Create native Mastra memory (async init; may be null if storage unavailable)
@@ -120,6 +125,25 @@ async function createDpaMomAgentInternalAsync(): Promise<{
   // Single model - Mastra Agent expects single model
   const model = getMastraModelSingle(true); // requireTools=true
 
+  const tools = {
+    // Workflow executor - for deterministic task flows
+    execute_workflow: executeWorkflow,
+    // Fallback tools - for queries that don't match workflow patterns
+    // Workflows handle: GitLab creation, OKR analysis, doc tracking, Feishu tasks
+    gitlab_cli: gitlabCliTool,
+    feishu_chat_history: feishuChatHistoryTool,
+    feishu_docs: feishuDocsTool,
+    bash: bashTools.bash,
+    readFile: bashTools.readFile,
+    writeFile: bashTools.writeFile,
+    // Quick lookups (not full analysis - that's handled by okr-analysis workflow)
+    mgr_okr_review: mgrOkrReviewTool,
+    // Data visualization - generates charts from data or CSV, auto-uploads to Feishu
+    visualization: visualizationTool,
+    // TTS voice messages - convert text to speech, send as Feishu audio
+    send_voice_message: ttsVoiceTool,
+  };
+
   const agent = new Agent({
     id: "dpa_mom",
     name: "DPA Mom",
@@ -127,26 +151,11 @@ async function createDpaMomAgentInternalAsync(): Promise<{
     model,
     memory: memory ?? undefined,
     inputProcessors,
-    tools: {
-      // Fallback tools - for queries that don't match workflow patterns
-      // Workflows handle: GitLab creation, OKR analysis, doc tracking
-      gitlab_cli: gitlabCliTool,
-      feishu_chat_history: feishuChatHistoryTool,
-      feishu_docs: feishuDocsTool,
-      bash: bashTools.bash,
-      readFile: bashTools.readFile,
-      writeFile: bashTools.writeFile,
-      // Quick lookups (not full analysis - that's handled by okr-analysis workflow)
-      mgr_okr_review: mgrOkrReviewTool,
-      // Data visualization - generates charts from data or CSV, auto-uploads to Feishu
-      visualization: visualizationTool,
-      // TTS voice messages - convert text to speech, send as Feishu audio
-      send_voice_message: ttsVoiceTool,
-    },
+    tools,
   });
 
   console.log(
-    `✅ [DpaMom] Agent created (9 tools + ${inputProcessors.length} processors)`,
+    `✅ [DpaMom] Agent created (${Object.keys(tools).length} tools + ${inputProcessors.length} processors)`,
   );
 
   return { agent, memory };

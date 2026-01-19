@@ -118,6 +118,20 @@ export interface WorkflowMetadata {
 }
 
 /**
+ * Confirmation button configuration for workflow outputs
+ */
+export interface ConfirmationConfig {
+  /** Label for confirm button */
+  confirmLabel?: string;
+  /** Label for cancel button */
+  cancelLabel?: string;
+  /** Prefix for confirm button value (e.g. "__gitlab_confirm__:") */
+  confirmValuePrefix?: string;
+  /** Full cancel button value (e.g. "__gitlab_cancel__") */
+  cancelValue?: string;
+}
+
+/**
  * Registered workflow with metadata
  */
 export interface RegisteredWorkflow {

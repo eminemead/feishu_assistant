@@ -14,6 +14,12 @@ import { executeSkillWorkflow } from "./workflows";
 import { SLASH_COMMANDS, HELP_COMMANDS } from "./workflows/dpa-assistant-workflow";
 import { getLinkedIssue } from "./services/issue-thread-mapping-service";
 import { stripThinkingTags } from "./streaming/thinking-panel";
+import { getRoutingDecision } from "./routing";
+import {
+  BROWSER_APPROVAL_CANCEL_PREFIX,
+  BROWSER_APPROVAL_CONFIRM_PREFIX,
+  BROWSER_APPROVAL_URL_REGEX,
+} from "./shared/browser-approval";
 
 /**
  * Format thinking/reasoning content as a collapsible-like section in markdown
@@ -176,6 +182,9 @@ export async function handleNewMessage(data: FeishuMessageData) {
               rootId: rootId,
               threadId: rootId,
               confirmationData: workflowResult.needsConfirmation ? workflowResult.confirmationData : undefined,
+              confirmationConfig: workflowResult.needsConfirmation
+                ? workflowResult.confirmationConfig
+                : undefined,
             }
           );
 
@@ -195,6 +204,67 @@ export async function handleNewMessage(data: FeishuMessageData) {
       }
     } else {
       logger.info(`[SlashCommand] Unknown command "${slashCmd}", falling through to agent`);
+    }
+  }
+
+  // Check for browser approval URLs or confirmation callbacks
+  const isBrowserApproval =
+    BROWSER_APPROVAL_URL_REGEX.test(cleanText) ||
+    cleanText.startsWith(BROWSER_APPROVAL_CONFIRM_PREFIX) ||
+    cleanText.startsWith(BROWSER_APPROVAL_CANCEL_PREFIX);
+  if (isBrowserApproval) {
+    logger.info(`[BrowserApproval] Intercepted approval request`);
+    devtoolsTracker.trackAgentCall("BrowserApproval", cleanText, {
+      messageId,
+      rootId,
+      commandIntercepted: true,
+    });
+
+    const card = await createAndSendStreamingCard(chatId, "chat_id", {}, {
+      replyToMessageId: messageId,
+      replyInThread: true,
+    });
+
+    try {
+      const workflowResult = await executeSkillWorkflow("browser-approval", {
+        query: cleanText,
+        chatId,
+        rootId,
+        userId,
+        onUpdate: async (text: string) => {
+          await updateCardElement(card.cardId, card.elementId, text);
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      await finalizeCardWithFollowups(
+        card.cardId,
+        card.elementId,
+        workflowResult.response,
+        undefined,
+        undefined,
+        {
+          conversationId: chatId,
+          rootId: rootId,
+          threadId: rootId,
+          confirmationData: workflowResult.needsConfirmation
+            ? workflowResult.confirmationData
+            : undefined,
+          confirmationConfig: workflowResult.needsConfirmation
+            ? workflowResult.confirmationConfig
+            : undefined,
+        }
+      );
+
+      devtoolsTracker.trackResponse("BrowserApproval", workflowResult.response, duration, {
+        threadId: rootId,
+        messageId,
+        workflowId: "browser-approval",
+      });
+      return;
+    } catch (workflowError) {
+      logger.error(`[BrowserApproval] Workflow execution failed:`, workflowError);
+      // Fall through to agent on error
     }
   }
 
@@ -219,6 +289,53 @@ export async function handleNewMessage(data: FeishuMessageData) {
   };
 
   try {
+    const routingDecision = getRoutingDecision(cleanText);
+    if (
+      routingDecision.target.type === "workflow" &&
+      routingDecision.target.workflowId === "feishu-task"
+    ) {
+      logger.info(`[FeishuTask] Intent detected, routing to feishu-task workflow`);
+
+      const threadMessages =
+        rootId !== messageId ? await getThread(chatId, rootId, botUserId) : [];
+
+      const workflowResult = await executeSkillWorkflow("feishu-task", {
+        query: cleanText,
+        chatId,
+        rootId,
+        userId,
+        context: threadMessages.length > 0 ? { threadMessages } : undefined,
+        onUpdate: async (text: string) => {
+          await updateCardElement(card.cardId, card.elementId, text);
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      await finalizeCardWithFollowups(
+        card.cardId,
+        card.elementId,
+        workflowResult.response,
+        undefined,
+        undefined,
+        {
+          conversationId: chatId,
+          rootId: rootId,
+          threadId: rootId,
+          confirmationData: workflowResult.needsConfirmation
+            ? workflowResult.confirmationData
+            : undefined,
+          confirmationConfig: workflowResult.confirmationConfig,
+        }
+      );
+
+      devtoolsTracker.trackResponse("FeishuTask", workflowResult.response, duration, {
+        threadId: rootId,
+        messageId,
+        workflowId: "feishu-task",
+      });
+      return;
+    }
+
     // Stabilize memory threading:
     // - In Feishu non-thread messages, rootId === messageId (unique per trigger)
     // - Use a stable "main" memory thread so the bot can remember prior turns in the chat

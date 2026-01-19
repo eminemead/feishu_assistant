@@ -9,13 +9,15 @@
  */
 
 import { createWorkflow, createStep } from "@mastra/core/workflows";
-import { generateText } from "ai";
+import { generateText, type CoreMessage } from "ai";
 import { z } from "zod";
 import { getMastraModelSingle } from "../shared/model-router";
 import {
   createFeishuTask,
   updateFeishuTaskStatus,
   createGitlabIssueFromTask,
+  updateGitlabIssueFromTask,
+  buildGitlabDescription,
   listTaskLinks,
   saveTaskLinkExtended,
   enqueueTaskLinkJob,
@@ -31,6 +33,7 @@ const OPEN_ID_REGEX = /^ou_[a-z0-9]+/i;
 const MAX_LIST_LIMIT = 50;
 const TASK_CONFIRM_PREFIX = "__feishu_task_confirm__";
 const TASK_CANCEL_PREFIX = "__feishu_task_cancel__";
+const TASK_PREFIX_REGEX = /^(?:\/?(?:task|todo|任务|待办))\s*[:：-]?\s*/i;
 
 const TaskIntentEnum = z.enum([
   "create_task",
@@ -65,6 +68,166 @@ function isOpenId(value?: string): boolean {
 
 function stripCodeFences(text: string): string {
   return text.replace(/```(?:json)?/g, "").replace(/```/g, "").trim();
+}
+
+function stripTaskPrefix(text: string): string {
+  return text.replace(TASK_PREFIX_REGEX, "").trim();
+}
+
+function extractMentions(text: string): string[] {
+  const matches = text.match(/@([^\s]+)/g);
+  if (!matches) return [];
+  return matches
+    .map((match) => match.replace(/^@/, "").trim())
+    .filter(Boolean);
+}
+
+function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+function resolveRelativeDate(raw: string, now: Date): string | undefined {
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  const todayStr = formatDate(now);
+  if (["today", "今天", "今"].includes(normalized)) {
+    return todayStr;
+  }
+  if (["tomorrow", "明天"].includes(normalized)) {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    return formatDate(tomorrow);
+  }
+  if (["后天"].includes(normalized)) {
+    const dayAfter = new Date(now);
+    dayAfter.setDate(now.getDate() + 2);
+    return formatDate(dayAfter);
+  }
+
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const daysUntilFridayBase = (5 - dayOfWeek + 7) % 7;
+  const thisFridayOffset = daysUntilFridayBase === 0 ? 7 : daysUntilFridayBase;
+  const thisFriday = new Date(now);
+  thisFriday.setDate(now.getDate() + thisFridayOffset);
+  const nextFriday = new Date(thisFriday);
+  nextFriday.setDate(thisFriday.getDate() + 7);
+
+  const daysUntilWednesdayBase = (3 - dayOfWeek + 7) % 7;
+  const nextWednesdayOffset = daysUntilWednesdayBase === 0 ? 7 : daysUntilWednesdayBase;
+  const nextWednesday = new Date(now);
+  nextWednesday.setDate(now.getDate() + nextWednesdayOffset);
+
+  if (/(next\s*friday|下周五)/i.test(normalized)) {
+    return formatDate(nextFriday);
+  }
+  if (/(this\s*friday|本周五|周五)/i.test(normalized)) {
+    return formatDate(thisFriday);
+  }
+  if (/(next\s*wednesday|下周三|下周3|next\s*wed)/i.test(normalized)) {
+    return formatDate(nextWednesday);
+  }
+
+  return undefined;
+}
+
+function extractDueDateFromText(text: string): string | undefined {
+  if (!text) return undefined;
+  const now = new Date();
+
+  const isoMatch = text.match(/\b\d{4}-\d{2}-\d{2}\b/);
+  if (isoMatch?.[0]) return isoMatch[0];
+
+  const zhMatch = text.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*(?:日|号)/);
+  if (zhMatch?.[1] && zhMatch?.[2]) {
+    return normalizeDueDate(`${zhMatch[1]}/${zhMatch[2]}`);
+  }
+
+  const mdMatch = text.match(/\b\d{1,2}[\/\-]\d{1,2}\b/);
+  if (mdMatch?.[0]) return normalizeDueDate(mdMatch[0]);
+
+  const keywordMatch = text.match(
+    /(?:截止|到期|due|ddl|deadline|before|by)\s*[:：]?\s*([^\s,，]+(?:\s+[^\s,，]+)?)/i
+  );
+  if (keywordMatch?.[1]) {
+    const resolved =
+      normalizeDueDate(keywordMatch[1]) || resolveRelativeDate(keywordMatch[1], now);
+    if (resolved) return resolved;
+  }
+
+  const relativePatterns = [
+    /今天|今日|today/i,
+    /明天|tomorrow/i,
+    /后天/i,
+    /下周五|next\s*friday/i,
+    /本周五|周五|this\s*friday/i,
+    /下周三|next\s*wed(?:nesday)?/i,
+  ];
+
+  for (const pattern of relativePatterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) {
+      const resolved = resolveRelativeDate(match[0], now);
+      if (resolved) return resolved;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeDueDate(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return undefined;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const relative = resolveRelativeDate(trimmed, new Date());
+  if (relative) return relative;
+
+  const mdMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (mdMatch) {
+    const month = parseInt(mdMatch[1], 10);
+    const day = parseInt(mdMatch[2], 10);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const year = new Date().getFullYear();
+      const date = new Date(year, month - 1, day);
+      if (!Number.isNaN(date.getTime())) {
+        return formatDate(date);
+      }
+    }
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return formatDate(parsed);
+  }
+
+  return undefined;
+}
+
+function formatThreadContext(
+  messages: CoreMessage[],
+  currentQuery: string
+): string | undefined {
+  if (!messages || messages.length === 0) return undefined;
+  const trimmedQuery = currentQuery.trim();
+  const cleaned = messages
+    .filter((msg) => msg.role === "user" && typeof msg.content === "string")
+    .map((msg) => String(msg.content || "").trim())
+    .filter(Boolean)
+    .filter((content) => content !== trimmedQuery)
+    .map((content) => (content === trimmedQuery ? content : stripTaskPrefix(content)))
+    .filter((content) => content !== trimmedQuery);
+
+  const unique = Array.from(new Set(cleaned));
+  if (unique.length === 0) return undefined;
+
+  const selected = unique.slice(-6);
+  const bullets = selected.map((content) => `- ${content}`).join("\n");
+  return `🧵 **上下文消息**\n${bullets}`;
 }
 
 function extractTaskGuid(input: string): string | null {
@@ -198,33 +361,33 @@ const classifyIntentStep = createStep({
 
     const confirmation = parseConfirmationQuery(trimmed);
     if (confirmation) {
-      return { ...inputData, intent: "create_task" as TaskIntent };
+      return { ...inputData, intent: "create_task" as const };
     }
 
     if (lower.startsWith("/tasklist") || lower.startsWith("/tasks")) {
-      return { ...inputData, intent: "list_tasks" as TaskIntent };
+      return { ...inputData, intent: "list_tasks" as const };
     }
     if (lower.startsWith("/task") || lower.startsWith("/todo")) {
-      return { ...inputData, intent: "create_task" as TaskIntent };
+      return { ...inputData, intent: "create_task" as const };
     }
     if (lower.startsWith("/done") || lower.startsWith("/complete")) {
-      return { ...inputData, intent: "complete_task" as TaskIntent };
+      return { ...inputData, intent: "complete_task" as const };
     }
     if (lower.startsWith("/taskhelp") || lower.startsWith("/help")) {
-      return { ...inputData, intent: "help" as TaskIntent };
+      return { ...inputData, intent: "help" as const };
     }
 
     if (/(list|tasks|task list|tasklist)/i.test(lower)) {
-      return { ...inputData, intent: "list_tasks" as TaskIntent };
+      return { ...inputData, intent: "list_tasks" as const };
     }
     if (/(complete|done|finish|reopen|undo)/i.test(lower)) {
-      return { ...inputData, intent: "complete_task" as TaskIntent };
+      return { ...inputData, intent: "complete_task" as const };
     }
     if (/(create|new task|todo|task)/i.test(lower)) {
-      return { ...inputData, intent: "create_task" as TaskIntent };
+      return { ...inputData, intent: "create_task" as const };
     }
     if (/(gitlab|issue)/i.test(lower)) {
-      return { ...inputData, intent: "link_gitlab" as TaskIntent };
+      return { ...inputData, intent: "link_gitlab" as const };
     }
 
     try {
@@ -247,7 +410,7 @@ User query: ${trimmed}`;
       });
 
       const intentRaw = text.trim().toLowerCase().replace(/[^a-z_]/g, "");
-      const intent =
+      const intent: TaskIntent =
         intentRaw === "create_task"
           ? "create_task"
           : intentRaw === "list_tasks"
@@ -258,10 +421,10 @@ User query: ${trimmed}`;
           ? "link_gitlab"
           : "help";
 
-      return { ...inputData, intent };
+      return { ...inputData, intent } as const;
     } catch (error) {
       console.warn("[FeishuTaskWorkflow] Intent classification failed:", error);
-      return { ...inputData, intent: "help" as TaskIntent };
+      return { ...inputData, intent: "help" as const };
     }
   },
 });
@@ -301,11 +464,26 @@ const parseRequestStep = createStep({
     if (intent !== "help") {
       try {
         const model = getMastraModelSingle(false);
+        const now = new Date();
+        const todayStr = formatDate(now);
+        const tomorrowStr = resolveRelativeDate("tomorrow", now) || todayStr;
+        const thisFridayStr = resolveRelativeDate("this friday", now) || todayStr;
+        const nextFridayStr = resolveRelativeDate("next friday", now) || todayStr;
+        const nextWednesdayStr = resolveRelativeDate("next wednesday", now) || todayStr;
+
         const prompt = `Extract task parameters as JSON (no markdown).
 Return ONLY JSON with keys:
 summary, description, dueDate, assignees, taskGuid, taskUrl,
 tasklistName, tasklistGuid, limit, linkGitlab, gitlabProject, completed.
-Use null for unknowns. assignees must be an array of strings.
+Use null for unknowns. assignees must be an array of strings (no @ prefix).
+If a due date is mentioned, output dueDate in YYYY-MM-DD.
+Today is ${todayStr}. Interpret:
+- today/今天 = ${todayStr}
+- tomorrow/明天 = ${tomorrowStr}
+- this friday/本周五/周五 = ${thisFridayStr}
+- next friday/下周五 = ${nextFridayStr}
+- next wednesday/下周三 = ${nextWednesdayStr}
+Strip leading "task/todo/待办/任务" prefixes from summary.
 
 User query: ${query}`;
 
@@ -326,8 +504,40 @@ User query: ${query}`;
     const fallbackGuid = extractTaskGuid(query);
     if (!params.taskGuid && fallbackGuid) params.taskGuid = fallbackGuid;
 
+    if (params.summary) {
+      params.summary = stripTaskPrefix(params.summary);
+    }
     if (intent === "create_task" && !params.summary) {
-      params.summary = query.trim();
+      params.summary = stripTaskPrefix(query);
+    }
+
+    if (!params.assignees || params.assignees.length === 0) {
+      const mentions = extractMentions(query);
+      if (mentions.length > 0) {
+        params.assignees = mentions;
+      }
+    }
+
+    if (params.dueDate) {
+      params.dueDate = normalizeDueDate(params.dueDate);
+    }
+    if (!params.dueDate) {
+      const extractedDueDate = extractDueDateFromText(query);
+      if (extractedDueDate) {
+        params.dueDate = extractedDueDate;
+      }
+    }
+
+    if (intent === "create_task") {
+      const contextMessages = Array.isArray((inputData.context as any)?.threadMessages)
+        ? ((inputData.context as any).threadMessages as CoreMessage[])
+        : [];
+      const contextBlock = formatThreadContext(contextMessages, query);
+      if (contextBlock) {
+        params.description = params.description
+          ? `${params.description}\n\n---\n${contextBlock}`
+          : contextBlock;
+      }
     }
 
     params.assignees = normalizeAssignees(params.assignees);
@@ -512,6 +722,7 @@ const executeTaskStep = createStep({
           summary,
           description: baseDescription || undefined,
           dueDate,
+          assignees: assignees.length ? assignees : undefined,
           assigneeOpenIds: assigneeOpenIds.length ? assigneeOpenIds : undefined,
           gitlabProject: project,
           __confirmed: true,
@@ -531,7 +742,21 @@ const executeTaskStep = createStep({
         };
       }
 
-      const createResult = await createFeishuTask({
+      const members = assigneeOpenIds.map((id) => ({
+        id,
+        type: "user",
+        role: "assignee",
+      }));
+
+      const taskDetails: FeishuTaskDetails = {
+        guid: "",
+        summary,
+        description: baseDescription || undefined,
+        due,
+        members,
+      };
+
+      const taskPromise = createFeishuTask({
         summary,
         description: baseDescription || undefined,
         dueDate,
@@ -539,38 +764,48 @@ const executeTaskStep = createStep({
         creatorOpenId: isOpenId(userId) ? userId : undefined,
       });
 
-      if (!createResult.success) {
+      const gitlabPromise = createGitlabIssueFromTask(taskDetails, undefined, project);
+
+      const [taskSettled, gitlabSettled] = await Promise.allSettled([
+        taskPromise,
+        gitlabPromise,
+      ]);
+
+      const taskResult =
+        taskSettled.status === "fulfilled"
+          ? taskSettled.value
+          : {
+              success: false,
+              error:
+                taskSettled.reason instanceof Error
+                  ? taskSettled.reason.message
+                  : String(taskSettled.reason),
+            };
+
+      const gitlabResult =
+        gitlabSettled.status === "fulfilled"
+          ? gitlabSettled.value
+          : {
+              success: false,
+              error:
+                gitlabSettled.reason instanceof Error
+                  ? gitlabSettled.reason.message
+                  : String(gitlabSettled.reason),
+            };
+
+      if (!taskResult.success && !gitlabResult.success) {
         return {
-          result: `Failed to create task: ${createResult.error}`,
+          result: `Failed to create task and GitLab issue.\nTask error: ${taskResult.error}\nGitLab error: ${gitlabResult.error}`,
           intent,
         };
       }
 
-      const taskDetails: FeishuTaskDetails = {
-        guid: createResult.taskGuid || "",
-        summary,
-        description: baseDescription || undefined,
-        due,
-        members: assigneeOpenIds.map((id) => ({
-          id,
-          type: "user",
-          role: "assignee",
-        })),
-        url: createResult.taskUrl,
-      };
-
-      const gitlabResult = await createGitlabIssueFromTask(
-        taskDetails,
-        createResult.taskUrl,
-        project
-      );
-
-      if (!gitlabResult.success || !gitlabResult.issueIid || !gitlabResult.issueUrl) {
+      if (taskResult.success && !gitlabResult.success) {
         let queueNote = "";
-        if (createResult.taskGuid) {
+        if (taskResult.taskGuid) {
           const queuedId = await enqueueTaskLinkJob({
-            taskGuid: createResult.taskGuid,
-            taskUrl: createResult.taskUrl || undefined,
+            taskGuid: taskResult.taskGuid,
+            taskUrl: taskResult.taskUrl || undefined,
             summary,
             description: baseDescription || undefined,
             dueTimestamp: dueTimestamp || undefined,
@@ -587,28 +822,48 @@ const executeTaskStep = createStep({
         return {
           result:
             `Feishu task created, but GitLab issue creation failed: ${gitlabResult.error}` +
-            (createResult.taskUrl ? `\nTask: ${createResult.taskUrl}` : "") +
+            (taskResult.taskUrl ? `\nTask: ${taskResult.taskUrl}` : "") +
             "\nGitLab link pending; will sync later." +
             queueNote,
           intent,
         };
       }
 
-      if (createResult.taskGuid) {
-        await saveTaskLinkExtended({
-          gitlabProject: project,
-          gitlabIssueIid: gitlabResult.issueIid,
-          gitlabIssueUrl: gitlabResult.issueUrl,
-          feishuTaskGuid: createResult.taskGuid,
-          feishuTaskUrl: createResult.taskUrl,
-        });
+      if (!taskResult.success && gitlabResult.success && gitlabResult.issueUrl) {
+        return {
+          result:
+            `GitLab issue created, but Feishu task creation failed: ${taskResult.error}` +
+            `\nGitLab: ${gitlabResult.issueUrl}\nPlease retry task creation if needed.`,
+          intent,
+        };
+      }
+
+      if (!gitlabResult.success || !gitlabResult.issueIid || !gitlabResult.issueUrl) {
+        return {
+          result: `Unexpected GitLab issue result: ${gitlabResult.error || "unknown error"}`,
+          intent,
+        };
+      }
+
+      if (taskResult.success && taskResult.taskGuid) {
+        try {
+          await saveTaskLinkExtended({
+            gitlabProject: project,
+            gitlabIssueIid: gitlabResult.issueIid,
+            gitlabIssueUrl: gitlabResult.issueUrl,
+            feishuTaskGuid: taskResult.taskGuid,
+            feishuTaskUrl: taskResult.taskUrl,
+          });
+        } catch (error) {
+          console.warn("[FeishuTaskWorkflow] Failed to save task link:", error);
+        }
 
         const linkedDescription = baseDescription
           ? `${baseDescription}\n\n🔗 GitLab Issue: ${gitlabResult.issueUrl}`
           : `🔗 GitLab Issue: ${gitlabResult.issueUrl}`;
 
         const updateResult = await updateFeishuTaskDescription(
-          createResult.taskGuid,
+          taskResult.taskGuid,
           linkedDescription
         );
 
@@ -619,12 +874,30 @@ const executeTaskStep = createStep({
         }
       }
 
+      if (taskResult.success && taskResult.taskUrl) {
+        const gitlabDescription = buildGitlabDescription(
+          { ...taskDetails, description: baseDescription || undefined },
+          taskResult.taskUrl
+        );
+        const updateGitlabResult = await updateGitlabIssueFromTask(
+          gitlabResult.issueIid,
+          { ...taskDetails, description: gitlabDescription },
+          ["description"],
+          project
+        );
+        if (!updateGitlabResult.success) {
+          console.warn(
+            `[FeishuTaskWorkflow] Failed to update GitLab issue description: ${updateGitlabResult.error}`
+          );
+        }
+      }
+
       const dueText = dueDate ? `\n- Due: ${dueDate}` : "";
       const assigneeText = assigneeOpenIds.length
         ? `\n- Assignees: ${assigneeOpenIds.join(", ")}`
         : "";
-      const taskUrlText = createResult.taskUrl
-        ? `\n- Task: ${createResult.taskUrl}`
+      const taskUrlText = taskResult.taskUrl
+        ? `\n- Task: ${taskResult.taskUrl}`
         : "";
 
       return {
@@ -693,4 +966,12 @@ export const feishuTaskWorkflow = createWorkflow({
   .then(executeTaskStep)
   .then(formatResponseStep)
   .commit();
+
+export const _testOnly = {
+  extractMentions,
+  extractDueDateFromText,
+  normalizeDueDate,
+  stripTaskPrefix,
+  formatThreadContext,
+};
 

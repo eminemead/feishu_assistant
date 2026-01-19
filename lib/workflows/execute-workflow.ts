@@ -9,7 +9,12 @@
  */
 
 import { getWorkflowRegistry } from "./registry";
-import type { WorkflowExecutionContext, BaseWorkflowInput, BaseWorkflowOutput } from "./types";
+import type {
+  WorkflowExecutionContext,
+  BaseWorkflowInput,
+  BaseWorkflowOutput,
+  ConfirmationConfig,
+} from "./types";
 import { stripThinkingTags } from "../streaming/thinking-panel";
 
 /**
@@ -65,6 +70,8 @@ export interface WorkflowExecutionResult {
   needsConfirmation?: boolean;
   /** JSON data for confirmation button (passed to callback) */
   confirmationData?: string;
+  /** Optional confirmation button config */
+  confirmationConfig?: ConfirmationConfig;
   /** Whether workflow should be skipped (handled by agent instead) */
   skipWorkflow?: boolean;
 }
@@ -146,6 +153,7 @@ export async function executeSkillWorkflow(
     let artifacts: Array<{ type: string; content: string; title?: string }> | undefined;
     let needsConfirmation: boolean | undefined;
     let confirmationData: string | undefined;
+    let confirmationConfig: ConfirmationConfig | undefined;
     
     if (typeof result === "string") {
       response = result;
@@ -215,6 +223,10 @@ export async function executeSkillWorkflow(
         confirmationData = dataSource.confirmationData as string | undefined;
         console.log(`[Workflow] Workflow requires confirmation`);
       }
+
+      if ("confirmationConfig" in dataSource && dataSource.confirmationConfig) {
+        confirmationConfig = dataSource.confirmationConfig as ConfirmationConfig;
+      }
       
       // Check for skip workflow signal (general_chat should be handled by agent)
       // Skip signal can be in outputData (from step output) or resultObj (top-level)
@@ -262,6 +274,7 @@ export async function executeSkillWorkflow(
       artifacts,
       needsConfirmation,
       confirmationData,
+      confirmationConfig,
     };
   } catch (error) {
     const durationMs = Date.now() - startTime;

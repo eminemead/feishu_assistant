@@ -565,7 +565,7 @@ function formatDueDate(timestamp: string): string {
 /**
  * Build GitLab issue description from Feishu task
  */
-function buildGitlabDescription(task: FeishuTaskDetails, feishuTaskUrl?: string): string {
+export function buildGitlabDescription(task: FeishuTaskDetails, feishuTaskUrl?: string): string {
   let desc = task.description || '';
   
   if (feishuTaskUrl) {

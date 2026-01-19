@@ -165,6 +165,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
         let reasoning: string | undefined = routerResult.reasoning;
         let needsConfirmation = routerResult.needsConfirmation || false;
         let confirmationData: string | undefined = routerResult.confirmationData;
+        let confirmationConfig = routerResult.confirmationConfig;
 
         // Always hide embedded <think>...</think> tags from rendered output
         const stripped = stripThinkingTags(result);
@@ -201,6 +202,7 @@ export async function handleNewAppMention(data: FeishuMentionData) {
                 rootId: rootId,
                 threadId: rootId,
                 confirmationData: needsConfirmation ? confirmationData : undefined,
+                confirmationConfig: needsConfirmation ? confirmationConfig : undefined,
             }
         );
         console.log(`[FeishuMention] Card finalized${finalizeResult.buttonMessageId ? ` (confirmation buttons: ${finalizeResult.buttonMessageId})` : ''}`);

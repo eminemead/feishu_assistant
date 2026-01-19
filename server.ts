@@ -18,6 +18,10 @@ import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
 import { handleDagsterWebhook } from "./lib/handlers/dagster-webhook-handler";
 import { handleTaskUpdatedEvent, TaskUpdatedEvent } from "./lib/handlers/feishu-task-webhook-handler";
 import {
+  parseTaskFormAction,
+  buildTaskConfirmationValue,
+} from "./lib/feishu-task-confirmation-card";
+import {
   NotificationRequestSchema,
   NotificationApiResponseSchema,
   NotificationErrorResponseSchema,
@@ -117,6 +121,23 @@ const recordWsEvent = () => {
 const formatError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const parseCardActionContext = (
+  contextValue?: string
+): { chatId: string; rootId: string } | null => {
+  if (!contextValue || !contextValue.includes("|")) {
+    return null;
+  }
+  const parts = contextValue.split("|");
+  if (parts.length < 2) {
+    return null;
+  }
+  const [chatId, rootId] = parts;
+  if (!chatId || !rootId) {
+    return null;
+  }
+  return { chatId, rootId };
+};
+
 const createWsClient = () =>
   new lark.WSClient({
     appId,
@@ -202,6 +223,41 @@ const eventDispatcher = new lark.EventDispatcher({
         const { handleReleaseNotesCardAction } = await import("./lib/workflows/release-notes-workflow");
         await handleReleaseNotesCardAction(rawActionValue);
         return; // Handled
+      }
+
+      const action = (data as any).action || (data as any).event?.action;
+      const taskFormAction = parseTaskFormAction(action);
+      if (taskFormAction) {
+        const contextFromAction = parseCardActionContext(taskFormAction.context);
+        const feishuContext = (data as any).context || {};
+        const chatId =
+          contextFromAction?.chatId || feishuContext.open_chat_id || "";
+        const rootId =
+          contextFromAction?.rootId || feishuContext.open_message_id || "";
+
+        const actionValue = buildTaskConfirmationValue(taskFormAction);
+        if (actionValue && chatId && rootId) {
+          handleButtonFollowup({
+            chatId,
+            messageId: eventId || "",
+            rootId,
+            botUserId,
+            userId: operatorId,
+            buttonValue: actionValue,
+            isMention: false,
+          })
+            .then(() => {
+              console.log(`✅ [CardAction] Task form submission processed`);
+            })
+            .catch((err) => {
+              console.error(`❌ [CardAction] Task form submission error:`, err);
+            });
+        } else {
+          console.warn(
+            `⚠️ [CardAction] Task form submission missing context or value`
+          );
+        }
+        return;
       }
       
       // Handle both string (legacy) and object (CardKit 2.0 with behaviors) formats
@@ -315,6 +371,41 @@ eventDispatcher.register({
             const { handleReleaseNotesCardAction } = await import("./lib/workflows/release-notes-workflow");
             await handleReleaseNotesCardAction(rawActionValue);
             return; // Handled
+          }
+
+          const action = (data as any).action || (data as any).event?.action;
+          const taskFormAction = parseTaskFormAction(action);
+          if (taskFormAction) {
+            const contextFromAction = parseCardActionContext(taskFormAction.context);
+            const feishuContext = (data as any).context || (data as any).trigger || {};
+            const chatId =
+              contextFromAction?.chatId || feishuContext.open_chat_id || feishuContext.chat_id || "";
+            const rootId =
+              contextFromAction?.rootId || feishuContext.open_message_id || feishuContext.message_id || "";
+
+            const actionValue = buildTaskConfirmationValue(taskFormAction);
+            if (actionValue && chatId && rootId) {
+              handleButtonFollowup({
+                chatId,
+                messageId: eventId || "",
+                rootId,
+                botUserId,
+                userId: operatorId,
+                buttonValue: actionValue,
+                isMention: false,
+              })
+                .then(() => {
+                  console.log(`✅ [CardAction] Task form submission processed`);
+                })
+                .catch((err) => {
+                  console.error(`❌ [CardAction] Task form submission error:`, err);
+                });
+            } else {
+              console.warn(
+                `⚠️ [CardAction] Task form submission missing context or value`
+              );
+            }
+            return;
           }
           
           // Handle both string (legacy) and object (CardKit 2.0) formats
@@ -1256,6 +1347,48 @@ app.post("/webhook/card", async (c) => {
       const { handleReleaseNotesCardAction } = await import("./lib/workflows/release-notes-workflow");
       const response = await handleReleaseNotesCardAction(actionValue);
       return c.json(response, 200);
+    }
+
+    const taskFormAction = parseTaskFormAction(cardActionPayload.event?.action);
+    if (taskFormAction) {
+      const actionValue = buildTaskConfirmationValue(taskFormAction);
+      const contextFromAction = parseCardActionContext(taskFormAction.context);
+
+      if (!contextFromAction) {
+        console.warn(`⚠️ [CardAction] Task form submission missing context`);
+        return c.json({ toast: { type: "warning", content: "Missing context" } }, 200);
+      }
+
+      if (!actionValue) {
+        console.warn(`⚠️ [CardAction] Task form submission missing action value`);
+        return c.json({ toast: { type: "warning", content: "Missing action value" } }, 200);
+      }
+
+      handleButtonFollowup({
+        chatId: contextFromAction.chatId,
+        messageId: cardActionPayload.header?.event_id || "",
+        rootId: contextFromAction.rootId,
+        botUserId,
+        userId: cardActionPayload.event?.operator?.operator_id || "",
+        buttonValue: actionValue,
+        isMention: false,
+      })
+        .then(() => {
+          console.log(`✅ [CardAction] Task form submission processed successfully`);
+        })
+        .catch((err) => {
+          console.error(`❌ [CardAction] Task form submission error:`, err);
+        });
+
+      return c.json(
+        {
+          toast: {
+            type: "success" as const,
+            content: "Processing your submission...",
+          },
+        },
+        200
+      );
     }
     if (typeof actionValue === "string" && actionValue.trim() && botUserId) {
       console.log(`🔘 [CardAction] Detected button followup action: "${actionValue}"`);

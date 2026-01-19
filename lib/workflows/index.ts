@@ -38,6 +38,7 @@ export { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 export { documentTrackingWorkflow, runDocumentTrackingWorkflow } from "./document-tracking-workflow";
 export { dpaAssistantWorkflow, runDpaAssistantWorkflow } from "./dpa-assistant-workflow";
 export { feishuTaskWorkflow } from "./feishu-task-workflow";
+export { browserApprovalWorkflow } from "./browser-approval-workflow";
 export { 
   releaseNotesWorkflow, 
   releaseNotesPreviewWorkflow,
@@ -57,6 +58,7 @@ import { documentTrackingWorkflow } from "./document-tracking-workflow";
 import { dpaAssistantWorkflow } from "./dpa-assistant-workflow";
 import { feishuTaskWorkflow } from "./feishu-task-workflow";
 import { releaseNotesWorkflow } from "./release-notes-workflow";
+import { browserApprovalWorkflow } from "./browser-approval-workflow";
 
 /**
  * Initialize and register all workflows
@@ -139,6 +141,19 @@ export function initializeWorkflows(): void {
       estimatedDurationSec: 4,
     },
     feishuTaskWorkflow as any
+  );
+
+  // Register Browser Approval Workflow
+  registerWorkflow(
+    {
+      id: "browser-approval",
+      name: "Browser Approval",
+      description: "Review and approve web-based PTO/sick/access requests",
+      tags: ["approval", "workflow", "browser"],
+      supportsStreaming: false,
+      estimatedDurationSec: 12,
+    },
+    browserApprovalWorkflow as any
   );
 
   registry.setInitialized();

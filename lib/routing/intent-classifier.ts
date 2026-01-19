@@ -11,6 +11,12 @@
  * 4. Fallback to LLM agent
  */
 
+import {
+  BROWSER_APPROVAL_CANCEL_PREFIX,
+  BROWSER_APPROVAL_CONFIRM_PREFIX,
+  BROWSER_APPROVAL_URL_REGEX,
+} from "../shared/browser-approval";
+
 export type RouteTarget =
   | { type: "workflow"; workflowId: string }
   | { type: "tool"; toolId: string }
@@ -88,6 +94,17 @@ const INTENT_RULES: IntentRule[] = [
     description: "Feishu task confirmation callbacks",
     examples: ["__feishu_task_confirm__:{...}", "__feishu_task_cancel__"],
   },
+  {
+    id: "browser_approval_confirm",
+    patterns: [
+      new RegExp(`^${BROWSER_APPROVAL_CONFIRM_PREFIX}`, "i"),
+      new RegExp(`^${BROWSER_APPROVAL_CANCEL_PREFIX}`, "i"),
+    ],
+    target: { type: "workflow", workflowId: "browser-approval" },
+    priority: 4,
+    description: "Browser approval confirmation callbacks",
+    examples: ["__browser_approval_confirm__:{...}", "__browser_approval_cancel__"],
+  },
 
   // ============================================================
   // Priority 10-19: GitLab Operations
@@ -146,6 +163,7 @@ const INTENT_RULES: IntentRule[] = [
     patterns: [
       /^\/(?:task|todo|任务|待办)(?:\s|$)/i,
       /^(?:task|todo)\s+/i,
+      /^(?:task|todo|任务|待办)\s*[:：]/i,
       /(?:创建|新建|添加|记录|安排).*(任务|待办)/i,
       /(?:任务|待办).*(创建|新建|添加|记录)/i,
       /(?:完成|标记完成|done|complete|finish|reopen|uncomplete).*(任务|待办|task|todo)/i,
@@ -209,6 +227,14 @@ const INTENT_RULES: IntentRule[] = [
     priority: 12,
     description: "Document tracking setup - workflow",
     examples: ["监控这个文档的变化", "订阅文档更新通知"],
+  },
+  {
+    id: "browser_approval_url",
+    patterns: [BROWSER_APPROVAL_URL_REGEX],
+    target: { type: "workflow", workflowId: "browser-approval" },
+    priority: 14,
+    description: "Browser approval URL handling",
+    examples: ["https://groot.nio.com/wf3/lark/approve/..."],
   },
   {
     id: "doc_read",

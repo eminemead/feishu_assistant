@@ -11,6 +11,11 @@
 import { getNextCardSequence, client as feishuClient, updateCardElement } from "./feishu-utils";
 import { FollowupOption } from "./tools/generate-followups-tool";
 import { sendFollowupButtonsMessage } from "./send-follow-up-buttons-message";
+import type { ConfirmationConfig } from "./workflows/types";
+import {
+  sendTaskConfirmationCard,
+  type TaskConfirmationPayload,
+} from "./feishu-task-confirmation-card";
 
 /**
  * Send confirmation buttons (Confirm/Cancel) for actions that need user confirmation
@@ -20,21 +25,51 @@ async function sendConfirmationButtons(
   conversationId: string,
   confirmationData: string,
   rootId: string,
-  threadId?: string
+  threadId?: string,
+  confirmationConfig?: ConfirmationConfig
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     console.log(`🔘 [Confirmation] Sending confirmation buttons...`);
+
+    const taskConfirmation = parseTaskConfirmationData(confirmationData);
+    if (taskConfirmation) {
+      const formResult = await sendTaskConfirmationCard({
+        conversationId,
+        rootId,
+        threadId,
+        payload: taskConfirmation.payload,
+        confirmPrefix: taskConfirmation.confirmPrefix,
+        cancelPrefix: taskConfirmation.cancelPrefix,
+        confirmLabel: confirmationConfig?.confirmLabel,
+        cancelLabel: confirmationConfig?.cancelLabel,
+      });
+
+      if (formResult.success) {
+        return { success: true, messageId: formResult.messageId };
+      }
+
+      console.warn(`⚠️ [Confirmation] Task form card failed, fallback to buttons: ${formResult.error}`);
+    }
 
     const {
       confirmPrefix,
       cancelPrefix,
       payload,
     } = resolveConfirmationPayload(confirmationData);
+    const confirmLabel = confirmationConfig?.confirmLabel || "✅ 确认 / Confirm";
+    const cancelLabel = confirmationConfig?.cancelLabel || "❌ 取消 / Cancel";
+    const overrideConfirmPrefix = confirmationConfig?.confirmValuePrefix;
+    const overrideCancelValue = confirmationConfig?.cancelValue;
+    const effectiveConfirmPrefix = overrideConfirmPrefix || confirmPrefix;
+    const effectiveCancelValue = overrideCancelValue || cancelPrefix;
+    const confirmValue = effectiveConfirmPrefix.endsWith(":")
+      ? `${effectiveConfirmPrefix}${payload}`
+      : `${effectiveConfirmPrefix}:${payload}`;
     
     // Use the same button format as follow-up buttons
     const confirmationButtons: FollowupOption[] = [
-      { text: "✅ 确认创建 / Confirm", value: `${confirmPrefix}:${payload}` },
-      { text: "❌ 取消 / Cancel", value: cancelPrefix },
+      { text: confirmLabel, value: confirmValue },
+      { text: cancelLabel, value: effectiveCancelValue },
     ];
     
     // Use the existing sendFollowupButtonsMessage function
@@ -101,6 +136,51 @@ function resolveConfirmationPayload(confirmationData: string): {
   }
 }
 
+function parseTaskConfirmationData(confirmationData: string): {
+  confirmPrefix: string;
+  cancelPrefix: string;
+  payload: TaskConfirmationPayload;
+} | null {
+  try {
+    const parsed = JSON.parse(confirmationData);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    const confirmPrefix =
+      typeof (parsed as any).confirmPrefix === "string"
+        ? (parsed as any).confirmPrefix
+        : "";
+    if (!confirmPrefix.startsWith("__feishu_task_confirm__")) {
+      return null;
+    }
+
+    const cancelPrefix =
+      typeof (parsed as any).cancelPrefix === "string"
+        ? (parsed as any).cancelPrefix
+        : "__feishu_task_cancel__";
+
+    const payloadSource =
+      (parsed as any).payload !== undefined
+        ? (parsed as any).payload
+        : (parsed as any).data !== undefined
+        ? (parsed as any).data
+        : parsed;
+
+    if (!payloadSource || typeof payloadSource !== "object") {
+      return null;
+    }
+
+    return {
+      confirmPrefix,
+      cancelPrefix,
+      payload: payloadSource as TaskConfirmationPayload,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
 export interface FinalizeCardConfig {
   /**
    * Feishu conversation ID (required for sending button message)
@@ -130,6 +210,10 @@ export interface FinalizeCardConfig {
    * The value is JSON-encoded data to be passed to the confirmation callback
    */
   confirmationData?: string;
+  /**
+   * Optional confirmation button overrides (labels + value prefixes)
+   */
+  confirmationConfig?: ConfirmationConfig;
 }
 
 /**
@@ -175,7 +259,8 @@ export async function finalizeCardWithFollowups(
         config.conversationId,
         config.confirmationData,
         config.rootId,
-        config.threadId
+        config.threadId,
+        config.confirmationConfig
       );
       
       if (confirmationResult.success) {

@@ -15,6 +15,7 @@ import { CoreMessage } from "ai";
 import { classifyIntent, ClassificationResult } from "./intent-classifier";
 import { executeDirectTool, formatToolResult, DirectToolResult } from "./direct-tool-executor";
 import { executeSkillWorkflow, type WorkflowExecutionResult } from "../workflows";
+import type { ConfirmationConfig } from "../workflows/types";
 import { handleDocumentCommand } from "../handle-doc-commands";
 import { SLASH_COMMANDS, HELP_COMMANDS } from "../workflows/dpa-assistant-workflow";
 import { getLinkedIssue } from "../services/issue-thread-mapping-service";
@@ -60,6 +61,8 @@ export interface RouterResult {
   needsConfirmation?: boolean;
   /** Confirmation data for buttons */
   confirmationData?: string;
+  /** Confirmation button config */
+  confirmationConfig?: ConfirmationConfig;
   /** Reasoning/thinking from agent */
   reasoning?: string;
   /** Raw result for further processing */
@@ -267,6 +270,7 @@ async function executeTarget(
         durationMs: Date.now() - startTime,
         needsConfirmation: workflowResult.needsConfirmation,
         confirmationData: workflowResult.confirmationData,
+        confirmationConfig: workflowResult.confirmationConfig,
         rawResult: workflowResult,
       };
     }
@@ -283,12 +287,16 @@ async function executeTarget(
         ? await getLinkedIssue(context.chatId, context.rootId)
         : null;
 
+      const workflowContext =
+        workflowId === "feishu-task" ? { threadMessages: messages } : undefined;
+
       const workflowResult = await executeSkillWorkflow(workflowId, {
         query,
         chatId: context.chatId,
         rootId: context.rootId,
         userId: context.userId,
         linkedIssue: linkedIssue || undefined,
+        context: workflowContext,
         onUpdate: context.onUpdate,
       });
 
@@ -313,6 +321,7 @@ async function executeTarget(
         durationMs: Date.now() - startTime,
         needsConfirmation: workflowResult.needsConfirmation,
         confirmationData: workflowResult.confirmationData,
+        confirmationConfig: workflowResult.confirmationConfig,
         rawResult: workflowResult,
       };
     }

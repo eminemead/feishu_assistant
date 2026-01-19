@@ -105,6 +105,27 @@ describe("Intent Classifier", () => {
     });
   });
 
+  describe("Feishu Task Operations", () => {
+    it("routes task creation intents to feishu-task workflow", () => {
+      const queries = [
+        "待办: 跟进新客户需求",
+        "todo: fix pipeline lag",
+        "任务：整理周报数据",
+        "task: update dashboard",
+        "task fix flaky test",
+      ];
+
+      for (const query of queries) {
+        const result = classifyIntent(query);
+        expect(result.target.type).toBe("workflow");
+        if (result.target.type === "workflow") {
+          expect(result.target.workflowId).toBe("feishu-task");
+        }
+        expect(result.confidence).toBe("exact");
+      }
+    });
+  });
+
   describe("Document Operations", () => {
     it("routes doc commands to doc-command handler", () => {
       const queries = [

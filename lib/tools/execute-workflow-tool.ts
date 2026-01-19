@@ -15,7 +15,14 @@ import { createTool } from "@mastra/core/tools";
 import { executeSkillWorkflow, getAvailableWorkflows } from "../workflows";
 
 const executeWorkflowSchema = z.object({
-  workflowId: z.enum(["dpa-assistant", "okr-analysis", "document-tracking", "feishu-task"])
+  workflowId: z
+    .enum([
+      "dpa-assistant",
+      "okr-analysis",
+      "document-tracking",
+      "feishu-task",
+      "browser-approval",
+    ])
     .describe("ID of workflow to execute"),
   query: z.string().describe("User query to pass to workflow"),
   params: z.record(z.any()).optional().describe("Additional workflow parameters"),
@@ -30,6 +37,7 @@ Available workflows:
 - **okr-analysis**: Complete OKR analysis with data query, chart generation, and insights. Use for: "分析OKR", "OKR分析", comprehensive OKR reports.
 - **document-tracking**: Set up document change tracking. Use for: "watch doc", "track document changes".
 - **feishu-task**: Feishu task creation with GitLab linking + confirmation. Use for: "创建任务", "list tasks", "complete task".
+- **browser-approval**: Review and approve web-based requests via agent-browser. Use for: approval URLs, PTO/sick/access requests.
 
 Use this tool when the user needs a multi-step operation with explicit confirmation or complex data processing.`,
   inputSchema: executeWorkflowSchema,
@@ -54,6 +62,7 @@ Use this tool when the user needs a multi-step operation with explicit confirmat
         durationMs: result.durationMs,
         needsConfirmation: result.needsConfirmation || false,
         confirmationData: result.confirmationData,
+        confirmationConfig: result.confirmationConfig,
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

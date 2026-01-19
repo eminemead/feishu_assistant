@@ -43,7 +43,7 @@
     "@larksuiteoapi/lark-mcp": "^0.5.1",
     "@larksuiteoapi/node-sdk": "^1.44.0",
     "@mastra/arize": "^1.0.0-beta.10",
-    "@mastra/core": "^1.0.0-beta.20",
+    "@mastra/core": "1.0.0-beta.23",
     "@mastra/hono": "^0.1.0-beta.15",
     "@mastra/memory": "^1.0.0-beta.11",
     "@mastra/observability": "^1.0.0-beta.10",

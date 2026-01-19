@@ -125,6 +125,26 @@ const classifyIntentOutputSchema = z.object({
   linkedIssue: linkedIssueSchema,
 });
 
+type ClassifyIntentOutput = z.infer<typeof classifyIntentOutputSchema>;
+
+// Helper to create properly-typed classify intent output
+function classifyResult(
+  intent: Intent,
+  input: z.infer<typeof classifyIntentInputSchema>,
+  params?: Record<string, string>,
+  queryOverride?: string
+): ClassifyIntentOutput {
+  return {
+    intent,
+    params,
+    query: queryOverride ?? input.query,
+    chatId: input.chatId,
+    rootId: input.rootId,
+    userId: input.userId,
+    linkedIssue: input.linkedIssue,
+  };
+}
+
 // Command-style triggers (slash commands) - explicit intent, no LLM needed
 // Exported for testing
 export const SLASH_COMMANDS: Record<string, Intent> = {
@@ -210,10 +230,9 @@ export function parseSlashCommand(query: string): {
 
 const classifyIntentStep = createStep({
   id: "classify-intent",
-  // @ts-ignore - Mastra beta.20 has overload resolution issues with tsgo
   inputSchema: classifyIntentInputSchema,
   outputSchema: classifyIntentOutputSchema,
-  execute: async ({ inputData }: { inputData: z.infer<typeof classifyIntentInputSchema> }) => {
+  execute: async ({ inputData }: { inputData: z.infer<typeof classifyIntentInputSchema> }): Promise<ClassifyIntentOutput> => {
     const { query, chatId, rootId, userId, linkedIssue } = inputData;
     
     console.log(`[DPA Workflow] ============================================`);
@@ -2550,11 +2569,18 @@ export const dpaAssistantWorkflow = createWorkflow({
     const branchResult = gitlabCreate || gitlabList || gitlabClose || gitlabAssign || gitlabThreadUpdate || gitlabRelink || gitlabSummarize || chatSearch || docRead || feedbackSummarize || feedbackUpdate || codeReview || generalChat;
     
     if (branchResult) {
+      // Cast to expected shape since getStepResult returns {} in Mastra's types
+      const typed = branchResult as {
+        result?: string;
+        intent?: Intent;
+        needsConfirmation?: boolean;
+        confirmationData?: string;
+      };
       return {
-        result: branchResult.result || "No response",
-        intent: branchResult.intent || "general_chat",
-        needsConfirmation: (branchResult as any).needsConfirmation,
-        confirmationData: (branchResult as any).confirmationData,
+        result: typed.result || "No response",
+        intent: typed.intent || "general_chat",
+        needsConfirmation: typed.needsConfirmation,
+        confirmationData: typed.confirmationData,
       };
     }
     
