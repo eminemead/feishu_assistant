@@ -234,7 +234,10 @@ const INTENT_RULES: IntentRule[] = [
     target: { type: "workflow", workflowId: "browser-approval" },
     priority: 14,
     description: "Browser approval URL handling",
-    examples: ["https://groot.nio.com/wf3/lark/approve/..."],
+    examples: [
+      "https://groot.nio.com/wf3/lark/approve/...",
+      "https://workflow.niohome.com/src/html/approve.html?...",
+    ],
   },
   {
     id: "doc_read",

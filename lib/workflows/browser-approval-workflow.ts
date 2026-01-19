@@ -109,10 +109,10 @@ function truncate(text: string, limit: number): string {
   return text.slice(0, limit) + "\n...[truncated]";
 }
 
-function getDecisionLabel(decision: ApprovalDecision): string {
-  if (decision === "approve") return "Approve";
-  if (decision === "reject") return "Reject";
-  return "Inquiry";
+function getDecisionLabel(decision: ApprovalDecision, chinese = false): string {
+  if (decision === "approve") return chinese ? "同意" : "Approve";
+  if (decision === "reject") return chinese ? "拒绝" : "Reject";
+  return chinese ? "询问" : "Inquiry";
 }
 
 function pickDecisionButton(
@@ -125,32 +125,50 @@ function pickDecisionButton(
   return buttons.inquiryRef;
 }
 
+const LLM_TIMEOUT_MS = 60000; // 60s timeout for LLM calls
+const PAGE_OPEN_TIMEOUT_MS = 300000; // 5min timeout for slow approval pages
+const SNAPSHOT_TIMEOUT_MS = 60000; // 60s timeout for snapshots
+
 async function extractApprovalContext(snapshotText: string): Promise<ApprovalExtraction> {
   const model = getMastraModelSingle(false);
   const prompt = `You are extracting structured data from an accessibility snapshot of an approval page.
-Use ONLY the snapshot content. Return JSON only.
+This may be a Chinese NIO internal system. Use ONLY the snapshot content. Return JSON only.
 
 Fields:
-- requestType: PTO | sick leave | data access | other
-- requester
-- dates
+- requestType: PTO | sick leave | data access | field access | other (look for 申请类型, 字段申请, etc.)
+- requester (look for 申请人)
+- dates (look for 申请日期, 有效期)
 - duration
-- reason
+- reason (look for 申请原因)
 - policySummary (short)
-- currentStatus
+- currentStatus (look for 审核中, 待审批, 已完成, etc.)
 - attachments (array)
-- decisionButtons: { approveRef, rejectRef, inquiryRef } using @e refs from snapshot
+- decisionButtons: { approveRef, rejectRef, inquiryRef } - look for 同意/拒绝/询问 text or @e refs
 - missingInfo (array)
-- summary (1-2 lines)
+- summary (1-2 lines describing what's being requested)
 - notes (optional)
 
 Snapshot:
 ${truncate(snapshotText, 12000)}`;
 
-  const { text } = await generateText({ model, prompt, temperature: 0 });
-  const parsed = safeJsonParse<ApprovalExtraction>(text, {});
-  const validated = extractionSchema.safeParse(parsed);
-  return validated.success ? validated.data : {};
+  console.log(`[BrowserApproval] Extracting context from snapshot (${snapshotText.length} chars)...`);
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), LLM_TIMEOUT_MS);
+  
+  try {
+    const { text } = await generateText({ 
+      model, 
+      prompt, 
+      temperature: 0,
+      abortSignal: abortController.signal,
+    });
+    console.log(`[BrowserApproval] Extraction complete`);
+    const parsed = safeJsonParse<ApprovalExtraction>(text, {});
+    const validated = extractionSchema.safeParse(parsed);
+    return validated.success ? validated.data : {};
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function decideApproval(
@@ -158,23 +176,43 @@ async function decideApproval(
 ): Promise<z.infer<typeof decisionSchema>> {
   const model = getMastraModelSingle(false);
   const prompt = `You are deciding approve/reject/inquiry based on the extracted approval data.
-If missingInfo is non-empty or policySummary suggests escalation, choose "inquiry".
+This is a data/field access request in a Chinese company system.
+
+Guidelines:
+- If the request is for standard data access with a clear business reason, recommend "approve"
+- If missingInfo is non-empty or something seems off, choose "inquiry"
+- Only recommend "reject" for clearly inappropriate requests
+
 Return JSON only with:
 - decision: approve | reject | inquiry
-- rationale: array of short bullet reasons
+- rationale: array of short bullet reasons (can be in Chinese if the data is Chinese)
 - questions: array of questions (only if inquiry)
 
 Extracted data:
 ${JSON.stringify(extraction, null, 2)}`;
 
-  const { text } = await generateText({ model, prompt, temperature: 0 });
-  const parsed = safeJsonParse<z.infer<typeof decisionSchema>>(text, {
-    decision: "inquiry",
-    rationale: [],
-    questions: [],
-  });
-  const validated = decisionSchema.safeParse(parsed);
-  return validated.success ? validated.data : { decision: "inquiry", rationale: [], questions: [] };
+  console.log(`[BrowserApproval] Deciding approval action...`);
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), LLM_TIMEOUT_MS);
+  
+  try {
+    const { text } = await generateText({ 
+      model, 
+      prompt, 
+      temperature: 0,
+      abortSignal: abortController.signal,
+    });
+    console.log(`[BrowserApproval] Decision complete`);
+    const parsed = safeJsonParse<z.infer<typeof decisionSchema>>(text, {
+      decision: "inquiry",
+      rationale: [],
+      questions: [],
+    });
+    const validated = decisionSchema.safeParse(parsed);
+    return validated.success ? validated.data : { decision: "inquiry", rationale: [], questions: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function resolveDecisionButtons(snapshotText: string): Promise<{
@@ -182,6 +220,22 @@ async function resolveDecisionButtons(snapshotText: string): Promise<{
   rejectRef?: string;
   inquiryRef?: string;
 }> {
+  // First try to find Chinese text buttons (common in NIO approval pages)
+  // These render as text nodes, not button elements, so we use text selectors
+  const hasChineseApprove = /同意/.test(snapshotText);
+  const hasChineseReject = /拒绝/.test(snapshotText);
+  const hasChineseInquiry = /询问/.test(snapshotText);
+  
+  if (hasChineseApprove || hasChineseReject || hasChineseInquiry) {
+    console.log(`[BrowserApproval] Found Chinese button text patterns`);
+    return {
+      approveRef: hasChineseApprove ? 'text=同意' : undefined,
+      rejectRef: hasChineseReject ? 'text=拒绝' : undefined,
+      inquiryRef: hasChineseInquiry ? 'text=询问' : undefined,
+    };
+  }
+
+  // Fallback: use LLM to find @e refs for English buttons
   const model = getMastraModelSingle(false);
   const prompt = `Find the approve/reject/inquiry button refs in this accessibility snapshot.
 Return JSON only: { approveRef, rejectRef, inquiryRef } using @e refs.
@@ -189,12 +243,26 @@ Return JSON only: { approveRef, rejectRef, inquiryRef } using @e refs.
 Snapshot:
 ${truncate(snapshotText, 12000)}`;
 
-  const { text } = await generateText({ model, prompt, temperature: 0 });
-  const parsed = safeJsonParse<{ approveRef?: string; rejectRef?: string; inquiryRef?: string }>(
-    text,
-    {}
-  );
-  return parsed;
+  console.log(`[BrowserApproval] Resolving decision buttons via LLM...`);
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), LLM_TIMEOUT_MS);
+  
+  try {
+    const { text } = await generateText({ 
+      model, 
+      prompt, 
+      temperature: 0,
+      abortSignal: abortController.signal,
+    });
+    console.log(`[BrowserApproval] Button resolution complete`);
+    const parsed = safeJsonParse<{ approveRef?: string; rejectRef?: string; inquiryRef?: string }>(
+      text,
+      {}
+    );
+    return parsed;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -271,21 +339,83 @@ const reviewApprovalStep = createStep({
     if (!requestUrl) {
       return {
         result:
-          "Missing approval URL. Provide a link like: https://groot.nio.com/wf3/lark/approve/<id>",
+          "Missing approval URL. Provide a link like:\n- https://groot.nio.com/wf3/lark/approve/<id> (data permissions)\n- https://workflow.niohome.com/src/html/approve.html?... (PTO/sick leave)",
       };
     }
 
-    console.log(`[BrowserApproval] Opening: ${requestUrl}`);
-    await agentBrowserOpen(requestUrl, { session, statePath, headed, timeoutMs: 45000 });
+    console.log(`[BrowserApproval] Opening: ${requestUrl} (session=${session}, headed=${headed})`);
+    const openResult = await agentBrowserOpen(requestUrl, { session, statePath, headed, timeoutMs: PAGE_OPEN_TIMEOUT_MS });
+    console.log(`[BrowserApproval] Page opened: ${openResult.stdout.substring(0, 200)}`);
 
+    // Check if redirected to login page
+    const loginRedirectPatterns = [
+      /signin\.nio\.com/i,
+      /login/i,
+      /sso.*callback/i,
+      /账号登录/,
+      /蔚来账号/,
+    ];
+    const wasRedirectedToLogin = loginRedirectPatterns.some(
+      (pattern) => pattern.test(openResult.stdout) || pattern.test(openResult.stderr)
+    );
+
+    if (wasRedirectedToLogin) {
+      console.log(`[BrowserApproval] Detected login redirect`);
+      return {
+        result: `🔐 **Authentication Required**
+
+The approval page requires NIO login. Setup options:
+
+**Option 1: Use Chrome with remote debugging (recommended)**
+\`\`\`bash
+# 1. Start Chrome with debugging enabled
+/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222
+
+# 2. Login to NIO in that Chrome window
+
+# 3. Add to .env:
+AGENT_BROWSER_CDP=9222
+\`\`\`
+
+**Option 2: Use headed mode each time**
+\`\`\`bash
+# Add to .env:
+AGENT_BROWSER_HEADED=true
+\`\`\`
+Then approve in the browser window that opens.
+
+After setup, restart the server and try again.`,
+      };
+    }
+
+    console.log(`[BrowserApproval] Taking snapshot...`);
     const snapshot = await agentBrowserSnapshot({
       session,
       json: true,
       depth: 6,
-      timeoutMs: 45000,
+      timeoutMs: SNAPSHOT_TIMEOUT_MS,
     });
+    console.log(`[BrowserApproval] Snapshot taken: ${snapshot.raw.length} chars`);
 
     const snapshotText = snapshot.raw;
+
+    // Double-check snapshot content for login page (in case redirect wasn't caught)
+    const snapshotHasLogin = loginRedirectPatterns.some((pattern) => pattern.test(snapshotText));
+    if (snapshotHasLogin && !snapshotText.includes("approve") && !snapshotText.includes("审批")) {
+      console.log(`[BrowserApproval] Snapshot shows login page`);
+      return {
+        result: `🔐 **Authentication Required**
+
+The page content shows a login screen. Please set up an authenticated browser session.
+
+**Setup:**
+\`\`\`bash
+agent-browser --headed --state ~/.agent-browser/nio-auth.json open "${requestUrl}"
+# Login manually, then add AGENT_BROWSER_STATE_PATH to .env
+\`\`\``,
+      };
+    }
+
     let extraction = await extractApprovalContext(snapshotText);
     const needsButtonFallback =
       !extraction.decisionButtons?.approveRef &&
@@ -297,7 +427,7 @@ const reviewApprovalStep = createStep({
         json: true,
         interactiveOnly: true,
         depth: 4,
-        timeoutMs: 45000,
+        timeoutMs: SNAPSHOT_TIMEOUT_MS,
       });
       const buttonRefs = await resolveDecisionButtons(buttonSnapshot.raw);
       extraction = {
@@ -433,14 +563,34 @@ const confirmApprovalStep = createStep({
     }
 
     console.log(`[BrowserApproval] Confirming action=${action} url=${requestUrl}`);
-    await agentBrowserOpen(requestUrl, { session, statePath, headed, timeoutMs: 45000 });
+    const openResult = await agentBrowserOpen(requestUrl, { session, statePath, headed, timeoutMs: PAGE_OPEN_TIMEOUT_MS });
+
+    // Check if session expired and redirected to login
+    const loginRedirectPatterns = [
+      /signin\.nio\.com/i,
+      /login/i,
+      /sso.*callback/i,
+      /账号登录/,
+      /蔚来账号/,
+    ];
+    const wasRedirectedToLogin = loginRedirectPatterns.some(
+      (pattern) => pattern.test(openResult.stdout) || pattern.test(openResult.stderr)
+    );
+
+    if (wasRedirectedToLogin) {
+      return {
+        result: `🔐 **Session Expired**
+
+The browser session has expired. Please re-authenticate using one of the setup methods (Chrome CDP or headed mode) and try again.`,
+      };
+    }
 
     const snapshot = await agentBrowserSnapshot({
       session,
       json: true,
       interactiveOnly: true,
       depth: 6,
-      timeoutMs: 45000,
+      timeoutMs: SNAPSHOT_TIMEOUT_MS,
     });
 
     const buttons = await resolveDecisionButtons(snapshot.raw);

@@ -1,7 +1,29 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { existsSync } from "fs";
 
 const execFileAsync = promisify(execFile);
+
+// Resolve agent-browser binary path (handles nvm installations)
+function resolveAgentBrowserPath(): string {
+  // Check common locations
+  const candidates = [
+    process.env.AGENT_BROWSER_PATH, // Explicit override
+    "/Users/xiaofei.yin/.nvm/versions/node/v22.19.0/bin/agent-browser", // nvm install
+    "/usr/local/bin/agent-browser",
+    "/opt/homebrew/bin/agent-browser",
+    "agent-browser", // fallback to PATH
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    if (candidate === "agent-browser" || existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return "agent-browser";
+}
+
+const AGENT_BROWSER_BIN = resolveAgentBrowserPath();
 
 export interface AgentBrowserBaseOptions {
   session?: string;
@@ -11,7 +33,10 @@ export interface AgentBrowserBaseOptions {
 }
 
 export interface AgentBrowserOpenOptions extends AgentBrowserBaseOptions {
+  /** @deprecated statePath not supported in agent-browser v0.6.0 - sessions don't persist */
   statePath?: string;
+  /** User data directory for persistent browser profile */
+  userDataDir?: string;
 }
 
 export interface AgentBrowserSnapshotOptions extends AgentBrowserBaseOptions {
@@ -44,9 +69,10 @@ async function runAgentBrowser(
   args: string[],
   options?: AgentBrowserBaseOptions
 ): Promise<AgentBrowserCommandResult> {
-  const command = `agent-browser ${args.join(" ")}`;
+  const command = `${AGENT_BROWSER_BIN} ${args.join(" ")}`;
+  console.log(`[AgentBrowser] Running: ${command}`);
   try {
-    const { stdout, stderr } = await execFileAsync("agent-browser", args, {
+    const { stdout, stderr } = await execFileAsync(AGENT_BROWSER_BIN, args, {
       timeout: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       maxBuffer: MAX_BUFFER_BYTES,
       env: process.env,
