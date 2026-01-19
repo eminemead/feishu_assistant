@@ -30,6 +30,7 @@ import {
   storeNotificationResponse,
 } from "./lib/notification-idempotency";
 import { logger } from "./lib/logger";
+import { startFeishuTaskLinkWorker } from "./lib/services/feishu-task-link-worker";
 
 // Global error handlers to prevent process crash
 process.on('unhandledRejection', (reason, promise) => {
@@ -1449,6 +1450,14 @@ async function startServer() {
   console.log("📋 [Startup] Step 0c: Initializing Mastra instance...");
   const mastra = await getMastraAsync();
   console.log("✅ [Startup] Step 0c: Mastra instance ready");
+
+  // Step 0d: Start Feishu task link worker (non-blocking)
+  try {
+    startFeishuTaskLinkWorker();
+    console.log("✅ [Startup] Step 0d: Feishu task link worker started");
+  } catch (error) {
+    console.warn("⚠️ [Startup] Step 0d: Feishu task link worker failed:", error);
+  }
   
   // Step 1: Initialize WebSocket for Subscription Mode
   if (useSubscriptionMode) {

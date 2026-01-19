@@ -37,6 +37,18 @@ export interface TaskLinkRecord {
   created_at: string;
 }
 
+export interface FeishuTaskLinkJobPayload {
+  taskGuid: string;
+  taskUrl?: string;
+  summary: string;
+  description?: string;
+  dueTimestamp?: string;
+  assigneeOpenIds?: string[];
+  gitlabProject: string;
+  createdBy?: string;
+  requestedAt?: string;
+}
+
 export interface FeishuTaskResult {
   success: boolean;
   taskGuid?: string;
@@ -186,6 +198,75 @@ export async function updateFeishuTaskStatus(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('❌ [FeishuTask] Error updating task status:', errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Update Feishu task description
+ */
+export async function updateFeishuTaskDescription(
+  taskGuid: string,
+  description: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const resp = await feishuClient.task.v2.task.patch({
+      path: { task_guid: taskGuid },
+      params: {
+        user_id_type: "open_id",
+      },
+      data: {
+        task: {
+          description,
+        },
+        update_fields: ["description"],
+      },
+    });
+
+    const isSuccess = resp.code === 0 || resp.code === undefined;
+    if (!isSuccess) {
+      return { success: false, error: `Failed to update task: ${JSON.stringify(resp)}` };
+    }
+
+    console.log(`✅ [FeishuTask] Updated task description: ${taskGuid}`);
+    return { success: true };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("❌ [FeishuTask] Error updating task description:", errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Delete Feishu task (best-effort cleanup)
+ */
+export async function deleteFeishuTask(
+  taskGuid: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const taskApi = (feishuClient.task.v2 as any);
+    const deleteApi = taskApi?.task?.delete;
+    if (typeof deleteApi !== "function") {
+      return { success: false, error: "Task delete API not available" };
+    }
+
+    const resp = await deleteApi({
+      path: { task_guid: taskGuid },
+      params: {
+        user_id_type: "open_id",
+      },
+    });
+
+    const isSuccess = resp.code === 0 || resp.code === undefined;
+    if (!isSuccess) {
+      return { success: false, error: `Failed to delete task: ${JSON.stringify(resp)}` };
+    }
+
+    console.log(`✅ [FeishuTask] Deleted task: ${taskGuid}`);
+    return { success: true };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("❌ [FeishuTask] Error deleting task:", errorMsg);
     return { success: false, error: errorMsg };
   }
 }
@@ -702,6 +783,139 @@ export async function getFeishuTaskByGitlabIssue(
   }
 
   return data as TaskLinkRecord;
+}
+
+/**
+ * List GitLab-Feishu task links (canonical task index)
+ */
+export async function listTaskLinks(params?: {
+  project?: string;
+  feishuStatus?: "todo" | "in_progress" | "done";
+  gitlabStatus?: "opened" | "closed";
+  limit?: number;
+}): Promise<TaskLinkRecord[]> {
+  try {
+    let query = supabase
+      .from("gitlab_feishu_task_links")
+      .select("*")
+      .order("updated_at", { ascending: false });
+
+    if (params?.project) {
+      query = query.eq("gitlab_project", params.project);
+    }
+    if (params?.feishuStatus) {
+      query = query.eq("feishu_status", params.feishuStatus);
+    }
+    if (params?.gitlabStatus) {
+      query = query.eq("gitlab_status", params.gitlabStatus);
+    }
+    if (params?.limit) {
+      query = query.limit(params.limit);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) {
+      console.warn("⚠️ [FeishuTask] Failed to list task links:", error);
+      return [];
+    }
+
+    return data as TaskLinkRecord[];
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("❌ [FeishuTask] Error listing task links:", errorMsg);
+    return [];
+  }
+}
+
+/**
+ * Enqueue a task link retry job (PGMQ)
+ */
+export async function enqueueTaskLinkJob(
+  payload: FeishuTaskLinkJobPayload
+): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.rpc("enqueue_feishu_task_link", {
+      payload,
+    });
+    if (error) {
+      console.error("❌ [FeishuTask] Failed to enqueue task link job:", error);
+      return null;
+    }
+
+    const msgId = typeof data === "number" ? data : Number(data);
+    return Number.isFinite(msgId) ? msgId : null;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("❌ [FeishuTask] Error enqueuing task link job:", errorMsg);
+    return null;
+  }
+}
+
+export interface TaskLinkQueueItem {
+  msgId: number;
+  readCount: number;
+  enqueuedAt?: string;
+  payload: FeishuTaskLinkJobPayload;
+}
+
+/**
+ * Dequeue task link retry jobs (PGMQ)
+ */
+export async function dequeueTaskLinkJobs(params?: {
+  batchSize?: number;
+  visibilityTimeoutSec?: number;
+}): Promise<TaskLinkQueueItem[]> {
+  const batchSize = params?.batchSize ?? 5;
+  const visibilityTimeoutSec = params?.visibilityTimeoutSec ?? 60;
+
+  try {
+    const { data, error } = await supabase.rpc("dequeue_feishu_task_link", {
+      batch_size: batchSize,
+      visibility_timeout: visibilityTimeoutSec,
+    });
+    if (error) {
+      console.error("❌ [FeishuTask] Failed to dequeue task link jobs:", error);
+      return [];
+    }
+
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    return data
+      .map((row: any) => ({
+        msgId: Number(row.msg_id),
+        readCount: Number(row.read_ct || 0),
+        enqueuedAt: row.enqueued_at,
+        payload: (row.message || row.msg || row.payload) as FeishuTaskLinkJobPayload,
+      }))
+      .filter((item) => Number.isFinite(item.msgId) && !!item.payload);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("❌ [FeishuTask] Error dequeuing task link jobs:", errorMsg);
+    return [];
+  }
+}
+
+/**
+ * Ack (delete) a task link retry job (PGMQ)
+ */
+export async function ackTaskLinkJob(msgId: number): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc("ack_feishu_task_link", {
+      msg_id: msgId,
+    });
+    if (error) {
+      console.error("❌ [FeishuTask] Failed to ack task link job:", error);
+      return false;
+    }
+
+    return Boolean(data);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("❌ [FeishuTask] Error acking task link job:", errorMsg);
+    return false;
+  }
 }
 
 /**

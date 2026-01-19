@@ -37,6 +37,7 @@ export {
 export { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 export { documentTrackingWorkflow, runDocumentTrackingWorkflow } from "./document-tracking-workflow";
 export { dpaAssistantWorkflow, runDpaAssistantWorkflow } from "./dpa-assistant-workflow";
+export { feishuTaskWorkflow } from "./feishu-task-workflow";
 export { 
   releaseNotesWorkflow, 
   releaseNotesPreviewWorkflow,
@@ -54,6 +55,7 @@ import { getWorkflowRegistry, registerWorkflow } from "./registry";
 import { okrAnalysisWorkflow } from "./okr-analysis-workflow";
 import { documentTrackingWorkflow } from "./document-tracking-workflow";
 import { dpaAssistantWorkflow } from "./dpa-assistant-workflow";
+import { feishuTaskWorkflow } from "./feishu-task-workflow";
 import { releaseNotesWorkflow } from "./release-notes-workflow";
 
 /**
@@ -124,6 +126,19 @@ export function initializeWorkflows(): void {
       estimatedDurationSec: 2,
     },
     releaseNotesWorkflow as any
+  );
+
+  // Register Feishu Task Workflow
+  registerWorkflow(
+    {
+      id: "feishu-task",
+      name: "Feishu Tasks",
+      description: "Create, list, and complete Feishu tasks",
+      tags: ["feishu", "task", "todo"],
+      supportsStreaming: false,
+      estimatedDurationSec: 4,
+    },
+    feishuTaskWorkflow as any
   );
 
   registry.setInitialized();

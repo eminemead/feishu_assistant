@@ -24,12 +24,17 @@ async function sendConfirmationButtons(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     console.log(`🔘 [Confirmation] Sending confirmation buttons...`);
+
+    const {
+      confirmPrefix,
+      cancelPrefix,
+      payload,
+    } = resolveConfirmationPayload(confirmationData);
     
     // Use the same button format as follow-up buttons
-    // The confirmation callback handler will recognize the __gitlab_confirm__ prefix
     const confirmationButtons: FollowupOption[] = [
-      { text: "✅ 确认创建 / Confirm", value: `__gitlab_confirm__:${confirmationData}` },
-      { text: "❌ 取消 / Cancel", value: "__gitlab_cancel__" },
+      { text: "✅ 确认创建 / Confirm", value: `${confirmPrefix}:${payload}` },
+      { text: "❌ 取消 / Cancel", value: cancelPrefix },
     ];
     
     // Use the existing sendFollowupButtonsMessage function
@@ -42,6 +47,57 @@ async function sendConfirmationButtons(
   } catch (error: any) {
     console.error(`❌ [Confirmation] Error sending buttons:`, error);
     return { success: false, error: error.message };
+  }
+}
+
+function resolveConfirmationPayload(confirmationData: string): {
+  confirmPrefix: string;
+  cancelPrefix: string;
+  payload: string;
+} {
+  const defaultConfig = {
+    confirmPrefix: "__gitlab_confirm__",
+    cancelPrefix: "__gitlab_cancel__",
+    payload: confirmationData,
+  };
+
+  try {
+    const parsed = JSON.parse(confirmationData);
+    if (!parsed || typeof parsed !== "object") {
+      return defaultConfig;
+    }
+
+    const confirmPrefix =
+      typeof (parsed as any).confirmPrefix === "string"
+        ? (parsed as any).confirmPrefix
+        : defaultConfig.confirmPrefix;
+    const cancelPrefix =
+      typeof (parsed as any).cancelPrefix === "string"
+        ? (parsed as any).cancelPrefix
+        : defaultConfig.cancelPrefix;
+
+    const hasCustomPrefix =
+      typeof (parsed as any).confirmPrefix === "string" ||
+      typeof (parsed as any).cancelPrefix === "string";
+
+    if (!hasCustomPrefix) {
+      return defaultConfig;
+    }
+
+    const payloadSource =
+      (parsed as any).payload !== undefined
+        ? (parsed as any).payload
+        : (parsed as any).data !== undefined
+        ? (parsed as any).data
+        : parsed;
+
+    return {
+      confirmPrefix,
+      cancelPrefix,
+      payload: JSON.stringify(payloadSource),
+    };
+  } catch (error) {
+    return defaultConfig;
   }
 }
 

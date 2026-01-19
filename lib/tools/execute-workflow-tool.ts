@@ -15,7 +15,7 @@ import { createTool } from "@mastra/core/tools";
 import { executeSkillWorkflow, getAvailableWorkflows } from "../workflows";
 
 const executeWorkflowSchema = z.object({
-  workflowId: z.enum(["dpa-assistant", "okr-analysis", "document-tracking"])
+  workflowId: z.enum(["dpa-assistant", "okr-analysis", "document-tracking", "feishu-task"])
     .describe("ID of workflow to execute"),
   query: z.string().describe("User query to pass to workflow"),
   params: z.record(z.any()).optional().describe("Additional workflow parameters"),
@@ -29,6 +29,7 @@ Available workflows:
 - **dpa-assistant**: GitLab issue creation with confirmation buttons. Use for: creating issues, updating linked issues.
 - **okr-analysis**: Complete OKR analysis with data query, chart generation, and insights. Use for: "分析OKR", "OKR分析", comprehensive OKR reports.
 - **document-tracking**: Set up document change tracking. Use for: "watch doc", "track document changes".
+- **feishu-task**: Feishu task creation with GitLab linking + confirmation. Use for: "创建任务", "list tasks", "complete task".
 
 Use this tool when the user needs a multi-step operation with explicit confirmation or complex data processing.`,
   inputSchema: executeWorkflowSchema,

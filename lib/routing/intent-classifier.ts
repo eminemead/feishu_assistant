@@ -72,6 +72,22 @@ const INTENT_RULES: IntentRule[] = [
     description: "Slash commands routed to dpa-assistant workflow",
     examples: ["/collect", "/创建 bug issue", "/list issues"],
   },
+  {
+    id: "gitlab_confirm",
+    patterns: [/^__gitlab_confirm__:/i, /^__gitlab_cancel__/i],
+    target: { type: "workflow", workflowId: "dpa-assistant" },
+    priority: 2,
+    description: "GitLab confirmation callbacks",
+    examples: ["__gitlab_confirm__:{...}", "__gitlab_cancel__"],
+  },
+  {
+    id: "feishu_task_confirm",
+    patterns: [/^__feishu_task_confirm__:/i, /^__feishu_task_cancel__/i],
+    target: { type: "workflow", workflowId: "feishu-task" },
+    priority: 3,
+    description: "Feishu task confirmation callbacks",
+    examples: ["__feishu_task_confirm__:{...}", "__feishu_task_cancel__"],
+  },
 
   // ============================================================
   // Priority 10-19: GitLab Operations
@@ -122,6 +138,25 @@ const INTENT_RULES: IntentRule[] = [
     examples: ["列出我的issues", "show open issues", "查看工单状态"],
   },
 
+  // ============================================================
+  // Priority 12-19: Feishu Task Operations
+  // ============================================================
+  {
+    id: "feishu_task",
+    patterns: [
+      /^\/(?:task|todo|任务|待办)(?:\s|$)/i,
+      /^(?:task|todo)\s+/i,
+      /(?:创建|新建|添加|记录|安排).*(任务|待办)/i,
+      /(?:任务|待办).*(创建|新建|添加|记录)/i,
+      /(?:完成|标记完成|done|complete|finish|reopen|uncomplete).*(任务|待办|task|todo)/i,
+      /(?:列出|查看|list|show).*(任务|待办|tasks?|todos?)/i,
+      /飞书.*(任务|task|todo)/i,
+    ],
+    target: { type: "workflow", workflowId: "feishu-task" },
+    priority: 13,
+    description: "Feishu task operations",
+    examples: ["创建一个任务", "list tasks", "/task fix bug"],
+  },
   // ============================================================
   // Priority 10-19: OKR Operations
   // ============================================================
