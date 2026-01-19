@@ -20,6 +20,7 @@ import {
   updateGitlabIssueFromTask,
   saveTaskLinkExtended,
   FeishuTaskDetails,
+  getFeishuTaskByGitlabIssue,
 } from '../services/feishu-task-service';
 import { generateAuthUrl, hasUserAuthorized } from '../auth/feishu-oauth';
 import { resolveGitlabUsername } from '../services/user-mapping-service';
@@ -447,7 +448,7 @@ export async function syncGitlabStatusToFeishuTask(
   issueIid: number,
   status: 'opened' | 'closed'
 ): Promise<void> {
-  const link = await getGitlabIssueByTaskGuid(`${project}#${issueIid}`);
+  const link = await getFeishuTaskByGitlabIssue(project, issueIid);
   if (!link) {
     console.log(`ℹ️ [GitLabSync] No Feishu task linked to ${project}#${issueIid}`);
     return;
@@ -461,5 +462,12 @@ export async function syncGitlabStatusToFeishuTask(
   const result = await updateFeishuTaskStatus(feishu_task_guid, completed);
   if (!result.success) {
     console.error(`❌ [GitLabSync] Failed to update Feishu task: ${result.error}`);
+    return;
+  }
+
+  try {
+    await updateGitlabStatus(project, issueIid, status);
+  } catch (error) {
+    console.error(`❌ [GitLabSync] Failed to update GitLab status in link table:`, error);
   }
 }

@@ -230,6 +230,42 @@ function formatThreadContext(
   return `🧵 **上下文消息**\n${bullets}`;
 }
 
+async function summarizeTaskContext(
+  contextBlock: string,
+  query: string,
+  model: ReturnType<typeof getMastraModelSingle>
+): Promise<string | null> {
+  try {
+    const prompt = `Summarize the following task context into 3-5 concise bullet points.
+Rules:
+- Use Mandarin Chinese.
+- Keep names, numbers, URLs, and technical terms as-is.
+- Focus on actionable context for creating a task.
+
+Task request: ${query}
+
+Context:
+${contextBlock}
+
+Output format:
+**上下文摘要**
+- ...
+- ...`;
+
+    const { text } = await generateText({
+      model,
+      prompt,
+      temperature: 0.2,
+    });
+
+    const trimmed = text.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch (error) {
+    console.warn("[FeishuTaskWorkflow] Context summary failed:", error);
+    return null;
+  }
+}
+
 function extractTaskGuid(input: string): string | null {
   const patterns = [
     /task_guid=([a-zA-Z0-9-]+)/i,
@@ -461,9 +497,11 @@ const parseRequestStep = createStep({
       }
     }
 
+    let model: ReturnType<typeof getMastraModelSingle> | null = null;
+
     if (intent !== "help") {
       try {
-        const model = getMastraModelSingle(false);
+        model = getMastraModelSingle(false);
         const now = new Date();
         const todayStr = formatDate(now);
         const tomorrowStr = resolveRelativeDate("tomorrow", now) || todayStr;
@@ -534,9 +572,26 @@ User query: ${query}`;
         : [];
       const contextBlock = formatThreadContext(contextMessages, query);
       if (contextBlock) {
-        params.description = params.description
-          ? `${params.description}\n\n---\n${contextBlock}`
-          : contextBlock;
+        const shouldSummarize =
+          process.env.FEISHU_TASK_CONTEXT_SUMMARY !== "false" &&
+          contextBlock.length > 200 &&
+          model;
+        if (shouldSummarize && model) {
+          const summary = await summarizeTaskContext(contextBlock, query, model);
+          if (summary) {
+            params.description = params.description
+              ? `${params.description}\n\n---\n${summary}`
+              : summary;
+          } else {
+            params.description = params.description
+              ? `${params.description}\n\n---\n${contextBlock}`
+              : contextBlock;
+          }
+        } else {
+          params.description = params.description
+            ? `${params.description}\n\n---\n${contextBlock}`
+            : contextBlock;
+        }
       }
     }
 
@@ -596,7 +651,7 @@ const executeTaskStep = createStep({
     confirmationData: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
-    const { intent, params: rawParams, userId, query } = inputData;
+    const { intent, params: rawParams, userId, query, chatId, rootId } = inputData;
     const params = rawParams as TaskParams;
     const effectiveIntent = intent === "link_gitlab" ? "create_task" : intent;
 

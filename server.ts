@@ -16,7 +16,11 @@ import {
 import { getMastraAsync, getObservabilityStatus } from "./lib/observability-config";
 import { handleDocChangeWebhook } from "./lib/handlers/doc-webhook-handler";
 import { handleDagsterWebhook } from "./lib/handlers/dagster-webhook-handler";
-import { handleTaskUpdatedEvent, TaskUpdatedEvent } from "./lib/handlers/feishu-task-webhook-handler";
+import {
+  handleTaskUpdatedEvent,
+  TaskUpdatedEvent,
+  syncGitlabStatusToFeishuTask,
+} from "./lib/handlers/feishu-task-webhook-handler";
 import {
   parseTaskFormAction,
   buildTaskConfirmationValue,
@@ -136,6 +140,13 @@ const parseCardActionContext = (
     return null;
   }
   return { chatId, rootId };
+};
+
+const gitlabWebhookToken = process.env.GITLAB_WEBHOOK_TOKEN;
+const validateGitlabWebhook = (headers: Record<string, string | undefined>): boolean => {
+  if (!gitlabWebhookToken) return true;
+  const tokenHeader = headers["x-gitlab-token"] || headers["X-Gitlab-Token"];
+  return tokenHeader === gitlabWebhookToken;
 };
 
 const createWsClient = () =>
@@ -1265,6 +1276,45 @@ app.post("/webhook/task", async (c) => {
     return c.json({ success: true }, 200);
   } catch (error) {
     console.error("❌ [TaskWebhook] Error processing webhook:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+// GitLab webhook endpoint for bidirectional sync (issue state)
+// Configure in GitLab: Settings → Webhooks → event: Issue events
+app.post("/webhook/gitlab", async (c) => {
+  try {
+    const headers = c.req.header();
+    if (!validateGitlabWebhook(headers as Record<string, string | undefined>)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const payload = await c.req.json().catch(() => null);
+    if (!payload) {
+      return c.json({ error: "Invalid payload" }, 400);
+    }
+
+    const eventType = payload.object_kind || payload.event_type;
+    if (eventType !== "issue") {
+      return c.json({ success: true }, 200);
+    }
+
+    const project = payload.project?.path_with_namespace;
+    const issueIid = payload.object_attributes?.iid;
+    const issueState = payload.object_attributes?.state;
+
+    if (!project || !issueIid || !issueState) {
+      return c.json({ success: true }, 200);
+    }
+
+    const status: "opened" | "closed" =
+      issueState === "closed" ? "closed" : "opened";
+
+    await syncGitlabStatusToFeishuTask(project, Number(issueIid), status);
+
+    return c.json({ success: true }, 200);
+  } catch (error) {
+    console.error("❌ [GitLabWebhook] Error processing webhook:", error);
     return c.json({ error: "Internal server error" }, 500);
   }
 });

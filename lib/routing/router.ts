@@ -288,7 +288,11 @@ async function executeTarget(
         : null;
 
       const workflowContext =
-        workflowId === "feishu-task" ? { threadMessages: messages } : undefined;
+        workflowId === "feishu-task"
+          ? {
+              threadMessages: messages,
+            }
+          : undefined;
 
       const workflowResult = await executeSkillWorkflow(workflowId, {
         query,
