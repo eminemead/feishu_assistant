@@ -134,6 +134,10 @@ async function confirmSend(preview: string, chatId: string): Promise<boolean> {
   console.log(preview);
   console.log("=".repeat(60));
   console.log(`\n💬 Target: ${chatId}`);
+  if (!process.stdin.isTTY) {
+    console.log("\n⚠️  No TTY available for confirmation. Use -y/--yes to skip.");
+    return false;
+  }
   console.log("\n⚠️  Send this message to Feishu? [y/N] ");
   
   return new Promise((resolve) => {
@@ -349,6 +353,15 @@ async function main() {
     console.log(`📝 Title: ${title}`);
     console.log(`💬 Target chat: ${chatId}`);
 
+    if (!args.yes) {
+      const previewText = `Title: ${title}\n\n${markdown}`;
+      const confirmed = await confirmSend(previewText, chatId);
+      if (!confirmed) {
+        console.log("❌ Cancelled.");
+        process.exit(0);
+      }
+    }
+
     const { cleanedMarkdown, images } = extractImageRefs(markdown);
     const imageKeyMap = new Map<string, string>();
 
@@ -362,16 +375,7 @@ async function main() {
     }
 
     const post = markdownToFeishuPost(cleanedMarkdown, title, imageKeyMap);
-    
-    if (!args.yes) {
-      const previewText = `Title: ${title}\n\n${markdown}`;
-      const confirmed = await confirmSend(previewText, chatId);
-      if (!confirmed) {
-        console.log("❌ Cancelled.");
-        process.exit(0);
-      }
-    }
-    
+
     console.log(`📤 Sending to Feishu...`);
     const messageId = await sendPostMessage(chatId, post);
     console.log(`✅ Published! message_id: ${messageId}`);
@@ -402,6 +406,16 @@ async function main() {
   console.log(`📝 Title: ${frontmatter.title}`);
   console.log(`💬 Target chat: ${chatId}`);
 
+  // Confirm before uploading/sending
+  if (!args.yes) {
+    const previewText = `Title: ${frontmatter.title}\n\n${body.substring(0, 1000)}${body.length > 1000 ? "\n..." : ""}`;
+    const confirmed = await confirmSend(previewText, chatId);
+    if (!confirmed) {
+      console.log("❌ Cancelled.");
+      process.exit(0);
+    }
+  }
+
   // Extract and upload images
   const { cleanedMarkdown, images } = extractImageRefs(body);
   const imageKeyMap = new Map<string, string>();
@@ -417,16 +431,6 @@ async function main() {
 
   // Build Feishu post
   const post = markdownToFeishuPost(cleanedMarkdown, frontmatter.title, imageKeyMap);
-
-  // Confirm before sending
-  if (!args.yes) {
-    const previewText = `Title: ${frontmatter.title}\n\n${body.substring(0, 1000)}${body.length > 1000 ? "\n..." : ""}`;
-    const confirmed = await confirmSend(previewText, chatId);
-    if (!confirmed) {
-      console.log("❌ Cancelled.");
-      process.exit(0);
-    }
-  }
 
   // Send
   console.log(`📤 Sending to Feishu...`);
