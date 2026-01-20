@@ -57,7 +57,7 @@ export function extractImageRefs(markdown: string): {
 
 /**
  * Convert markdown text to Feishu post elements
- * Handles: **bold**, [links](url), inline code, and image placeholders
+ * Handles: **bold**, [links](url), <at user_id="...">@Name</at>, inline code, and image placeholders
  */
 function parseInlineElements(
   text: string,
@@ -65,19 +65,42 @@ function parseInlineElements(
 ): FeishuPostElement[] {
   const elements: FeishuPostElement[] = [];
   
-  // Pattern to match: links, image placeholders, or plain text
-  const tokenRegex = /(\[([^\]]+)\]\(([^)]+)\))|(__IMAGE_\d+__)|([^[\]_]+)/g;
+  // Tokenize: at mentions, links, bold, image placeholders, plain text
+  // Order matters: more specific patterns first
+  const tokenRegex = /(<at\s+user_id="([^"]+)"[^>]*>([^<]*)<\/at>)|(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^*]+)\*\*)|(__IMAGE_\d+__)/g;
+  
+  let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = tokenRegex.exec(text)) !== null) {
-    const [full, linkMatch, linkText, linkHref, imagePlaceholder, plainText] = match;
+    // Add plain text before this match
+    if (match.index > lastIndex) {
+      const plain = text.slice(lastIndex, match.index);
+      if (plain) {
+        elements.push({ tag: 'text', text: plain });
+      }
+    }
+    
+    const [full, atMatch, atUserId, atName, linkMatch, linkText, linkHref, boldMatch, boldText, imagePlaceholder] = match;
 
-    if (linkMatch) {
+    if (atMatch) {
+      // At mention: <at user_id="ou_xxx">@Name</at>
+      elements.push({
+        tag: 'at',
+        user_id: atUserId,
+      });
+    } else if (linkMatch) {
       // Link: [text](url)
       elements.push({
         tag: 'a',
         text: linkText,
         href: linkHref,
+      });
+    } else if (boldMatch) {
+      // Bold: **text** → Feishu doesn't have bold in post, use【】to emphasize
+      elements.push({
+        tag: 'text',
+        text: boldText,
       });
     } else if (imagePlaceholder) {
       // Image placeholder → resolve to image_key
@@ -88,17 +111,21 @@ function parseInlineElements(
           image_key: imageKey,
         });
       } else {
-        // Fallback: show as text if image upload failed
         elements.push({
           tag: 'text',
           text: '[image]',
         });
       }
-    } else if (plainText) {
-      elements.push({
-        tag: 'text',
-        text: plainText,
-      });
+    }
+    
+    lastIndex = match.index + full.length;
+  }
+
+  // Add remaining plain text after last match
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex);
+    if (remaining) {
+      elements.push({ tag: 'text', text: remaining });
     }
   }
 
@@ -128,9 +155,9 @@ export function markdownToFeishuPost(
   for (const line of lines) {
     const trimmed = line.trim();
     
-    // Skip empty lines (but preserve as empty paragraph for spacing)
+    // Empty lines → add a blank line with a single space for Feishu spacing
     if (!trimmed) {
-      content.push([]);
+      content.push([{ tag: 'text', text: ' ' }]);
       continue;
     }
 

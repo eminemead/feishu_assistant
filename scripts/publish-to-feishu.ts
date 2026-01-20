@@ -14,6 +14,22 @@
  * Frontmatter:
  *   title: Article Title
  *   chat_id: oc_xxxxx
+ *
+ * ## Feishu Rich Text Rendering Notes
+ *
+ * 1. **Empty paragraphs are ignored** — Feishu collapses empty `[]` in post content.
+ *    Use `[{ tag: 'text', text: ' ' }]` for visual spacing between sections.
+ *
+ * 2. **Bold not natively supported in post** — `**text**` must be converted to plain
+ *    text or use【brackets】for emphasis. No inline bold styling in post format.
+ *
+ * 3. **@mentions require open_id** — Use `<at user_id="ou_xxx">@Name</at>` syntax.
+ *    The user_id must be a valid Feishu open_id (ou_*), not email or user_id.
+ *
+ * 4. **Post vs Text messages** — Post (rich text) supports structured content with
+ *    links, images, @mentions. Text messages support inline `<at>` but no formatting.
+ *
+ * See lib/feishu/rich-text-builder.ts for the markdown → Feishu post conversion.
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -29,6 +45,9 @@ import {
 const DEFAULT_CHAT_ID =
   process.env.FEISHU_PUBLISH_CHAT_ID ||
   'oc_c6c0874d4020e0d3b48d1fce2b62656b'; // Data Product & Analytics Team
+
+// Default: no self-reactions (bots reacting to own messages looks odd)
+const DEFAULT_REACTIONS: string[] = [];
 
 interface Frontmatter {
   title: string;
@@ -325,7 +344,7 @@ async function main() {
     const chatId = args.chatId || DEFAULT_CHAT_ID;
     const reactions = args.noReactions
       ? []
-      : (args.reactions || parseReactionList(process.env.FEISHU_PUBLISH_REACTIONS || "✅"));
+      : (args.reactions ?? (process.env.FEISHU_PUBLISH_REACTIONS ? parseReactionList(process.env.FEISHU_PUBLISH_REACTIONS) : DEFAULT_REACTIONS));
     if (args.text) {
       const text = await resolveInlineInput(args.text, "Text");
       if (!text.trim()) {
@@ -402,7 +421,7 @@ async function main() {
   const chatId = args.chatId || frontmatter.chat_id || DEFAULT_CHAT_ID;
   const reactions = args.noReactions
     ? []
-    : (args.reactions || parseReactionList(process.env.FEISHU_PUBLISH_REACTIONS || "✅"));
+    : (args.reactions ?? (process.env.FEISHU_PUBLISH_REACTIONS ? parseReactionList(process.env.FEISHU_PUBLISH_REACTIONS) : DEFAULT_REACTIONS));
   console.log(`📝 Title: ${frontmatter.title}`);
   console.log(`💬 Target chat: ${chatId}`);
 
