@@ -43,6 +43,7 @@ interface CliArgs {
   chatId?: string;
   reactions?: string[];
   noReactions?: boolean;
+  yes?: boolean;
   help?: boolean;
 }
 
@@ -56,6 +57,7 @@ Usage:
   bun run scripts/publish-to-feishu.ts --markdown - --title "<title>" [--chat-id <id>]
   bun run scripts/publish-to-feishu.ts --text "<message>" --reactions "✅,🚧"
   bun run scripts/publish-to-feishu.ts --text "<message>" --no-reactions
+  bun run scripts/publish-to-feishu.ts --text "<message>" -y              # skip confirmation
 `);
 }
 
@@ -104,6 +106,8 @@ function parseArgs(args: string[]): CliArgs {
       parsed.reactions = parseReactionList(arg.split("=").slice(1).join("="));
     } else if (arg === "--no-reactions") {
       parsed.noReactions = true;
+    } else if (arg === "-y" || arg === "--yes" || arg === "--force") {
+      parsed.yes = true;
     } else if (!arg.startsWith("--") && !parsed.filePath) {
       parsed.filePath = arg;
     }
@@ -120,6 +124,24 @@ async function readStdin(): Promise<string> {
     });
     process.stdin.on("end", () => resolve(data.trimEnd()));
     process.stdin.on("error", (err) => reject(err));
+  });
+}
+
+async function confirmSend(preview: string, chatId: string): Promise<boolean> {
+  console.log("\n" + "=".repeat(60));
+  console.log("📋 PREVIEW");
+  console.log("=".repeat(60));
+  console.log(preview);
+  console.log("=".repeat(60));
+  console.log(`\n💬 Target: ${chatId}`);
+  console.log("\n⚠️  Send this message to Feishu? [y/N] ");
+  
+  return new Promise((resolve) => {
+    process.stdin.setEncoding("utf-8");
+    process.stdin.once("data", (data) => {
+      const answer = data.toString().trim().toLowerCase();
+      resolve(answer === "y" || answer === "yes");
+    });
   });
 }
 
@@ -305,6 +327,15 @@ async function main() {
       if (!text.trim()) {
         throw new Error("Text message is empty");
       }
+      
+      if (!args.yes) {
+        const confirmed = await confirmSend(text, chatId);
+        if (!confirmed) {
+          console.log("❌ Cancelled.");
+          process.exit(0);
+        }
+      }
+      
       console.log(`💬 Target chat: ${chatId}`);
       console.log(`📤 Sending text...`);
       const messageId = await sendTextMessage(chatId, text);
@@ -331,6 +362,16 @@ async function main() {
     }
 
     const post = markdownToFeishuPost(cleanedMarkdown, title, imageKeyMap);
+    
+    if (!args.yes) {
+      const previewText = `Title: ${title}\n\n${markdown}`;
+      const confirmed = await confirmSend(previewText, chatId);
+      if (!confirmed) {
+        console.log("❌ Cancelled.");
+        process.exit(0);
+      }
+    }
+    
     console.log(`📤 Sending to Feishu...`);
     const messageId = await sendPostMessage(chatId, post);
     console.log(`✅ Published! message_id: ${messageId}`);
@@ -376,6 +417,16 @@ async function main() {
 
   // Build Feishu post
   const post = markdownToFeishuPost(cleanedMarkdown, frontmatter.title, imageKeyMap);
+
+  // Confirm before sending
+  if (!args.yes) {
+    const previewText = `Title: ${frontmatter.title}\n\n${body.substring(0, 1000)}${body.length > 1000 ? "\n..." : ""}`;
+    const confirmed = await confirmSend(previewText, chatId);
+    if (!confirmed) {
+      console.log("❌ Cancelled.");
+      process.exit(0);
+    }
+  }
 
   // Send
   console.log(`📤 Sending to Feishu...`);
